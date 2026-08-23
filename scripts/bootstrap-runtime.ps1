@@ -21,6 +21,8 @@ $geoSiteRuSha256 = 'C36E157ADF86EDF7B722B51F3ACB93BBB2A7F8083932DAE29B4B5EF2C1CE
 $singBoxUrl = "https://github.com/SagerNet/sing-box/releases/download/v$singBoxVersion/sing-box-$singBoxVersion-windows-amd64.zip"
 $winTunUrl = "https://www.wintun.net/builds/wintun-$winTunVersion.zip"
 $trustTunnelUrl = "https://github.com/TrustTunnel/TrustTunnelClient/releases/download/v$trustTunnelVersion/trusttunnel_client-v$trustTunnelVersion-windows-x86_64.zip"
+$geoIpRuUrl = 'https://raw.githubusercontent.com/SagerNet/sing-geoip/b9c5e675b4d5359d4b47f4434fa7ae77e9991306/geoip-ru.srs'
+$geoSiteRuUrl = 'https://raw.githubusercontent.com/SagerNet/sing-geosite/a70ce9f1f078f129cd40500f0bc0aee6eb6d59cd/geosite-category-ru.srs'
 
 $resolvedDestination = [System.IO.Path]::GetFullPath($Destination)
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -33,8 +35,11 @@ $extractDirectory = Join-Path $projectRoot 'build\runtime-extract'
 $singBoxArchive = Join-Path $downloadDirectory "sing-box-$singBoxVersion-windows-amd64.zip"
 $winTunArchive = Join-Path $downloadDirectory "wintun-$winTunVersion.zip"
 $trustTunnelArchive = Join-Path $downloadDirectory "trusttunnel_client-v$trustTunnelVersion-windows-x86_64.zip"
+$geoDirectory = Join-Path $resolvedDestination 'geo'
+$geoIpRuPath = Join-Path $geoDirectory 'geoip-ru.srs'
+$geoSiteRuPath = Join-Path $geoDirectory 'geosite-category-ru.srs'
 
-New-Item -ItemType Directory -Force -Path $downloadDirectory, $resolvedDestination | Out-Null
+New-Item -ItemType Directory -Force -Path $downloadDirectory, $resolvedDestination, $geoDirectory | Out-Null
 
 function Receive-VerifiedArchive {
   param(
@@ -54,6 +59,8 @@ function Receive-VerifiedArchive {
 Receive-VerifiedArchive $singBoxUrl $singBoxArchive $singBoxSha256
 Receive-VerifiedArchive $winTunUrl $winTunArchive $winTunSha256
 Receive-VerifiedArchive $trustTunnelUrl $trustTunnelArchive $trustTunnelSha256
+Receive-VerifiedArchive $geoIpRuUrl $geoIpRuPath $geoIpRuSha256
+Receive-VerifiedArchive $geoSiteRuUrl $geoSiteRuPath $geoSiteRuSha256
 
 if (Test-Path -LiteralPath $extractDirectory) {
   Remove-Item -Recurse -Force -LiteralPath $extractDirectory
@@ -73,10 +80,9 @@ Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\trusttun
 Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\setup_wizard.exe') -Destination $resolvedDestination
 Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\LICENSE.txt') -Destination (Join-Path $resolvedDestination 'LICENSE-TrustTunnel.txt')
 
-$geoDirectory = Join-Path $resolvedDestination 'geo'
 $geoAssets = @(
-  @{ Path = (Join-Path $geoDirectory 'geoip-ru.srs'); Sha256 = $geoIpRuSha256 },
-  @{ Path = (Join-Path $geoDirectory 'geosite-category-ru.srs'); Sha256 = $geoSiteRuSha256 }
+  @{ Path = $geoIpRuPath; Sha256 = $geoIpRuSha256 },
+  @{ Path = $geoSiteRuPath; Sha256 = $geoSiteRuSha256 }
 )
 foreach ($asset in $geoAssets) {
   if (-not (Test-Path -LiteralPath $asset.Path -PathType Leaf)) {
