@@ -6,7 +6,7 @@ layout and an explicit `VpnSession` boundary.
 
 ## Current status
 
-Windows 0.3.5 recovery candidate is implemented:
+Windows 0.3.6 recovery candidate is implemented:
 
 - Compose Desktop shell with compact desktop navigation and persistent RU/EN actionable states;
 - tunnel detection through the Windows IP Helper API, so the adapter is matched
@@ -48,7 +48,7 @@ Windows 0.3.5 recovery candidate is implemented:
   drag-and-drop, and redacted log copy;
 - signed Windows OTA channel with HTTPS origin allowlist, Ed25519 manifest
   verification, resumable downloads, size bounds, and installer SHA-256;
-- compact 640×520 Material 3 shell with hamburger navigation, gear settings,
+- compact 600×440 Material 3 shell with hamburger navigation, gear settings,
   one circular connect/stop action, grouped server selection, and restrained motion;
 - redacted technical journal;
 - release MSI and EXE installers.
@@ -76,25 +76,26 @@ Creating installers (the repository downloads the pinned WiX toolset):
 
 Release artifacts:
 
-- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.5.exe`
-- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.5.msi`
+- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.6.exe`
+- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.6.msi`
 
 After installing, verify the package and the unstripped JNA runtime:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.5
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.6
 ```
 
-Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.5 repairs split DNS and
-TrustTunnel routing, bundles RU geo data, and replaces the oversized shell. The signed
+Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.6 hardens split routing,
+normalizes both TUN MTUs, removes the oversized shell, and fixes Stop/Connect and
+background-monitor races. The signed
 public OTA channel uses a self-elevating bootstrap so an installed 0.3.0 or
 0.3.1 can be replaced in place after the user accepts the Windows UAC prompt.
 The artifacts are not Authenticode-signed, so Windows SmartScreen may show the
 publisher as unknown. Real-PC tunnel acceptance is still required before calling
-0.3.5 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
+0.3.6 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
 remain required before declaring a final 1.0 security release.
 
 See [Windows notes](docs/WINDOWS.md) and the
 [parity matrix](docs/PARITY.md). The current acceptance evidence is recorded in
-[0.3.5 release evidence](docs/RELEASE_0.3.5.md); the remaining elevated checks
-are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.5.md).
+[0.3.6 release evidence](docs/RELEASE_0.3.6.md); the remaining elevated checks
+are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.6.md).

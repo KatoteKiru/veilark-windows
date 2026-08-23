@@ -11,9 +11,10 @@ internal data class TrustTunnelRoutingPlan(
   val exclusions: List<String>,
   val exclusionsTcpEarlyAckEnabled: Boolean = false,
   val exclusionsPreresolveEnabled: Boolean = false,
+  val exclusionsPreresolveMaxQueries: Int = 50,
 )
 
-/** Converts Veilark routing semantics to TrustTunnel 1.0.x TOML settings. */
+/** Converts Veilark routing semantics to TrustTunnel 1.1.5 TOML settings. */
 internal object TrustTunnelRouting {
   fun plan(profile: Profile): TrustTunnelRoutingPlan = when (profile.appliedRouting.mode) {
     RoutingMode.All -> TrustTunnelRoutingPlan("general", emptyList())
@@ -21,10 +22,12 @@ internal object TrustTunnelRouting {
       "general",
       requiredGeoExclusions(profile),
       true,
+      true,
     )
     RoutingMode.RussiaVpn -> TrustTunnelRoutingPlan(
       "selective",
       requiredGeoExclusions(profile),
+      true,
       true,
     )
     RoutingMode.Manual -> {
@@ -46,7 +49,8 @@ internal object TrustTunnelRouting {
           direct.networks + direct.domains
             .filterNot(vpnOverrides::contains)
             .flatMap(::domainWithSubdomains)
-          ).distinct(),
+        ).distinct(),
+        direct.domains.any { it !in vpnOverrides },
         direct.domains.any { it !in vpnOverrides },
       )
     }
@@ -73,10 +77,11 @@ internal object TrustTunnelRouting {
     val routingBlock = buildList {
       add("vpn_mode = \"${plan.vpnMode}\"")
       add("exclusions_tcp_early_ack_enabled = ${plan.exclusionsTcpEarlyAckEnabled}")
-      // Thousands of RU entries must not turn connection startup into a DNS
-      // pre-resolution pass. DNS interception plus early SNI matching handles
-      // domain exclusions while the pinned CIDRs are effective immediately.
+      // Keep pre-resolution bounded. It populates the address suspect cache for
+      // QUIC/secure-DNS clients, while the 50-query cap prevents thousands of
+      // RU entries from becoming an unbounded background DNS burst.
       add("exclusions_preresolve_enabled = ${plan.exclusionsPreresolveEnabled}")
+      add("exclusions_preresolve_max_queries = ${plan.exclusionsPreresolveMaxQueries}")
       add("exclusions = [")
       plan.exclusions.forEach { add("  \"${tomlString(it)}\",") }
       add("]")
@@ -85,6 +90,10 @@ internal object TrustTunnelRouting {
     val routed = (topLevel + routingBlock + lines.drop(firstSection)).joinToString("\n")
       .trimEnd() + "\n"
     return ensureTableAssignment(routed, "[listener.tun]", "change_system_dns", "true")
+      // 1280 is the IPv6 minimum MTU and is also used by Veilark's sing-box
+      // TUN. Keeping both cores at this conservative value avoids black-holed
+      // HTTPS/QUIC packets on access networks with smaller effective MTUs.
+      .let { ensureTableAssignment(it, "[listener.tun]", "mtu_size", "1280") }
   }
 
   private fun requiredGeoExclusions(profile: Profile): List<String> =
@@ -172,5 +181,6 @@ internal object TrustTunnelRouting {
     "exclusions",
     "exclusions_tcp_early_ack_enabled",
     "exclusions_preresolve_enabled",
+    "exclusions_preresolve_max_queries",
   )
 }

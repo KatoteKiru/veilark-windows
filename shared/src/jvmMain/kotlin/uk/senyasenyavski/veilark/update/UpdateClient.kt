@@ -1,6 +1,7 @@
 package uk.senyasenyavski.veilark.update
 
 import org.json.JSONObject
+import uk.senyasenyavski.veilark.net.boundedByteArrayHandler
 import java.io.InputStream
 import java.net.URI
 import java.net.http.HttpClient
@@ -9,6 +10,7 @@ import java.net.http.HttpResponse
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.FileTime
@@ -19,6 +21,9 @@ import java.security.spec.X509EncodedKeySpec
 import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class AppUpdate(
@@ -60,7 +65,10 @@ class UpdateClient(
       .header("Accept", "application/json")
       .GET()
       .build()
-    val response = client.send(request, HttpResponse.BodyHandlers.ofByteArray())
+    val response = client.send(
+      request,
+      boundedByteArrayHandler(MAX_MANIFEST_SIZE, "Манифест обновления слишком большой"),
+    )
     require(response.statusCode() == 200) {
       "Сервер обновлений ответил HTTP ${response.statusCode()}"
     }
@@ -116,16 +124,31 @@ class UpdateClient(
       verifyDownloadedInstaller(finalPath, update)
       return finalPath
     }
-    if (Files.exists(partialPath) && Files.size(partialPath) > update.size) {
+    if (
+      Files.exists(partialPath, LinkOption.NOFOLLOW_LINKS) &&
+      !Files.isRegularFile(partialPath, LinkOption.NOFOLLOW_LINKS)
+    ) {
       Files.delete(partialPath)
     }
-    val offset = if (Files.isRegularFile(partialPath)) Files.size(partialPath) else 0L
+    if (Files.exists(partialPath, LinkOption.NOFOLLOW_LINKS) && Files.size(partialPath) > update.size) {
+      Files.delete(partialPath)
+    }
+    val offset = if (Files.isRegularFile(partialPath, LinkOption.NOFOLLOW_LINKS)) {
+      Files.size(partialPath)
+    } else {
+      0L
+    }
+    if (offset == update.size) {
+      verifyDownloadedInstaller(partialPath, update)
+      promoteDownload(partialPath, finalPath)
+      return finalPath
+    }
     val requestBuilder = HttpRequest.newBuilder(installerUri)
       .timeout(Duration.ofMinutes(5))
       .header("User-Agent", "Veilark-Windows/$CURRENT_VERSION_NAME")
       .GET()
     if (offset > 0L) requestBuilder.header("Range", "bytes=$offset-")
-    val response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofInputStream())
+    val response = sendCancellable(requestBuilder.build(), isCancelled)
     val append = offset > 0L && response.statusCode() == 206
     require(response.statusCode() == 200 || append) {
       response.body().close()
@@ -138,12 +161,17 @@ class UpdateClient(
         "Сервер обновлений вернул неверный диапазон"
       }
     }
-    val options = if (append) {
-      arrayOf(java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
+    val options: Array<OpenOption> = if (append) {
+      arrayOf(
+        java.nio.file.StandardOpenOption.CREATE,
+        java.nio.file.StandardOpenOption.APPEND,
+        LinkOption.NOFOLLOW_LINKS,
+      )
     } else {
       arrayOf(
         java.nio.file.StandardOpenOption.CREATE,
         java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+        LinkOption.NOFOLLOW_LINKS,
       )
     }
     response.body().use { input ->
@@ -153,16 +181,7 @@ class UpdateClient(
     }
     require(Files.size(partialPath) == update.size) { "Обновление загрузилось не полностью" }
     verifyDownloadedInstaller(partialPath, update)
-    try {
-      Files.move(
-        partialPath,
-        finalPath,
-        StandardCopyOption.REPLACE_EXISTING,
-        StandardCopyOption.ATOMIC_MOVE,
-      )
-    } catch (_: AtomicMoveNotSupportedException) {
-      Files.move(partialPath, finalPath, StandardCopyOption.REPLACE_EXISTING)
-    }
+    promoteDownload(partialPath, finalPath)
     return finalPath
   }
 
@@ -279,6 +298,52 @@ class UpdateClient(
     return digest.digest().joinToString("") { "%02X".format(it) }
   }
 
+  private fun promoteDownload(partialPath: Path, finalPath: Path) {
+    try {
+      Files.move(
+        partialPath,
+        finalPath,
+        StandardCopyOption.REPLACE_EXISTING,
+        StandardCopyOption.ATOMIC_MOVE,
+      )
+    } catch (_: AtomicMoveNotSupportedException) {
+      Files.move(partialPath, finalPath, StandardCopyOption.REPLACE_EXISTING)
+    }
+  }
+
+  private fun sendCancellable(
+    request: HttpRequest,
+    isCancelled: () -> Boolean,
+  ): HttpResponse<InputStream> {
+    val pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
+    try {
+      while (true) {
+        throwIfCancelled(isCancelled)
+        try {
+          return pending.get(CANCELLATION_POLL_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+          // Poll the explicit UI cancellation token while headers are pending.
+        }
+      }
+    } catch (cancelled: CancellationException) {
+      pending.cancel(true)
+      throw cancelled
+    } catch (interrupted: InterruptedException) {
+      pending.cancel(true)
+      Thread.currentThread().interrupt()
+      throw CancellationException("Загрузка обновления отменена").also {
+        it.initCause(interrupted)
+      }
+    } catch (failed: ExecutionException) {
+      val cause = failed.cause ?: failed
+      when (cause) {
+        is RuntimeException -> throw cause
+        is Error -> throw cause
+        else -> throw IllegalStateException(cause.message ?: "Не удалось загрузить обновление", cause)
+      }
+    }
+  }
+
   private fun copyBounded(
     input: InputStream,
     output: java.io.OutputStream,
@@ -309,29 +374,27 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 305
-    const val CURRENT_VERSION_NAME = "0.3.5"
+    const val CURRENT_VERSION_CODE = 306
+    const val CURRENT_VERSION_NAME = "0.3.6"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.5
-      • Главное окно уменьшено до 640×520: боковая панель убрана в hamburger-меню, маршруты и язык — в шестерёнку.
-      • Возвращён круг подключения. Он же отключает VPN и мгновенно останавливает незавершённую попытку.
-      • Список серверов стал обычным сгруппированным меню: подписки, все вложенные узлы обоих ядер, выбранный сервер и пинг видны без отдельных экранов.
-      • Исправлена маршрутизация «Россия напрямую»: RU-домены используют локальный DNS и прямой маршрут, остальной трафик — защищённый DNS и VPN. Обратный режим работает симметрично.
-      • Проверенные RU-правила теперь входят в установщик и не требуют доступа к GitHub перед подключением.
-      • TrustTunnel обновлён до 1.1.5-rc.6: исправлены выбор сетевого интерфейса Windows, split-routing и аварийное завершение при проверке нескольких адресов.
-      • При активном стороннем TUN Veilark больше не изображает успешное подключение: запуск блокируется с названием конфликтующего VPN.
-      • Обновление устанавливается поверх 0.3.1 с сохранением подписок, встроенной Veilark Trust и выбранных серверов.
+      Исправлено и добавлено в 0.3.6
+      • Окно стало компактным 600×440: круг подключения, статус и выбор ядра собраны в один блок; пустые растянутые карточки убраны.
+      • Главное меню серверов показывает подписки и все вложенные узлы sing-box и TrustTunnel; выбор и пинг доступны на главном экране.
+      • Исправлена частичная загрузка сайтов в split-routing: sing-box дольше распознаёт TLS/QUIC, а TrustTunnel ограниченно предварительно разрешает домены без DNS-шторма.
+      • MTU обоих ядер согласован на 1280, чтобы не терять крупные HTTPS/QUIC-пакеты на сетях с меньшим эффективным MTU.
+      • Кнопка Stop больше не гоняется с повторным Connect; отмена пинга завершает setup wizard, а ошибка счётчиков или health-check не убивает монитор сессии.
+      • Ответы подписок и OTA-манифеста ограничиваются ещё во время чтения; завершённая часть OTA проверяется и не скачивается повторно.
+      • Обновление устанавливается поверх версий 0.3.x с сохранением подписок, встроенной Veilark Trust, маршрутов и выбранных серверов.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.5
-      • The main window is now 640×520: the sidebar moved into a hamburger menu, while routing and language live under the settings gear.
-      • The circular connection control is back. The same control disconnects and immediately stops an unfinished attempt.
-      • Server selection is a standard grouped menu showing subscriptions, every nested server from both cores, selection and latency.
-      • Fixed Russia-direct routing: RU domains use local DNS and direct egress, while other traffic uses secure DNS and the VPN. The inverse preset is symmetrical.
-      • Verified RU rule sets are bundled with the installer, so connecting no longer depends on GitHub access.
-      • TrustTunnel is updated to 1.1.5-rc.6 with Windows interface selection, split-routing and multi-address pinger crash fixes.
-      • If another TUN is active, Veilark now blocks startup and names the conflicting VPN instead of presenting a false success.
-      • The update installs over 0.3.1 while preserving subscriptions, built-in Veilark Trust and selected servers.
+      Fixed and added in 0.3.6
+      • The window is now a compact 600×440: connection circle, status and core selection form one block, with empty stretched cards removed.
+      • The Home server menu groups subscriptions and every nested sing-box and TrustTunnel endpoint; selection and latency testing stay on Home.
+      • Partial page loading in split routing is addressed: sing-box allows longer TLS/QUIC sniffing, while TrustTunnel performs bounded domain pre-resolution without a DNS burst.
+      • Both cores use an MTU of 1280 to avoid black-holed large HTTPS/QUIC packets on paths with a smaller effective MTU.
+      • Stop no longer races a repeated Connect; cancelling a ping terminates its setup wizard, and counter or health-check failures no longer silently kill session monitoring.
+      • Subscription and OTA manifest bodies are bounded while being read; a complete OTA partial is verified and promoted without another download.
+      • The update installs over 0.3.x while preserving subscriptions, built-in Veilark Trust, routing and selected servers.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
@@ -341,6 +404,7 @@ class UpdateClient(
     private const val MAX_INSTALLER_SIZE = 300L * 1024L * 1024L
     private const val MAX_NOTES_LENGTH = 4_000
     private const val BUFFER_SIZE = 128 * 1024
+    private const val CANCELLATION_POLL_MILLIS = 100L
     private const val DEFAULT_STALE_DOWNLOAD_AGE_MILLIS = 7L * 24L * 60L * 60L * 1_000L
     private const val PUBLIC_KEY =
       "MCowBQYDK2VwAyEA0YGkIFZV3+5QovppegKn/lxq35kKlbyLd1YW0JR6At0="

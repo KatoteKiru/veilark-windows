@@ -129,6 +129,7 @@ object ProfileSelection {
           rules.put(
             JSONObject()
               .put("rule_set", JSONArray(listOf(GEOIP_RU_TAG, GEOSITE_CATEGORY_RU_TAG)))
+              .put("action", "route")
               .put("outbound", targetOutbound),
           ),
         )
@@ -199,6 +200,7 @@ object ProfileSelection {
       rules.put(
         JSONObject()
           .put("domain_suffix", JSONArray(entries.domains))
+          .put("action", "route")
           .put("outbound", outbound),
       )
     }
@@ -206,6 +208,7 @@ object ProfileSelection {
       rules.put(
         JSONObject()
           .put("ip_cidr", JSONArray(entries.networks))
+          .put("action", "route")
           .put("outbound", outbound),
       )
     }
@@ -233,7 +236,14 @@ object ProfileSelection {
    * never resolve.
    */
   private fun baseTunRules(): JSONArray = JSONArray()
-    .put(JSONObject().put("action", "sniff"))
+    .put(
+      JSONObject()
+        .put("action", "sniff")
+        // 300 ms is sing-box's default. It is too short for a fragmented TLS
+        // ClientHello or the first QUIC flight on a loaded Windows host, and a
+        // missed domain makes geo routing fall back to the destination IP.
+        .put("timeout", "1s"),
+    )
     .put(
       JSONObject()
         .put("protocol", "dns")
@@ -242,6 +252,7 @@ object ProfileSelection {
     .put(
       JSONObject()
         .put("ip_is_private", true)
+        .put("action", "route")
         .put("outbound", "direct"),
     )
 

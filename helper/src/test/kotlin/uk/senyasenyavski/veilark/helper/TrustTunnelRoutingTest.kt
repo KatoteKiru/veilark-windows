@@ -23,8 +23,10 @@ class TrustTunnelRoutingTest {
     assertEquals("general", plan.vpnMode)
     assertTrue(result.contains("vpn_mode = \"general\""))
     assertTrue(result.contains("exclusions_tcp_early_ack_enabled = true"))
-    assertTrue(result.contains("exclusions_preresolve_enabled = false"))
+    assertTrue(result.contains("exclusions_preresolve_enabled = true"))
+    assertTrue(result.contains("exclusions_preresolve_max_queries = 50"))
     assertTrue(result.contains("change_system_dns = true"))
+    assertTrue(result.contains("mtu_size = 1280"))
     assertTrue(result.contains("\"5.8.0.0/13\""))
     assertTrue(result.contains("\"*.ru\""))
     assertTrue(result.contains("password = \"test-secret\""))
@@ -41,6 +43,7 @@ class TrustTunnelRoutingTest {
     assertTrue(result.contains("vpn_mode = \"selective\""))
     assertEquals(listOf("5.8.0.0/13", "*.ru"), plan.exclusions)
     assertTrue(plan.exclusionsTcpEarlyAckEnabled)
+    assertTrue(plan.exclusionsPreresolveEnabled)
   }
 
   @Test
@@ -48,7 +51,7 @@ class TrustTunnelRoutingTest {
     val plan = TrustTunnelRouting.plan(profile(RoutingMode.All))
     val result = TrustTunnelRouting.apply(TOML, plan)
 
-    assertEquals(TrustTunnelRoutingPlan("general", emptyList(), false, false), plan)
+    assertEquals(TrustTunnelRoutingPlan("general", emptyList(), false, false, 50), plan)
     assertTrue(result.contains("exclusions = [\n]"))
     assertTrue(result.contains("exclusions_tcp_early_ack_enabled = false"))
   }
@@ -69,6 +72,7 @@ class TrustTunnelRoutingTest {
     assertEquals("general", plan.vpnMode)
     assertEquals(listOf("10.0.0.0/8", "direct.test", "*.direct.test"), plan.exclusions)
     assertTrue(plan.exclusionsTcpEarlyAckEnabled)
+    assertTrue(plan.exclusionsPreresolveEnabled)
   }
 
   @Test
@@ -108,6 +112,7 @@ class TrustTunnelRoutingTest {
 
       [listener.tun]
       bound_if = ""
+      mtu_size = 1350
     """.trimIndent()
   }
 }

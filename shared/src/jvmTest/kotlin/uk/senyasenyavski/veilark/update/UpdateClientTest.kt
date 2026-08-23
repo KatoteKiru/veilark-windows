@@ -86,6 +86,25 @@ class UpdateClientTest {
   }
 
   @Test
+  fun `complete resumable download is promoted without opening a request`() {
+    val payload = "complete update".toByteArray()
+    val update = updateFor(payload)
+    val directory = Files.createTempDirectory("veilark-update-complete-partial")
+    try {
+      val partial = directory.resolve(".Veilark-${update.versionCode}.download")
+      Files.write(partial, payload)
+
+      val installer = client().download(update, directory)
+
+      assertTrue(Files.isRegularFile(installer))
+      assertFalse(Files.exists(partial))
+      assertEquals(payload.size.toLong(), Files.size(installer))
+    } finally {
+      directory.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `explicit discard and stale cleanup only touch managed update files`() {
     val directory = Files.createTempDirectory("veilark-clean-updates")
     val update = updateFor("installer".toByteArray())

@@ -6,6 +6,7 @@ import uk.senyasenyavski.veilark.update.UpdateClient
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.util.Base64
 
@@ -207,25 +208,41 @@ class WindowsUpdateInstaller(
     return removed
   }
 
+  @Synchronized
   private fun writeStatus(outcome: UpdateInstallOutcome) {
     Files.createDirectories(updateDirectory)
     val encodedMessage = Base64.getEncoder().encodeToString(
       outcome.message.take(MAX_STATUS_MESSAGE_LENGTH).toByteArray(Charsets.UTF_8),
     )
-    Files.writeString(
-      statusFile,
-      buildString {
-        appendLine("phase=${outcome.phase}")
-        appendLine("versionCode=${outcome.versionCode}")
-        appendLine("versionName=${outcome.versionName}")
-        appendLine("exitCode=${outcome.exitCode ?: ""}")
-        appendLine("message64=$encodedMessage")
-      },
-      Charsets.UTF_8,
-      StandardOpenOption.CREATE,
-      StandardOpenOption.TRUNCATE_EXISTING,
-      StandardOpenOption.WRITE,
-    )
+    val temporary = statusFile.resolveSibling("${statusFile.fileName}.tmp")
+    try {
+      Files.deleteIfExists(temporary)
+      Files.writeString(
+        temporary,
+        buildString {
+          appendLine("phase=${outcome.phase}")
+          appendLine("versionCode=${outcome.versionCode}")
+          appendLine("versionName=${outcome.versionName}")
+          appendLine("exitCode=${outcome.exitCode ?: ""}")
+          appendLine("message64=$encodedMessage")
+        },
+        Charsets.UTF_8,
+        StandardOpenOption.CREATE_NEW,
+        StandardOpenOption.WRITE,
+      )
+      runCatching {
+        Files.move(
+          temporary,
+          statusFile,
+          StandardCopyOption.ATOMIC_MOVE,
+          StandardCopyOption.REPLACE_EXISTING,
+        )
+      }.getOrElse {
+        Files.move(temporary, statusFile, StandardCopyOption.REPLACE_EXISTING)
+      }
+    } finally {
+      runCatching { Files.deleteIfExists(temporary) }
+    }
   }
 
   internal fun helperScript(

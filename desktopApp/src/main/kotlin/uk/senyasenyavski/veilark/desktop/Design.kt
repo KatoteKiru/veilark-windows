@@ -220,11 +220,11 @@ internal fun CompactAppBar(
   var navigationExpanded by remember { mutableStateOf(false) }
   var settingsExpanded by remember { mutableStateOf(false) }
   Surface(
-    modifier = Modifier.fillMaxWidth().height(52.dp),
+    modifier = Modifier.fillMaxWidth().height(48.dp),
     color = MaterialTheme.colorScheme.surfaceContainerLow,
   ) {
     Row(
-      modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Box {
@@ -261,35 +261,43 @@ internal fun CompactAppBar(
       Image(
         painter = painterResource("veilark-logo.png"),
         contentDescription = null,
-        modifier = Modifier.size(24.dp),
+        modifier = Modifier.size(22.dp),
       )
-      Column(Modifier.weight(1f).padding(start = 8.dp)) {
-        Text("Veilark", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Box(
-            Modifier.size(7.dp).background(
-              when (phase) {
-                is VpnPhase.Connected -> MaterialTheme.colorScheme.primary
-                is VpnPhase.Degraded -> MaterialTheme.colorScheme.tertiary
-                is VpnPhase.Error -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.outline
-              },
-              CircleShape,
-            ),
-          )
-          Text(
-            "${destination.title(language)} · ${when (engine) {
-              VpnEngine.SingBox -> "sing-box"
-              VpnEngine.TrustTunnel -> "TrustTunnel"
-            }}",
-            modifier = Modifier.padding(start = 6.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
-      }
+      Text(
+        "Veilark",
+        modifier = Modifier.padding(start = 8.dp),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+      )
+      Box(
+        Modifier.padding(start = 9.dp).size(7.dp).background(
+          when (phase) {
+            is VpnPhase.Connected -> MaterialTheme.colorScheme.primary
+            is VpnPhase.Degraded -> MaterialTheme.colorScheme.tertiary
+            is VpnPhase.Error -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.outline
+          },
+          CircleShape,
+        ),
+      )
+      Text(
+        destination.title(language),
+        modifier = Modifier.weight(1f).padding(start = 6.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      Text(
+        when (engine) {
+          VpnEngine.SingBox -> "sing-box"
+          VpnEngine.TrustTunnel -> "TrustTunnel"
+        },
+        modifier = Modifier.padding(horizontal = 6.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+      )
       Box {
         IconButton(onClick = { settingsExpanded = true }) {
           Icon(Icons.Rounded.Settings, language.text("Настройки", "Settings"))
@@ -344,14 +352,20 @@ internal fun PageHeader(
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    Column(Modifier.weight(1f).padding(end = if (action == null) 0.dp else 16.dp)) {
-      Text(title, style = MaterialTheme.typography.headlineSmall)
+    Column(Modifier.weight(1f).padding(end = if (action == null) 0.dp else 10.dp)) {
+      Text(
+        title,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
       Text(
         subtitle,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 3.dp),
-        maxLines = 1,
+        modifier = Modifier.padding(top = 1.dp),
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
       )
     }

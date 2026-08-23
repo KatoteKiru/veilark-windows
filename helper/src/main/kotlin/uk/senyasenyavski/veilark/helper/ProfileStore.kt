@@ -11,9 +11,11 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.nio.channels.Channels
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 
 data class StoredProfiles(
   val profiles: List<Profile> = emptyList(),
@@ -86,18 +88,22 @@ class ProfileStore(
   fun save(value: StoredProfiles) {
     Files.createDirectories(path.parent)
     val encrypted = protector.protect(encode(value))
+    require(encrypted.size.toLong() <= MAX_STORE_BYTES) {
+      "Хранилище профилей слишком большое"
+    }
     val temporary = path.resolveSibling("${path.fileName}.tmp")
     val backupTemporary = backupPath.resolveSibling("${backupPath.fileName}.tmp")
     try {
       Files.write(temporary, encrypted)
       // Verify with the same protector and decoder before replacing the only
       // copy of the user's subscriptions.
-      decode(protector.unprotect(Files.readAllBytes(temporary)))
+      decode(protector.unprotect(readBoundedBytes(temporary)))
 
       val validPrimary = if (Files.isRegularFile(path)) {
         runCatching {
-          decodeProtected(path)
-          Files.readAllBytes(path)
+          val existing = readBoundedBytes(path)
+          decode(protector.unprotect(existing))
+          existing
         }.getOrNull()
       } else {
         null
@@ -114,7 +120,25 @@ class ProfileStore(
   }
 
   private fun decodeProtected(candidate: Path): StoredProfiles =
-    decode(protector.unprotect(Files.readAllBytes(candidate)))
+    decode(protector.unprotect(readBoundedBytes(candidate)))
+
+  private fun readBoundedBytes(candidate: Path): ByteArray =
+    Files.newByteChannel(candidate, StandardOpenOption.READ).use { channel ->
+      val declaredSize = channel.size()
+      require(declaredSize in 0..MAX_STORE_BYTES) {
+        "Хранилище профилей слишком большое"
+      }
+      val expectedSize = declaredSize.toInt()
+      val bytes = Channels.newInputStream(channel).readNBytes(expectedSize + 1)
+      require(bytes.size == expectedSize) {
+        if (bytes.size > expectedSize) {
+          "Хранилище профилей слишком большое"
+        } else {
+          "Хранилище профилей обрезано"
+        }
+      }
+      bytes
+    }
 
   private fun moveReplacing(source: Path, target: Path) {
     runCatching {
@@ -306,6 +330,7 @@ class ProfileStore(
     readInt().also { require(it in 0..maximum) { "Недопустимый размер в хранилище" } }
 
   private companion object {
+    const val MAX_STORE_BYTES = 64L * 1024L * 1024L
     const val MAGIC = 0x56454C4B
     const val CURRENT_VERSION = 6
     const val MAX_LEGACY_PROFILES = 16

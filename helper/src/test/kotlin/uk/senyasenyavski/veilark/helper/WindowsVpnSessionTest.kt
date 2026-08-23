@@ -251,6 +251,79 @@ class WindowsVpnSessionTest {
   }
 
   @Test
+  fun `connect is ignored while disconnect owns teardown`() {
+    runBlocking {
+      val controller = FakeController(
+        engine = VpnEngine.SingBox,
+        blockStart = true,
+        blockStop = true,
+      )
+      val session = WindowsVpnSession(listOf(controller), logger = {})
+      val connecting = launch { session.connect(profile(VpnEngine.SingBox)) }
+      withTimeout(2_000) {
+        while (session.state.value.phase !is VpnPhase.Connecting) delay(10)
+      }
+
+      val disconnecting = launch { session.disconnect() }
+      withTimeout(2_000) {
+        while (session.state.value.phase !is VpnPhase.Stopping || controller.stopCalls.get() == 0) {
+          delay(10)
+        }
+      }
+
+      withTimeout(2_000) { session.connect(profile(VpnEngine.SingBox)) }
+      assertEquals(1, controller.startCalls.get())
+      assertIs<VpnPhase.Stopping>(session.state.value.phase)
+
+      controller.releaseStop()
+      disconnecting.join()
+      connecting.join()
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
+    }
+  }
+
+  @Test
+  fun `monitor failure degrades and then recovers instead of silently stopping`() {
+    runBlocking {
+      val controller = FakeController(VpnEngine.SingBox)
+      val session = fastSession(controller)
+      session.connect(profile(VpnEngine.SingBox))
+
+      controller.healthFailure = IllegalStateException("synthetic probe failure")
+      withTimeout(2_000) {
+        while (session.state.value.phase !is VpnPhase.Degraded) delay(10)
+      }
+      assertTrue(
+        assertIs<VpnPhase.Degraded>(session.state.value.phase)
+          .message.contains("проверка доступности"),
+      )
+
+      controller.healthFailure = null
+      withTimeout(2_000) {
+        while (session.state.value.phase !is VpnPhase.Connected) delay(10)
+      }
+      session.disconnect()
+    }
+  }
+
+  @Test
+  fun `statistics failure does not tear down a connected core`() {
+    runBlocking {
+      val controller = FakeController(VpnEngine.SingBox).apply {
+        statisticsFailure = IllegalStateException("synthetic counter failure")
+      }
+      val session = WindowsVpnSession(listOf(controller), logger = {})
+
+      session.connect(profile(VpnEngine.SingBox))
+
+      assertIs<VpnPhase.Connected>(session.state.value.phase)
+      assertTrue(controller.started)
+      assertNull(session.state.value.traffic)
+      session.disconnect()
+    }
+  }
+
+  @Test
   fun `disconnect publishes stopping before controller shutdown finishes`() {
     runBlocking {
       val controller = FakeController(VpnEngine.SingBox, blockStop = true)
@@ -332,6 +405,9 @@ class WindowsVpnSessionTest {
     var stopped = false
     var health: EngineHealth = EngineHealth.Healthy
     var statistics: TunnelStatistics? = null
+    var healthFailure: Throwable? = null
+    var statisticsFailure: Throwable? = null
+    val startCalls = AtomicInteger()
     val stopCalls = AtomicInteger()
     val maxConcurrentStops = AtomicInteger()
     private val concurrentStops = AtomicInteger()
@@ -341,6 +417,7 @@ class WindowsVpnSessionTest {
     private val stopGate = CompletableDeferred<Unit>().apply { if (!blockStop) complete(Unit) }
 
     override suspend fun start(profile: Profile): EngineHealth {
+      startCalls.incrementAndGet()
       if (nonCancellableStart) {
         withContext(NonCancellable) { gate.await() }
       } else {
@@ -367,8 +444,15 @@ class WindowsVpnSessionTest {
     }
 
     override fun isAlive(): Boolean = started
-    override suspend fun health(): EngineHealth = health
-    override fun statistics(): TunnelStatistics? = statistics
+    override suspend fun health(): EngineHealth {
+      healthFailure?.let { throw it }
+      return health
+    }
+
+    override fun statistics(): TunnelStatistics? {
+      statisticsFailure?.let { throw it }
+      return statistics
+    }
 
     fun crash() {
       started = false

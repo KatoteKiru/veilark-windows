@@ -2,6 +2,7 @@ package com.example.veilark.profile
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import uk.senyasenyavski.veilark.net.boundedByteArrayHandler
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -13,6 +14,11 @@ import java.time.Duration
  * parser's Android tests can run unchanged on Windows.
  */
 object SubscriptionFetcher {
+  private val client = HttpClient.newBuilder()
+    .connectTimeout(Duration.ofSeconds(10))
+    .followRedirects(HttpClient.Redirect.NORMAL)
+    .build()
+
   suspend fun fetch(
     source: String,
     headers: Map<String, String> = emptyMap(),
@@ -35,11 +41,10 @@ object SubscriptionFetcher {
       .apply { headers.forEach(::header) }
       .GET()
       .build()
-    val client = HttpClient.newBuilder()
-      .connectTimeout(Duration.ofSeconds(10))
-      .followRedirects(HttpClient.Redirect.NORMAL)
-      .build()
-    val response = client.send(request, HttpResponse.BodyHandlers.ofByteArray())
+    val response = client.send(
+      request,
+      boundedByteArrayHandler(MAX_BYTES, "Подписка больше 4 МБ"),
+    )
     when (response.statusCode()) {
       in 200..299 -> validateBody(
         response.body(),

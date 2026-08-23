@@ -6,7 +6,11 @@ import org.json.JSONObject
 import java.net.ServerSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.system.measureTimeMillis
 import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import uk.senyasenyavski.veilark.model.Node
@@ -63,6 +67,48 @@ class NodeLatencyProbeTest {
 
       assertTrue(requireNotNull(NodeLatencyProbe(1_000).probe(profile)["node"]).available)
     }
+  }
+
+  @Test
+  fun `DNS and TCP share one hard timeout without opening a real socket`() = runBlocking {
+    val connectorCalls = AtomicInteger()
+    val profile = Profile(
+      id = "timeout",
+      name = "timeout",
+      engine = VpnEngine.SingBox,
+      config = JSONObject().put(
+        "outbounds",
+        JSONArray().put(
+          JSONObject()
+            .put("tag", "node")
+            .put("server", "delayed.invalid")
+            .put("server_port", 443),
+        ),
+      ).toString(),
+      nodes = listOf(Node("node", "Delayed", "VLESS")),
+      sourceLabel = "test",
+    )
+    val probe = NodeLatencyProbe(
+      timeoutMillis = 500,
+      concurrency = 1,
+      resolver = {
+        Thread.sleep(100)
+        arrayOf(InetAddress.getLoopbackAddress())
+      },
+      connector = { _, _, _ ->
+        connectorCalls.incrementAndGet()
+        Thread.sleep(5_000)
+      },
+    )
+    lateinit var result: NodeLatency
+
+    val elapsed = measureTimeMillis {
+      result = requireNotNull(probe.probe(profile)["node"])
+    }
+
+    assertFalse(result.available)
+    assertEquals(1, connectorCalls.get())
+    assertTrue(elapsed < 1_500, "Probe exceeded its hard deadline: ${elapsed}ms")
   }
 
   @Test

@@ -7,7 +7,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -44,21 +46,25 @@ class WindowsVpnSession(
   private var connectJob: Job? = null
   private var monitorJob: Job? = null
 
+  init {
+    require(statisticsIntervalMillis > 0) { "Интервал статистики должен быть положительным" }
+    require(healthChecksEveryTicks > 0) { "Интервал проверки соединения должен быть положительным" }
+    require(disconnectJoinTimeoutMillis > 0) { "Тайм-аут остановки должен быть положительным" }
+  }
+
   override val state: StateFlow<SessionState> = mutableState
 
   override suspend fun connect(profile: Profile) {
     val job = mutex.withLock {
-      if (connectJob?.isActive == true || activeController?.isAlive() == true) return
-      preConnectCheck()?.let { message ->
-        publish(
-          SessionState(
-            engine = profile.engine,
-            phase = VpnPhase.Error(message, "COMPETING_TUNNEL"),
-            profile = profile,
-          ),
-        )
-        return
-      }
+      // disconnect() clears connectJob before waiting for native teardown so it
+      // can cancel the attempt without deadlocking this mutex. The explicit
+      // Stopping/owner gates prevent a second click from starting the same
+      // controller while that teardown is still in progress.
+      if (
+        connectJob?.isActive == true ||
+        activeController != null ||
+        mutableState.value.phase is VpnPhase.Stopping
+      ) return
       val controller = controllers[profile.engine] ?: run {
         publish(
           SessionState(
@@ -113,7 +119,9 @@ class WindowsVpnSession(
     }
     val stopped = controller?.let { stopOwnedController(it) } ?: Result.success(Unit)
     val terminated = stopped.mapCatching {
-      check(pendingFinished) { "Попытка подключения не остановилась за 3 секунды" }
+      check(pendingFinished) {
+        "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
+      }
       check(controller?.isAlive() != true) { "VPN-ядро всё ещё работает" }
     }
     mutex.withLock {
@@ -136,7 +144,25 @@ class WindowsVpnSession(
 
   private suspend fun runConnect(controller: EngineController, profile: Profile) {
     try {
+      // ActiveTunnelConflict reads the native Windows interface table. Keep it
+      // on the session's IO scope rather than blocking the caller/UI thread.
+      preConnectCheck()?.let { message ->
+        currentCoroutineContext().ensureActive()
+        mutex.withLock {
+          if (mutableState.value.phase is VpnPhase.Stopping) return@withLock
+          publish(
+            SessionState(
+              engine = profile.engine,
+              phase = VpnPhase.Error(message, "COMPETING_TUNNEL"),
+              profile = profile,
+            ),
+          )
+        }
+        return
+      }
+      currentCoroutineContext().ensureActive()
       mutex.withLock {
+        if (mutableState.value.phase is VpnPhase.Stopping) return
         activeController = controller
         publish(mutableState.value.copy(phase = VpnPhase.Connecting))
       }
@@ -149,7 +175,7 @@ class WindowsVpnSession(
               EngineHealth.Healthy -> VpnPhase.Connected(System.currentTimeMillis())
               is EngineHealth.Unhealthy -> VpnPhase.Degraded(health.message)
             },
-            traffic = controller.statistics()?.toSnapshot(),
+            traffic = safeStatistics(controller),
           ),
         )
         startMonitor(controller)
@@ -236,8 +262,8 @@ class WindowsVpnSession(
           reportCoreExit(controller)
           return@launch
         }
-        val statistics = controller.statistics()?.toSnapshot()
-        val health = if (tick % healthChecksEveryTicks == 0) controller.health() else null
+        val statistics = safeStatistics(controller)
+        val health = if (tick % healthChecksEveryTicks == 0) safeHealth(controller) else null
         mutex.withLock {
           if (activeController !== controller) return@withLock
           val phase = mutableState.value.phase
@@ -277,6 +303,22 @@ class WindowsVpnSession(
         traffic = null,
       ),
     )
+  }
+
+  private fun safeStatistics(controller: EngineController): TrafficSnapshot? = try {
+    controller.statistics()?.toSnapshot()
+  } catch (_: Exception) {
+    logger("Не удалось прочитать счётчики VPN-туннеля")
+    null
+  }
+
+  private suspend fun safeHealth(controller: EngineController): EngineHealth = try {
+    controller.health()
+  } catch (cancellation: CancellationException) {
+    throw cancellation
+  } catch (_: Exception) {
+    logger("Не удалось выполнить проверку доступности VPN-туннеля")
+    EngineHealth.Unhealthy("проверка доступности туннеля не выполнена")
   }
 
   private fun publish(state: SessionState) {

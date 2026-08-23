@@ -305,10 +305,10 @@ fun main(args: Array<String>) {
     visible = windowVisible,
     title = "Veilark",
     icon = painterResource("veilark-logo.png"),
-    state = rememberWindowState(width = 640.dp, height = 520.dp),
+    state = rememberWindowState(width = 600.dp, height = 440.dp),
   ) {
     DisposableEffect(Unit) {
-      window.minimumSize = java.awt.Dimension(560, 500)
+      window.minimumSize = java.awt.Dimension(520, 420)
       window.transferHandler = object : TransferHandler() {
         override fun canImport(support: TransferSupport): Boolean =
           support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
@@ -1140,7 +1140,7 @@ private fun HomeScreen(
   val connected = phase is VpnPhase.Connected || phase is VpnPhase.Degraded
   val connecting = phase is VpnPhase.Preparing || phase is VpnPhase.Connecting
   val stopping = phase is VpnPhase.Stopping
-  Page {
+  Page(maxWidth = 520.dp, verticalPadding = 8.dp) {
     AnimatedVisibility(visible = !elevated && !connected) {
       ElevationNotice(Modifier.padding(bottom = 10.dp))
     }
@@ -1238,88 +1238,89 @@ private fun CompactConnectionWorkspace(
     else -> language.text("Подключить", "Connect")
   }
 
+  val statusTitle = when (phase) {
+    VpnPhase.Idle -> language.text("Отключено", "Disconnected")
+    VpnPhase.NeedsElevation -> language.text("Требуются права Windows", "Windows admin access required")
+    VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
+    VpnPhase.Connecting -> language.text("Подключение", "Connecting")
+    is VpnPhase.Connected -> language.text("Подключено", "Connected")
+    is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
+    VpnPhase.Stopping -> language.text("Остановка", "Stopping")
+    is VpnPhase.Error -> language.text("Ошибка подключения", "Connection error")
+  }
+
   Column(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier.fillMaxWidth().widthIn(max = 500.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    Text(
-      when (phase) {
-        VpnPhase.Idle -> language.text("Отключено", "Disconnected")
-        VpnPhase.NeedsElevation -> language.text("Требуются права Windows", "Windows admin access required")
-        VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
-        VpnPhase.Connecting -> language.text("Подключение", "Connecting")
-        is VpnPhase.Connected -> language.text("Подключено", "Connected")
-        is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
-        VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-        is VpnPhase.Error -> language.text("Ошибка подключения", "Connection error")
-      },
-      style = MaterialTheme.typography.titleLarge,
-      fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-      statusSummary,
-      modifier = Modifier.padding(top = 2.dp).widthIn(max = 500.dp),
-      style = MaterialTheme.typography.bodySmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      maxLines = 2,
-      overflow = TextOverflow.Ellipsis,
-      textAlign = TextAlign.Center,
-    )
-
-    Surface(
-      modifier = Modifier.padding(top = 14.dp).size(118.dp)
-        .clickable(
-          enabled = phase !is VpnPhase.Stopping,
-          role = Role.Button,
-          onClick = if (profile == null) onImport else onAction,
-        ),
-      color = statusContainerColor,
-      contentColor = statusContentColor,
-      shape = CircleShape,
-      tonalElevation = 2.dp,
-    ) {
-      Box(contentAlignment = Alignment.Center) {
-        if (busy) {
-          CircularProgressIndicator(
-            modifier = Modifier.size(90.dp),
-            color = LocalContentColor.current,
-            strokeWidth = 3.dp,
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      if (maxWidth >= 450.dp) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Center,
+        ) {
+          ConnectionCircle(
+            busy = busy,
+            connected = connected,
+            enabled = phase !is VpnPhase.Stopping,
+            actionLabel = actionLabel,
+            stateLabel = statusTitle,
+            containerColor = statusContainerColor,
+            contentColor = statusContentColor,
+            onClick = if (profile == null) onImport else onAction,
           )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          AnimatedContent(
-            targetState = busy,
-            transitionSpec = {
-              (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .9f))
-                .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .9f))
-            },
-          ) { isBusy ->
-            if (isBusy) {
-              Icon(Icons.Rounded.StopCircle, null, Modifier.size(34.dp))
-            } else {
-              ShieldMark(
-                checked = connected,
-                color = LocalContentColor.current,
-                modifier = Modifier.size(42.dp),
-              )
-            }
+          Column(
+            modifier = Modifier.weight(1f).padding(start = 16.dp),
+            horizontalAlignment = Alignment.Start,
+          ) {
+            ConnectionStatus(
+              title = statusTitle,
+              summary = statusSummary,
+              connected = connected,
+              phase = phase,
+              traffic = traffic,
+              textAlign = TextAlign.Start,
+            )
+            EngineSelector(
+              selectedEngine = selectedEngine,
+              availableEngines = availableEngines,
+              enabled = !configurationLocked,
+              onEngineSelect = onEngineSelect,
+              modifier = Modifier.padding(top = 8.dp).widthIn(max = 280.dp),
+            )
           }
-          Text(
-            actionLabel,
-            modifier = Modifier.padding(top = 6.dp),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
+        }
+      } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          ConnectionStatus(
+            title = statusTitle,
+            summary = statusSummary,
+            connected = connected,
+            phase = phase,
+            traffic = traffic,
+            textAlign = TextAlign.Center,
+          )
+          ConnectionCircle(
+            busy = busy,
+            connected = connected,
+            enabled = phase !is VpnPhase.Stopping,
+            actionLabel = actionLabel,
+            stateLabel = statusTitle,
+            containerColor = statusContainerColor,
+            contentColor = statusContentColor,
+            onClick = if (profile == null) onImport else onAction,
+            modifier = Modifier.padding(top = 10.dp),
+          )
+          EngineSelector(
+            selectedEngine = selectedEngine,
+            availableEngines = availableEngines,
+            enabled = !configurationLocked,
+            onEngineSelect = onEngineSelect,
+            modifier = Modifier.padding(top = 10.dp).widthIn(max = 280.dp),
           )
         }
       }
-    }
-
-    if (connected) {
-      CompactTrafficEvidence(
-        phase = phase,
-        traffic = traffic,
-        modifier = Modifier.padding(top = 8.dp),
-      )
     }
 
     AnimatedVisibility(
@@ -1331,30 +1332,8 @@ private fun CompactConnectionWorkspace(
         phase = phase,
         message = statusMessage,
         onOpenLogs = onOpenLogs,
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
       )
-    }
-
-    Surface(
-      modifier = Modifier.padding(top = 14.dp).widthIn(max = 300.dp).fillMaxWidth(),
-      color = MaterialTheme.colorScheme.surfaceContainerHigh,
-      shape = RoundedCornerShape(11.dp),
-    ) {
-      Row(
-        modifier = Modifier.fillMaxWidth().padding(2.dp).selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-      ) {
-        VpnEngine.entries.forEach { engine ->
-          EngineChoice(
-            engine = engine,
-            selected = selectedEngine == engine,
-            configured = engine in availableEngines,
-            enabled = !configurationLocked,
-            modifier = Modifier.weight(1f),
-            onSelect = onEngineSelect,
-          )
-        }
-      }
     }
 
     if (profile == null) {
@@ -1376,7 +1355,7 @@ private fun CompactConnectionWorkspace(
         latencies = nodeLatencies,
         enabled = !configurationLocked,
         onSelect = onSelectEndpoint,
-        modifier = Modifier.padding(top = 10.dp).widthIn(max = 460.dp).fillMaxWidth(),
+        modifier = Modifier.padding(top = 10.dp).widthIn(max = 420.dp).fillMaxWidth(),
       )
     }
 
@@ -1403,6 +1382,132 @@ private fun CompactConnectionWorkspace(
           else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
           Text(language.text("Пинг", "Ping"), Modifier.padding(start = 5.dp))
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ConnectionStatus(
+  title: String,
+  summary: String,
+  connected: Boolean,
+  phase: VpnPhase,
+  traffic: TrafficSnapshot?,
+  textAlign: TextAlign,
+) {
+  Text(
+    title,
+    modifier = Modifier.fillMaxWidth(),
+    style = MaterialTheme.typography.titleLarge,
+    fontWeight = FontWeight.SemiBold,
+    maxLines = 1,
+    overflow = TextOverflow.Ellipsis,
+    textAlign = textAlign,
+  )
+  Text(
+    summary,
+    modifier = Modifier.fillMaxWidth().padding(top = 1.dp),
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    maxLines = 2,
+    overflow = TextOverflow.Ellipsis,
+    textAlign = textAlign,
+  )
+  if (connected) {
+    CompactTrafficEvidence(
+      phase = phase,
+      traffic = traffic,
+      modifier = Modifier.padding(top = 4.dp),
+    )
+  }
+}
+
+@Composable
+private fun ConnectionCircle(
+  busy: Boolean,
+  connected: Boolean,
+  enabled: Boolean,
+  actionLabel: String,
+  stateLabel: String,
+  containerColor: Color,
+  contentColor: Color,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Surface(
+    modifier = modifier.size(100.dp)
+      .semantics { stateDescription = stateLabel }
+      .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+    color = containerColor,
+    contentColor = contentColor,
+    shape = CircleShape,
+    tonalElevation = 2.dp,
+  ) {
+    Box(contentAlignment = Alignment.Center) {
+      if (busy) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(76.dp),
+          color = LocalContentColor.current,
+          strokeWidth = 3.dp,
+        )
+      }
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        AnimatedContent(
+          targetState = busy,
+          transitionSpec = {
+            (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .9f))
+              .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .9f))
+          },
+        ) { isBusy ->
+          if (isBusy) {
+            Icon(Icons.Rounded.StopCircle, null, Modifier.size(30.dp))
+          } else {
+            ShieldMark(
+              checked = connected,
+              color = LocalContentColor.current,
+              modifier = Modifier.size(35.dp),
+            )
+          }
+        }
+        Text(
+          actionLabel,
+          modifier = Modifier.padding(top = 4.dp),
+          style = MaterialTheme.typography.labelMedium,
+          fontWeight = FontWeight.SemiBold,
+          maxLines = 1,
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun EngineSelector(
+  selectedEngine: VpnEngine,
+  availableEngines: Set<VpnEngine>,
+  enabled: Boolean,
+  onEngineSelect: (VpnEngine) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Surface(
+    modifier = modifier.fillMaxWidth(),
+    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    shape = RoundedCornerShape(11.dp),
+  ) {
+    Row(
+      modifier = Modifier.fillMaxWidth().padding(2.dp).selectableGroup(),
+      horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+      VpnEngine.entries.forEach { engine ->
+        EngineChoice(
+          engine = engine,
+          selected = selectedEngine == engine,
+          configured = engine in availableEngines,
+          enabled = enabled,
+          modifier = Modifier.weight(1f),
+          onSelect = onEngineSelect,
+        )
       }
     }
   }
@@ -1636,9 +1741,9 @@ private fun EndpointPicker(
           expanded = true
         },
         enabled = enabled && groups.isNotEmpty(),
-        modifier = Modifier.fillMaxWidth().height(50.dp),
+        modifier = Modifier.fillMaxWidth().height(48.dp),
         shape = RoundedCornerShape(11.dp),
-        contentPadding = PaddingValues(horizontal = 15.dp, vertical = 7.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
       ) {
         Icon(Icons.Rounded.Language, null, Modifier.size(19.dp))
         Column(Modifier.weight(1f).padding(horizontal = 11.dp)) {
@@ -1672,11 +1777,11 @@ private fun EndpointPicker(
           expanded = false
           query = ""
         },
-        width = 460.dp,
+        width = 420.dp,
       ) {
         Column(Modifier.fillMaxWidth()) {
           Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 5.dp, bottom = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
@@ -1695,7 +1800,7 @@ private fun EndpointPicker(
             OutlinedTextField(
               value = query,
               onValueChange = { query = it },
-              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
               singleLine = true,
               placeholder = { Text(language.text("Найти сервер", "Find server")) },
               shape = RoundedCornerShape(12.dp),
@@ -1714,14 +1819,14 @@ private fun EndpointPicker(
             }
           } else {
             LazyColumn(
-              modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp),
-              contentPadding = PaddingValues(vertical = 6.dp),
+              modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+              contentPadding = PaddingValues(vertical = 4.dp),
             ) {
               filteredGroups.forEach { group ->
                 item(key = "group-${group.subscriptionId}") {
                   Row(
                     modifier = Modifier.fillMaxWidth()
-                      .padding(start = 16.dp, end = 16.dp, top = 9.dp, bottom = 5.dp),
+                      .padding(start = 14.dp, end = 14.dp, top = 7.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                   ) {
                     Text(
@@ -1769,7 +1874,7 @@ private fun EndpointPicker(
                   ) {
                     Row(
                       modifier = Modifier.fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 9.dp),
+                        .padding(start = 12.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
                       verticalAlignment = Alignment.CenterVertically,
                     ) {
                       Icon(
@@ -2746,7 +2851,7 @@ private fun ProfilesScreen(
   onUrl: () -> Unit,
 ) {
   val language = LocalUiLanguage.current
-  Page {
+  Page(maxWidth = 600.dp) {
     PageHeader(
       language.text("Подписки", "Subscriptions"),
       language.text("Источники и узлы обоих VPN-ядер", "Sources and servers for both VPN cores"),
@@ -2754,7 +2859,7 @@ private fun ProfilesScreen(
         Button(
           onClick = onUrl,
           enabled = configurationEnabled && !importing,
-          shape = RoundedCornerShape(16.dp),
+          shape = RoundedCornerShape(12.dp),
         ) {
           Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
           Text(language.text("Добавить", "Add"), Modifier.padding(start = 8.dp))
@@ -2762,7 +2867,7 @@ private fun ProfilesScreen(
       },
     )
     Row(
-      modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+      modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
@@ -2786,10 +2891,10 @@ private fun ProfilesScreen(
         Text(language.text("Из файла", "File"), Modifier.padding(start = 6.dp))
       }
     }
-    CardSection(Modifier.fillMaxWidth().heightIn(min = 118.dp)) {
+    CardSection(Modifier.fillMaxWidth().heightIn(min = 92.dp)) {
       if (subscriptions.isEmpty()) {
         Box(
-          Modifier.fillMaxWidth().height(118.dp),
+          Modifier.fillMaxWidth().height(92.dp),
           contentAlignment = Alignment.Center,
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2863,8 +2968,8 @@ private fun ProfilesScreen(
               },
               leadingContent = {
                 Surface(
-              modifier = Modifier.size(40.dp),
-              shape = RoundedCornerShape(12.dp),
+                  modifier = Modifier.size(36.dp),
+                  shape = RoundedCornerShape(10.dp),
                   color = if (active) {
                     MaterialTheme.colorScheme.primaryContainer
                   } else {
@@ -2905,14 +3010,6 @@ private fun ProfilesScreen(
                       )
                     }
                   }
-                  if (active) {
-                    Text(
-                      language.text("Активна", "Active"),
-                      modifier = Modifier.padding(horizontal = 8.dp),
-                      color = MaterialTheme.colorScheme.primary,
-                      style = MaterialTheme.typography.labelLarge,
-                    )
-                  }
                 }
               },
               colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -2929,7 +3026,7 @@ private fun ProfilesScreen(
     }
     val activeProfile = activeSubscription?.profile(selectedEngine)
     if (activeProfile != null) {
-      Spacer(Modifier.height(18.dp))
+      Spacer(Modifier.height(10.dp))
       Text(
         language.text("Узел подключения", "Connection server"),
         style = MaterialTheme.typography.titleMedium,
@@ -2947,8 +3044,8 @@ private fun ProfilesScreen(
           OutlinedButton(
             onClick = { onProbe(activeProfile) },
             enabled = !probing,
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            shape = RoundedCornerShape(12.dp),
           ) {
             if (probing) {
               CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
@@ -3114,7 +3211,10 @@ private fun NodeDropdown(
   }
   val activeLatencyLabel = when {
     activeLatency == null -> ""
-    activeLatency.available -> " · ${activeLatency.millis} мс"
+    activeLatency.available -> language.text(
+      " · ${activeLatency.millis} мс",
+      " · ${activeLatency.millis} ms",
+    )
     else -> language.text(" · таймаут", " · timeout")
   }
   val arrowRotation by animateFloatAsState(
@@ -3138,7 +3238,12 @@ private fun NodeDropdown(
     ) {
       Icon(Icons.Rounded.Language, null, Modifier.size(19.dp))
       Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-        Text(activeName, fontWeight = FontWeight.Medium)
+        Text(
+          activeName,
+          fontWeight = FontWeight.Medium,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
         Text(
           "$activeDetail$activeLatencyLabel",
           style = MaterialTheme.typography.bodySmall,
@@ -3157,7 +3262,7 @@ private fun NodeDropdown(
         expanded = false
         query = ""
       },
-      width = 500.dp,
+      width = 420.dp,
     ) {
       Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -3229,7 +3334,7 @@ private fun NodeDropdown(
                   Text(
                     when {
                       latency == null -> "—"
-                      latency.available -> "${latency.millis} мс"
+                      latency.available -> language.text("${latency.millis} мс", "${latency.millis} ms")
                       else -> language.text("таймаут", "timeout")
                     },
                     style = MaterialTheme.typography.labelMedium,
@@ -3311,7 +3416,7 @@ private fun RoutingScreen(
   val manual = selectedPreset == RoutingPresetUi.Custom
   val enabled = hasAnyProfile && configurationEnabled && !geoRefreshing
 
-  Page {
+  Page(maxWidth = 600.dp) {
     PageHeader(
       language.text("Маршрутизация", "Routing"),
       language.text(
@@ -3347,9 +3452,9 @@ private fun RoutingScreen(
         }
       },
     )
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(8.dp))
     CardSection(Modifier.fillMaxWidth()) {
-      Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+      Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
         Text(
           language.text("Схема трафика", "Traffic policy"),
           style = MaterialTheme.typography.labelLarge,
@@ -3365,13 +3470,13 @@ private fun RoutingScreen(
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(
-          modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
+          modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
           RoutingPresetUi.entries.chunked(2).forEach { rowPresets ->
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
               rowPresets.forEach { preset ->
                 RoutingPresetChoice(
@@ -3391,33 +3496,46 @@ private fun RoutingScreen(
           exit = fadeOut(tween(120)),
         ) {
           Column {
-            HorizontalDivider(Modifier.padding(top = 14.dp))
-            Row(
-              Modifier.fillMaxWidth().padding(vertical = 12.dp),
-              horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-              OutlinedTextField(
-                value = directEntries,
-                onValueChange = { directEntries = it },
-                modifier = Modifier.weight(1f),
-                enabled = enabled,
-                label = { Text(language.text("Напрямую", "Direct")) },
-                supportingText = { Text(language.text("Домены, IP или CIDR через пробел", "Domains, IPs or CIDRs separated by spaces")) },
-                minLines = 3,
-                maxLines = 6,
-                shape = RoundedCornerShape(12.dp),
-              )
-              OutlinedTextField(
-                value = vpnEntries,
-                onValueChange = { vpnEntries = it },
-                modifier = Modifier.weight(1f),
-                enabled = enabled,
-                label = { Text(language.text("Через VPN", "Through VPN")) },
-                supportingText = { Text(language.text("Домены, IP или CIDR через пробел", "Domains, IPs or CIDRs separated by spaces")) },
-                minLines = 3,
-                maxLines = 6,
-                shape = RoundedCornerShape(12.dp),
-              )
+            HorizontalDivider(Modifier.padding(top = 10.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+              if (maxWidth >= 520.dp) {
+                Row(
+                  Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  RoutingRuleField(
+                    value = directEntries,
+                    onValueChange = { directEntries = it },
+                    label = language.text("Напрямую", "Direct"),
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                  )
+                  RoutingRuleField(
+                    value = vpnEntries,
+                    onValueChange = { vpnEntries = it },
+                    label = language.text("Через VPN", "Through VPN"),
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                  )
+                }
+              } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  RoutingRuleField(
+                    value = directEntries,
+                    onValueChange = { directEntries = it },
+                    label = language.text("Напрямую", "Direct"),
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                  )
+                  RoutingRuleField(
+                    value = vpnEntries,
+                    onValueChange = { vpnEntries = it },
+                    label = language.text("Через VPN", "Through VPN"),
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                  )
+                }
+              }
             }
           }
         }
@@ -3534,7 +3652,7 @@ private fun RoutingPresetChoice(
   )
   Surface(
     modifier = modifier
-      .heightIn(min = 72.dp)
+      .heightIn(min = 64.dp)
       .graphicsLayer { alpha = if (enabled) 1f else .58f }
       .selectable(
         selected = selected,
@@ -3557,7 +3675,7 @@ private fun RoutingPresetChoice(
     shape = RoundedCornerShape(12.dp),
   ) {
     Row(
-      Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Surface(
@@ -3592,6 +3710,34 @@ private fun RoutingPresetChoice(
 }
 
 @Composable
+private fun RoutingRuleField(
+  value: String,
+  onValueChange: (String) -> Unit,
+  label: String,
+  enabled: Boolean,
+  modifier: Modifier,
+) {
+  val language = LocalUiLanguage.current
+  OutlinedTextField(
+    value = value,
+    onValueChange = onValueChange,
+    modifier = modifier,
+    enabled = enabled,
+    label = { Text(label) },
+    supportingText = {
+      Text(
+        language.text("Домены, IP или CIDR через пробел", "Domains, IPs or CIDRs separated by spaces"),
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
+    minLines = 2,
+    maxLines = 5,
+    shape = RoundedCornerShape(12.dp),
+  )
+}
+
+@Composable
 private fun SettingRow(
   title: String,
   subtitle: String,
@@ -3616,7 +3762,7 @@ private fun SettingRow(
           language.text("Выключено", "Off")
         }
       }
-      .padding(vertical = 15.dp),
+      .padding(vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Column(Modifier.weight(1f)) {
@@ -3648,7 +3794,7 @@ private fun DiagnosticsScreen() {
     }
   }
 
-  Page {
+  Page(maxWidth = 520.dp) {
     PageHeader(
       language.text("Диагностика", "Diagnostics"),
       language.text("Доступность внешних сервисов", "External service availability"),
@@ -3656,7 +3802,7 @@ private fun DiagnosticsScreen() {
         Button(
           onClick = ::runChecks,
           enabled = !running,
-          shape = RoundedCornerShape(16.dp),
+          shape = RoundedCornerShape(12.dp),
         ) {
           if (running) {
             CircularProgressIndicator(
@@ -3675,7 +3821,7 @@ private fun DiagnosticsScreen() {
         }
       },
     )
-    Spacer(Modifier.height(24.dp))
+    Spacer(Modifier.height(10.dp))
     CardSection(Modifier.fillMaxWidth()) {
       Column {
         HealthChecker.defaultTargets
@@ -3689,7 +3835,10 @@ private fun DiagnosticsScreen() {
                     running && result == null -> language.text("Выполняется HTTPS-запрос", "Running HTTPS request")
                     result?.safeError != null -> result.safeError.orEmpty()
                     result?.statusCode != null ->
-                      "HTTP ${result.statusCode} · ${result.latencyMillis} мс"
+                      language.text(
+                        "HTTP ${result.statusCode} · ${result.latencyMillis} мс",
+                        "HTTP ${result.statusCode} · ${result.latencyMillis} ms",
+                      )
                     else -> language.text("Проверка ещё не запускалась", "Not checked yet")
                   },
                 )
@@ -3750,7 +3899,7 @@ private fun UpdateBanner(
     ) {
       Column {
         Row(
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 9.dp),
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Icon(Icons.Rounded.Update, null, Modifier.size(19.dp))
@@ -3794,12 +3943,12 @@ private fun UpdatesScreen(
     is DesktopUpdateState.Failed -> state.update
     else -> null
   }
-  Page {
+  Page(maxWidth = 580.dp) {
     PageHeader(
       language.text("Обновления", "Updates"),
       language.text("Проверка работает в фоне и не прерывается при навигации", "Checks continue in the background while you navigate"),
     )
-    Spacer(Modifier.height(18.dp))
+    Spacer(Modifier.height(10.dp))
     CardSection(Modifier.fillMaxWidth()) {
       Column {
         ListItem(
@@ -3839,40 +3988,20 @@ private fun UpdatesScreen(
               },
             )
           },
-          trailingContent = {
-            when (state) {
-              is DesktopUpdateState.Available -> Button(
-                onClick = { onDownload(state.update) },
-                shape = RoundedCornerShape(12.dp),
-              ) { Text(language.text("Загрузить", "Download")) }
-              is DesktopUpdateState.Downloading -> OutlinedButton(
-                onClick = onCancelDownload,
-                shape = RoundedCornerShape(12.dp),
-              ) { Text(language.text("Отменить", "Cancel")) }
-              is DesktopUpdateState.Ready -> Button(
-                onClick = { onInstall(state) },
-                shape = RoundedCornerShape(12.dp),
-              ) { Text(language.text("Установить и перезапустить", "Install and restart")) }
-              is DesktopUpdateState.Installing -> CircularProgressIndicator(
-                Modifier.size(24.dp),
-                strokeWidth = 2.dp,
-              )
-              else -> OutlinedButton(
-                onClick = onCheck,
-                enabled = state !is DesktopUpdateState.Checking,
-                shape = RoundedCornerShape(12.dp),
-              ) {
-                if (state is DesktopUpdateState.Checking) {
-                  CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                } else {
-                  Icon(Icons.Rounded.Refresh, null, Modifier.size(17.dp))
-                }
-                Text(language.text("Проверить", "Check"), Modifier.padding(start = 7.dp))
-              }
-            }
-          },
           colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
+        Box(
+          modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+          contentAlignment = Alignment.CenterEnd,
+        ) {
+          UpdatePrimaryAction(
+            state = state,
+            onCheck = onCheck,
+            onDownload = onDownload,
+            onCancelDownload = onCancelDownload,
+            onInstall = onInstall,
+          )
+        }
         AnimatedVisibility(visible = state is DesktopUpdateState.Downloading) {
           LinearProgressIndicator(
             progress = {
@@ -3883,7 +4012,7 @@ private fun UpdatesScreen(
         }
       }
     }
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(12.dp))
     Text(
       if (update != null) {
         language.text("Что изменится в ${update.versionName}", "What's new in ${update.versionName}")
@@ -3891,7 +4020,7 @@ private fun UpdatesScreen(
         language.text("Что входит в ${UpdateClient.CURRENT_VERSION_NAME}", "What's included in ${UpdateClient.CURRENT_VERSION_NAME}")
       },
       style = MaterialTheme.typography.titleLarge,
-      modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
+      modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
     )
     CardSection(Modifier.fillMaxWidth()) {
       Column {
@@ -3918,11 +4047,52 @@ private fun UpdatesScreen(
         Text(
           update?.notes?.ifBlank { language.text("Описание версии не указано", "No release notes provided") }
             ?: language.text(UpdateClient.CURRENT_RELEASE_NOTES, UpdateClient.CURRENT_RELEASE_NOTES_EN),
-          modifier = Modifier.fillMaxWidth().padding(20.dp),
+          modifier = Modifier.fillMaxWidth().padding(14.dp),
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
+    }
+  }
+}
+
+@Composable
+private fun UpdatePrimaryAction(
+  state: DesktopUpdateState,
+  onCheck: () -> Unit,
+  onDownload: (AppUpdate) -> Unit,
+  onCancelDownload: () -> Unit,
+  onInstall: (DesktopUpdateState.Ready) -> Unit,
+) {
+  val language = LocalUiLanguage.current
+  when (state) {
+    is DesktopUpdateState.Available -> Button(
+      onClick = { onDownload(state.update) },
+      shape = RoundedCornerShape(12.dp),
+    ) { Text(language.text("Загрузить", "Download")) }
+    is DesktopUpdateState.Downloading -> OutlinedButton(
+      onClick = onCancelDownload,
+      shape = RoundedCornerShape(12.dp),
+    ) { Text(language.text("Отменить", "Cancel")) }
+    is DesktopUpdateState.Ready -> Button(
+      onClick = { onInstall(state) },
+      shape = RoundedCornerShape(12.dp),
+    ) { Text(language.text("Установить и перезапустить", "Install and restart")) }
+    is DesktopUpdateState.Installing -> CircularProgressIndicator(
+      Modifier.size(24.dp),
+      strokeWidth = 2.dp,
+    )
+    else -> OutlinedButton(
+      onClick = onCheck,
+      enabled = state !is DesktopUpdateState.Checking,
+      shape = RoundedCornerShape(12.dp),
+    ) {
+      if (state is DesktopUpdateState.Checking) {
+        CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+      } else {
+        Icon(Icons.Rounded.Refresh, null, Modifier.size(17.dp))
+      }
+      Text(language.text("Проверить", "Check"), Modifier.padding(start = 7.dp))
     }
   }
 }
@@ -3936,45 +4106,45 @@ private fun LogsScreen() {
   val visibleLog = log.ifBlank { language.text("Ошибок и сетевых событий пока нет", "No errors or network events yet") }
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-      modifier = Modifier.fillMaxSize().widthIn(max = 1040.dp)
-        .padding(horizontal = 20.dp, vertical = 18.dp),
+      modifier = Modifier.fillMaxSize().widthIn(max = 720.dp)
+        .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
       PageHeader(
         language.text("Технический журнал", "Technical log"),
         language.text("События ядра без ключей доступа", "Core events with credentials removed"),
         action = {
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
+          Row {
+            IconButton(
               onClick = {
                 Toolkit.getDefaultToolkit().systemClipboard
                   .setContents(StringSelection(log), null)
               },
-              shape = RoundedCornerShape(12.dp),
-              contentPadding = PaddingValues(horizontal = 12.dp),
             ) {
-              Icon(Icons.Rounded.ContentPaste, null, Modifier.size(17.dp))
-              Text(language.text("Копировать", "Copy"), Modifier.padding(start = 6.dp))
+              Icon(
+                Icons.Rounded.ContentPaste,
+                language.text("Копировать журнал", "Copy log"),
+              )
             }
-            OutlinedButton(
+            IconButton(
               onClick = { log = readLog() },
-              shape = RoundedCornerShape(12.dp),
-              contentPadding = PaddingValues(horizontal = 12.dp),
             ) {
-              Icon(Icons.Rounded.Refresh, null, Modifier.size(17.dp))
-              Text(language.text("Обновить", "Refresh"), Modifier.padding(start = 6.dp))
+              Icon(
+                Icons.Rounded.Refresh,
+                language.text("Обновить журнал", "Refresh log"),
+              )
             }
           }
         },
       )
-      Spacer(Modifier.height(12.dp))
+      Spacer(Modifier.height(8.dp))
       Surface(
         modifier = Modifier.fillMaxWidth().weight(1f),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
       ) {
         Column {
           Row(
-            modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 14.dp),
+            modifier = Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Icon(
@@ -4006,7 +4176,7 @@ private fun LogsScreen() {
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .verticalScroll(verticalScroll)
                 .horizontalScroll(horizontalScroll)
-                .padding(14.dp),
+                .padding(10.dp),
             ) {
               Text(
                 visibleLog,
@@ -4024,12 +4194,17 @@ private fun LogsScreen() {
 }
 
 @Composable
-private fun Page(content: @Composable ColumnScope.() -> Unit) {
+private fun Page(
+  maxWidth: Dp = 560.dp,
+  horizontalPadding: Dp = 12.dp,
+  verticalPadding: Dp = 10.dp,
+  content: @Composable ColumnScope.() -> Unit,
+) {
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-      modifier = Modifier.fillMaxHeight().widthIn(max = 620.dp).fillMaxWidth()
+      modifier = Modifier.fillMaxHeight().widthIn(max = maxWidth).fillMaxWidth()
         .verticalScroll(rememberScrollState())
-        .padding(horizontal = 14.dp, vertical = 10.dp),
+        .padding(horizontal = horizontalPadding, vertical = verticalPadding),
       content = content,
     )
   }

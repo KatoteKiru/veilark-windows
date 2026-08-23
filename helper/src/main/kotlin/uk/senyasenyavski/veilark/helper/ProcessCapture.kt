@@ -18,6 +18,8 @@ internal fun Process.capture(
   timeoutMillis: Long,
   maximumOutputChars: Int = 32_000,
 ): CapturedProcess {
+  require(timeoutMillis > 0) { "Тайм-аут процесса должен быть положительным" }
+  require(maximumOutputChars >= 0) { "Лимит вывода не может быть отрицательным" }
   val output = StringBuilder()
   val reader = thread(name = "veilark-process-capture", isDaemon = true) {
     runCatching {
@@ -33,12 +35,25 @@ internal fun Process.capture(
       }
     }
   }
-  val finished = waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
-  if (!finished) {
-    destroyForcibly()
-    waitFor(2, TimeUnit.SECONDS)
+  val finished = try {
+    waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+  } catch (interrupted: InterruptedException) {
+    terminateCapturedProcess(gracefulMillis = 500)
+    runCatching { inputStream.close() }
+    runCatching { reader.join(2_000) }
+    throw interrupted
   }
-  reader.join(2_000)
+  if (!finished) {
+    terminateCapturedProcess(gracefulMillis = 0)
+  }
+  if (isAlive) runCatching { inputStream.close() }
+  try {
+    reader.join(2_000)
+  } catch (interrupted: InterruptedException) {
+    terminateCapturedProcess(gracefulMillis = 0)
+    runCatching { inputStream.close() }
+    throw interrupted
+  }
   return CapturedProcess(
     exitCode = runCatching { exitValue() }.getOrNull(),
     output = synchronized(output) { output.toString() },
@@ -53,7 +68,19 @@ internal suspend fun Process.captureCancellable(
 ): CapturedProcess = try {
   runInterruptible(Dispatchers.IO) { capture(timeoutMillis, maximumOutputChars) }
 } catch (cancellation: CancellationException) {
-  destroy()
-  if (!waitFor(500, TimeUnit.MILLISECONDS)) destroyForcibly()
+  terminateCapturedProcess(gracefulMillis = 500)
+  runCatching { inputStream.close() }
   throw cancellation
+}
+
+private fun Process.terminateCapturedProcess(gracefulMillis: Long) {
+  if (!isAlive) return
+  if (gracefulMillis > 0) {
+    runCatching { destroy() }
+    val stopped = runCatching { waitFor(gracefulMillis, TimeUnit.MILLISECONDS) }
+      .getOrDefault(false)
+    if (stopped) return
+  }
+  runCatching { destroyForcibly() }
+  runCatching { waitFor(2, TimeUnit.SECONDS) }
 }

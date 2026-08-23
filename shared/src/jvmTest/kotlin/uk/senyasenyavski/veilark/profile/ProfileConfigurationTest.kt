@@ -2,6 +2,8 @@ package uk.senyasenyavski.veilark.profile
 
 import com.example.veilark.profile.SubscriptionParser
 import org.json.JSONObject
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -51,6 +53,12 @@ class ProfileConfigurationTest {
       root.getJSONArray("outbounds").getJSONObject(1)
         .getJSONObject("tls").getBoolean("fragment"),
     )
+    val routeRules = root.getJSONObject("route").getJSONArray("rules")
+    assertEquals("1s", routeRules.getJSONObject(0).getString("timeout"))
+    repeat(routeRules.length()) { index ->
+      val rule = routeRules.getJSONObject(index)
+      if (rule.has("outbound")) assertEquals("route", rule.getString("action"))
+    }
   }
 
   @Test
@@ -98,6 +106,7 @@ class ProfileConfigurationTest {
     assertEquals("binary", route.getJSONArray("rule_set").getJSONObject(1).getString("format"))
     assertEquals("hijack-dns", route.getJSONArray("rules").getJSONObject(1).getString("action"))
     assertEquals("direct", route.getJSONArray("rules").getJSONObject(3).getString("outbound"))
+    assertEquals("route", route.getJSONArray("rules").getJSONObject(3).getString("action"))
   }
 
   @Test
@@ -124,6 +133,7 @@ class ProfileConfigurationTest {
     assertEquals("direct", route.getString("final"))
     assertEquals("hijack-dns", route.getJSONArray("rules").getJSONObject(1).getString("action"))
     assertEquals(selectedTag, route.getJSONArray("rules").getJSONObject(3).getString("outbound"))
+    assertEquals("route", route.getJSONArray("rules").getJSONObject(3).getString("action"))
     val secureDns = JSONObject(configured.config).getJSONObject("dns").getJSONArray("servers")
       .getJSONObject(1)
     assertEquals(selectedTag, secureDns.getString("detour"))
@@ -184,6 +194,55 @@ class ProfileConfigurationTest {
 
     assertEquals("tt://second", configured.config)
     assertFalse(configured.config.contains("fragment"))
+  }
+
+  @Test
+  fun `all generated routing modes pass bundled sing-box check`() {
+    val checker = System.getenv("SING_BOX_CHECKER")?.takeIf { File(it).isFile } ?: return
+    val geoIp = System.getenv("VEILARK_GEOIP_RU_SRS")?.takeIf { File(it).isFile } ?: return
+    val geoSite = System.getenv("VEILARK_GEOSITE_RU_SRS")?.takeIf { File(it).isFile } ?: return
+    val compiled = SubscriptionParser().compile(
+      "trojan://secret@203.0.113.2:443?security=tls&sni=example.com#NL".toByteArray(),
+    )
+    val profile = Profile(
+      "id",
+      "profile",
+      VpnEngine.SingBox,
+      compiled.json,
+      compiled.nodes.map { Node(it.tag, it.name, it.protocol) },
+      "test",
+    )
+    val assets = GeoRoutingAssets(geoIp, geoSite, listOf("5.8.0.0/13", "*.ru"))
+    val modes = listOf(
+      RoutingSettings(mode = RoutingMode.All),
+      RoutingSettings(
+        mode = RoutingMode.Manual,
+        directEntries = "example.ru 10.0.0.0/8",
+        vpnEntries = "youtube.com",
+      ),
+      RoutingSettings(mode = RoutingMode.RussiaDirect),
+      RoutingSettings(mode = RoutingMode.RussiaVpn),
+    )
+
+    modes.forEach { routing ->
+      val configured = ProfileConfiguration.apply(
+        profile,
+        routing,
+        compiled.nodes.single().tag,
+        assets,
+      )
+      val config = Files.createTempFile("veilark-${routing.mode}-", ".json").toFile()
+      try {
+        config.writeText(configured.config)
+        val process = ProcessBuilder(checker, "check", "-c", config.path)
+          .redirectErrorStream(true)
+          .start()
+        val output = process.inputStream.bufferedReader().readText()
+        assertEquals(0, process.waitFor(), "sing-box rejected ${routing.mode}: $output")
+      } finally {
+        config.delete()
+      }
+    }
   }
 
   private fun geoAssets() = GeoRoutingAssets(

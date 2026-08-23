@@ -106,6 +106,25 @@ class WindowsUpdateInstallerTest {
   }
 
   @Test
+  fun `failed temporary status write preserves the previous durable outcome`() {
+    val fixture = Fixture()
+    try {
+      fixture.installer.scheduleAfterExit(fixture.update, fixture.download)
+      val temporary = fixture.updates.resolve("last-install.properties.tmp")
+      Files.createDirectories(temporary)
+      Files.writeString(temporary.resolve("occupied"), "keep")
+
+      assertFailsWith<java.io.IOException> {
+        fixture.installer.scheduleAfterExit(fixture.update, fixture.download)
+      }
+
+      assertEquals(UpdateInstallPhase.Scheduled, fixture.installer.readLastOutcome()?.phase)
+    } finally {
+      fixture.close()
+    }
+  }
+
+  @Test
   fun `coordinator stops VPN before updater is launched`() = runBlocking {
     val fixture = Fixture()
     try {

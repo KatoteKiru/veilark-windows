@@ -3,6 +3,7 @@ package uk.senyasenyavski.veilark.helper
 import com.sun.jna.Platform
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.readBytes
@@ -178,6 +179,34 @@ class ProfileStoreTest {
 
       assertEquals(first, restored)
       assertTrue(Files.size(backup) > 3)
+    } finally {
+      backup.deleteIfExists()
+      path.deleteIfExists()
+      directory.deleteIfExists()
+    }
+  }
+
+  @Test
+  fun `oversized primary is rejected before allocation and valid backup is used`() {
+    val directory = Files.createTempDirectory("veilark-profile-size-limit")
+    val path = directory.resolve("profiles.dat")
+    val backup = directory.resolve("profiles.dat.bak")
+    val store = ProfileStore(path, XorProtector) {}
+    val expected = SubscriptionCatalog.put(
+      StoredProfiles(),
+      SubscriptionRecord.user(listOf(profile(VpnEngine.SingBox))),
+    )
+    try {
+      store.save(expected)
+      Files.move(path, backup)
+      RandomAccessFile(path.toFile(), "rw").use { file ->
+        file.setLength(64L * 1024L * 1024L + 1L)
+      }
+
+      val restored = assertIs<ProfileLoadResult.Loaded>(store.loadResult()).stored
+
+      assertEquals(expected, restored)
+      assertEquals(64L * 1024L * 1024L + 1L, Files.size(path))
     } finally {
       backup.deleteIfExists()
       path.deleteIfExists()
