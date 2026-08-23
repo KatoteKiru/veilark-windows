@@ -33,6 +33,8 @@ Release date: 2026-08-23
 ## Package identity
 
 - Version code/name: `305` / `0.3.5`.
+- Public OTA installer:
+  `https://nl2.senyasenyavski.uk:2096/veilark/windows/Veilark-0.3.5.exe`.
 - OTA wrapper size/SHA-256: `129656320` /
   `3B2F1AA49651FF54AD3C396EA317EC86443FD53793959A964F549B4E5473F76F`.
 - Inner jpackage EXE size/SHA-256: `129648128` /
@@ -42,6 +44,8 @@ Release date: 2026-08-23
 - MSI ProductVersion: `0.3.5`.
 - MSI ProductCode: `{237A7AE0-FFE8-3DE3-AC65-538AC35D73EF}`.
 - MSI UpgradeCode: `{47A6CDD8-9630-4FA5-A2FD-C29C5774DC1A}` (unchanged).
+- The live signed manifest passed the production `UpdateClient` validator.
+- A complete public redownload matched the local OTA wrapper byte-for-byte.
 - The wrapper is not Authenticode-signed; Windows can show an unknown-publisher
   warning.
 
