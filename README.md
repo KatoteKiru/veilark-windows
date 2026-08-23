@@ -6,7 +6,7 @@ layout and an explicit `VpnSession` boundary.
 
 ## Current status
 
-Windows 0.3.7 recovery candidate is implemented:
+Windows 0.3.8 recovery candidate is implemented:
 
 - Compose Desktop shell with compact desktop navigation and persistent RU/EN actionable states;
 - tunnel detection through the Windows IP Helper API, so the adapter is matched
@@ -39,9 +39,12 @@ Windows 0.3.7 recovery candidate is implemented:
 - automatic or explicit sing-box node selection, including DNS detour updates;
 - panel-independent 3x-ui/Remnawave/plain subscription import with recursive
   JSON envelopes, Base64, URI lists, sing-box/Xray JSON, and Clash YAML;
+- explicit sing-box subscription negotiation for panels that dispatch formats
+  by User-Agent, including Remnawave and modern x-ui;
 - all nested sing-box nodes and TrustTunnel endpoints retained in one bounded,
-  scrollable Material 3 server picker on Home and Profiles; mixed subscriptions
-  populate both engines without intrinsic-layout crashes;
+  scrollable Material 3 server picker on Home and Profiles, with exact endpoint
+  counts, country flags and a visible scrollbar; mixed subscriptions populate
+  both engines without intrinsic-layout crashes;
 - persisted HTTPS subscription sources with manual refresh and a parallel
   per-node TCP latency probe for both engines;
 - system tray actions and notifications, start-minimized support, file
@@ -77,26 +80,26 @@ Creating installers (the repository downloads the pinned WiX toolset):
 
 Release artifacts:
 
-- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.7.exe`
-- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.7.msi`
+- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.8.exe`
+- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.8.msi`
 
 After installing, verify the package and the unstripped JNA runtime:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.7
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.8
 ```
 
-Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.7 centers and refines the
-compact Home layout, restores the direct foreign TrustTunnel path in RU split
-routing, and preserves the MTU supplied by each TrustTunnel profile. The signed
+Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.8 fixes sing-box format
+negotiation, imports nested server groups, and makes every location visibly
+discoverable in the compact selector without changing the Material 3 palette. The signed
 public OTA channel uses a self-elevating bootstrap so an installed 0.3.0 or
 0.3.1 can be replaced in place after the user accepts the Windows UAC prompt.
 The artifacts are not Authenticode-signed, so Windows SmartScreen may show the
 publisher as unknown. Real-PC tunnel acceptance is still required before calling
-0.3.7 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
+0.3.8 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
 remain required before declaring a final 1.0 security release.
 
 See [Windows notes](docs/WINDOWS.md) and the
 [parity matrix](docs/PARITY.md). The current acceptance evidence is recorded in
-[0.3.7 release evidence](docs/RELEASE_0.3.7.md); the remaining elevated checks
-are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.7.md).
+[0.3.8 release evidence](docs/RELEASE_0.3.8.md); the remaining elevated checks
+are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.8.md).

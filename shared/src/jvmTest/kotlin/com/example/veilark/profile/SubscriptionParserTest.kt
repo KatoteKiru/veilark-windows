@@ -396,6 +396,82 @@ class SubscriptionParserTest {
   }
 
   @Test
+  fun importsEveryServerGroupFromNestedSingBoxEnvelope() {
+    fun location(name: String, address: String, protocol: String): JSONObject {
+      val outbound = JSONObject()
+        .put("type", protocol)
+        .put("tag", name)
+        .put("server", address)
+        .put("server_port", 443)
+      when (protocol) {
+        "vless" -> outbound.put("uuid", "11111111-1111-1111-1111-111111111111")
+        "trojan" -> outbound.put("password", "secret")
+        "shadowsocks" -> outbound
+          .put("method", "aes-256-gcm")
+          .put("password", "secret")
+      }
+      return JSONObject()
+        .put("name", name)
+        .put("config", JSONObject().put("outbounds", org.json.JSONArray().put(outbound)))
+    }
+
+    val source = JSONObject().put(
+      "serverGroups",
+      org.json.JSONArray()
+        .put(location("Germany", "203.0.113.21", "vless"))
+        .put(location("Netherlands", "203.0.113.22", "trojan"))
+        .put(
+          JSONObject()
+            .put("name", "Finland")
+            .put(
+              "serializedConfig",
+              location("Finland", "203.0.113.23", "shadowsocks")
+                .getJSONObject("config")
+                .toString(),
+            ),
+        ),
+    )
+
+    val result = parser.compile(source.toString().toByteArray())
+
+    assertEquals(3, result.profileCount)
+    assertEquals(
+      listOf("Germany", "Netherlands", "Finland"),
+      result.nodes.map(ConnectionNode::name),
+    )
+    assertEquals(
+      listOf("VLESS", "Trojan", "Shadowsocks"),
+      result.nodes.map(ConnectionNode::protocol),
+    )
+  }
+
+  @Test
+  fun importsTopLevelSingBoxOutboundArray() {
+    val source = org.json.JSONArray()
+      .put(
+        JSONObject()
+          .put("type", "trojan")
+          .put("tag", "Germany")
+          .put("server", "203.0.113.31")
+          .put("server_port", 443)
+          .put("password", "secret"),
+      )
+      .put(
+        JSONObject()
+          .put("type", "vless")
+          .put("tag", "Netherlands")
+          .put("server", "203.0.113.32")
+          .put("server_port", 443)
+          .put("uuid", "11111111-1111-1111-1111-111111111111"),
+      )
+
+    val result = parser.compile(source.toString().toByteArray())
+
+    assertEquals(2, result.profileCount)
+    assertEquals(listOf("Germany", "Netherlands"), result.nodes.map(ConnectionNode::name))
+  }
+
+  @Test
   fun importsRemnawaveXrayJson() {
     val source = JSONObject()
       .put(

@@ -3,10 +3,20 @@ package uk.senyasenyavski.veilark.importer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.VpnEngine
 
 class ProfileImporterTest {
+  @Test
+  fun `subscription request identifies the sing-box core`() {
+    val userAgent = ProfileImporter.subscriptionUserAgent()
+
+    assertTrue(userAgent.startsWith("sing-box/1.13.14 "))
+    assertTrue(userAgent.contains("Veilark-Windows/"))
+    assertTrue(userAgent.endsWith("; Windows)"))
+  }
+
   @Test
   fun `raw TrustTunnel link creates a TrustTunnel profile`() {
     val result = assertIs<ImportResult.Success>(

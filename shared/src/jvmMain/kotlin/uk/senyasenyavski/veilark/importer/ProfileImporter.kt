@@ -40,7 +40,14 @@ class ProfileImporter(
     require(!uri.host.isNullOrBlank()) { "В ссылке подписки нет адреса сервера" }
     val request = HttpRequest.newBuilder(uri)
       .timeout(Duration.ofSeconds(20))
-      .header("User-Agent", "Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}")
+      // Remnawave and modern x-ui installations dispatch the subscription
+      // format by User-Agent. Identifying the actual core prevents the generic
+      // base64/browser fallback from exposing only a partial server group.
+      .header(
+        "User-Agent",
+        subscriptionUserAgent(),
+      )
+      .header("X-Client", "Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}")
       .header("Accept", "application/json, text/plain, application/yaml, */*")
       .GET()
       .build()
@@ -178,12 +185,17 @@ class ProfileImporter(
       .take(10)
       .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
+  internal companion object {
+    private const val SING_BOX_COMPAT_VERSION = "1.13.14"
+    private const val MAX_BYTES = 4L * 1024 * 1024
+
+    internal fun subscriptionUserAgent(): String =
+      "sing-box/$SING_BOX_COMPAT_VERSION " +
+        "(Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}; Windows)"
+  }
+
   private fun Throwable.safeMessage(): String = when (this) {
     is IllegalArgumentException -> message ?: "Профиль не поддерживается"
     else -> "Не удалось импортировать профиль: ${message ?: javaClass.simpleName}"
-  }
-
-  private companion object {
-    const val MAX_BYTES = 4L * 1024 * 1024
   }
 }

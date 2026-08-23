@@ -368,23 +368,26 @@ class SubscriptionParser {
       .put("tls", tls(uri))
 
   private fun compileJsonDocument(decoded: String): CompiledSubscription? {
-    if (!decoded.trimStart().startsWith("{")) return null
-    val root = runCatching { JSONObject(decoded) }.getOrNull() ?: return null
-    val sourceOutbounds = root.optJSONArray("outbounds") ?: return null
+    val trimmed = decoded.trimStart()
+    val root: Any = when {
+      trimmed.startsWith("{") -> runCatching { JSONObject(decoded) }.getOrNull()
+      trimmed.startsWith("[") -> runCatching { JSONArray(decoded) }.getOrNull()
+      else -> null
+    } ?: return null
+    val sourceOutbounds = collectOutboundObjects(root)
+    if (sourceOutbounds.length() == 0) return null
     if ((0 until sourceOutbounds.length()).any {
-        sourceOutbounds.optJSONObject(it)?.has("protocol") == true
+        sourceOutbounds.optJSONObject(it)?.optString("protocol")?.lowercase() in
+          XRAY_PROTOCOLS
       }
     ) {
       return compileXrayJson(sourceOutbounds)
     }
-    val supported = setOf(
-      "vless", "trojan", "hysteria2", "vmess", "shadowsocks", "tuic", "anytls",
-    )
     val links = mutableListOf<ParsedOutbound>()
     for (index in 0 until sourceOutbounds.length()) {
       val outbound = sourceOutbounds.optJSONObject(index) ?: continue
       val type = outbound.optString("type")
-      if (type !in supported) continue
+      if (type !in SING_BOX_PROTOCOLS) continue
       val name = outbound.optString("tag").ifBlank { "${protocolName(type)} ${index + 1}" }
         .take(64)
       val tag = uniqueTag(name, links.size)
@@ -394,18 +397,86 @@ class SubscriptionParser {
         ConnectionNode(tag, name, protocolName(type)),
       )
     }
-    require(links.isNotEmpty()) { "В JSON нет поддерживаемых sing-box outbounds" }
+    if (links.isEmpty()) return null
     return buildSubscription(links, emptyList(), 0)
   }
 
+  /**
+   * Subscription panels do not always return a bare sing-box config. Some wrap
+   * several generated configs in a JSON envelope (and occasionally stringify
+   * those configs). Reading only root.outbounds ignored sibling server groups.
+   *
+   * Collect every bounded `outbounds` array while retaining the provider order.
+   * Objects are cloned because compilation replaces provider tags with stable,
+   * subscription-scoped tags.
+   */
+  private fun collectOutboundObjects(root: Any): JSONArray {
+    val collected = JSONArray()
+    val seen = linkedSetOf<String>()
+    val parsedDocuments = mutableSetOf<String>()
+    lateinit var visit: (Any?, Int) -> Unit
+    visit = { value, depth ->
+      if (depth <= MAX_JSON_DEPTH && collected.length() < MAX_PROFILE_LINKS) {
+        when (value) {
+          is JSONObject -> {
+            val directType = value.optString("type").lowercase()
+            val directProtocol = value.optString("protocol").lowercase()
+            if (
+              (directType in SING_BOX_PROTOCOLS && value.optString("server").isNotBlank()) ||
+              (directProtocol in XRAY_PROTOCOLS && value.has("settings"))
+            ) {
+              val serialized = value.toString()
+              if (seen.add(serialized)) collected.put(JSONObject(serialized))
+            }
+            value.optJSONArray("outbounds")?.let { outbounds ->
+              repeat(outbounds.length()) { index ->
+                val outbound = outbounds.optJSONObject(index) ?: return@repeat
+                val serialized = outbound.toString()
+                if (seen.add(serialized) && collected.length() < MAX_PROFILE_LINKS) {
+                  collected.put(JSONObject(serialized))
+                }
+              }
+            }
+            val keys = value.keys()
+            while (keys.hasNext()) {
+              val key = keys.next()
+              if (key != "outbounds") visit(value.opt(key), depth + 1)
+            }
+          }
+          is JSONArray -> repeat(value.length()) { index ->
+            visit(value.opt(index), depth + 1)
+          }
+          is String -> {
+            val embedded = value.trim()
+            if (
+              embedded.length <= MAX_SUBSCRIPTION_SIZE &&
+              parsedDocuments.add(embedded) &&
+              (embedded.startsWith("{") || embedded.startsWith("["))
+            ) {
+              val document = if (embedded.startsWith("{")) {
+                runCatching { JSONObject(embedded) }.getOrNull()
+              } else {
+                runCatching { JSONArray(embedded) }.getOrNull()
+              }
+              document?.let {
+                visit(it, depth + 1)
+              }
+            }
+          }
+        }
+      }
+    }
+    visit(root, 0)
+    return collected
+  }
+
   private fun compileXrayJson(sourceOutbounds: JSONArray): CompiledSubscription {
-    val supported = setOf("vless", "vmess", "trojan", "shadowsocks")
     val parsed = mutableListOf<ParsedOutbound>()
     var rejected = 0
     repeat(sourceOutbounds.length()) { outboundIndex ->
       val source = sourceOutbounds.optJSONObject(outboundIndex) ?: return@repeat
       val protocol = source.optString("protocol").lowercase()
-      if (protocol !in supported) {
+      if (protocol !in XRAY_PROTOCOLS) {
         rejected += 1
         return@repeat
       }
@@ -955,6 +1026,10 @@ class SubscriptionParser {
     val BASE64_VALUE = Regex("""^[A-Za-z0-9+/=_-]+$""")
     val SCHEME_LINE = Regex(
       """(?i)^(vless|trojan|hysteria2|hy2|vmess|ss|tuic|anytls|tt)://.+""",
+    )
+    val XRAY_PROTOCOLS = setOf("vless", "vmess", "trojan", "shadowsocks")
+    val SING_BOX_PROTOCOLS = setOf(
+      "vless", "trojan", "hysteria2", "vmess", "shadowsocks", "tuic", "anytls",
     )
   }
 }

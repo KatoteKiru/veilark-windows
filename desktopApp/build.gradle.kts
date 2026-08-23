@@ -112,7 +112,7 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Msi, TargetFormat.Exe)
       packageName = "Veilark"
-      packageVersion = "0.3.7"
+      packageVersion = "0.3.8"
       description = "Veilark VPN for Windows"
       vendor = "Veilark"
       modules("java.net.http", "java.logging", "java.naming", "java.security.jgss")

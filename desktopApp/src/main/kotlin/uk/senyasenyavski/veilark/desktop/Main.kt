@@ -22,6 +22,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,6 +43,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -166,6 +169,8 @@ import uk.senyasenyavski.veilark.model.TrafficSnapshot
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
 import uk.senyasenyavski.veilark.profile.ProfileConfiguration
+import uk.senyasenyavski.veilark.profile.NodeCountry
+import uk.senyasenyavski.veilark.profile.NodePresentation
 import uk.senyasenyavski.veilark.update.AppUpdate
 import uk.senyasenyavski.veilark.update.UpdateClient
 import java.awt.FileDialog
@@ -652,20 +657,25 @@ private fun VeilarkApp(
         nodeLatencies = nodeLatencies - invalidatedProfiles
         if (!refreshed) destination = Destination.Home
         importDialog = false
+        val importedNodeSummary = result.profiles.joinToString(" · ") {
+          "${it.engine.displayName}: ${it.nodes.size}"
+        }
         scope.launch {
           snackbar.showSnackbar(
             if (refreshed && result.rejectedProfiles == 0) {
-              language.text("Подписка обновлена", "Subscription refreshed")
+              language.text(
+                "Подписка обновлена · $importedNodeSummary",
+                "Subscription refreshed · $importedNodeSummary",
+              )
             } else if (result.rejectedProfiles == 0) {
-              if (result.profiles.size == 2) {
-                language.text("Подписка импортирована для обоих ядер", "Subscription imported for both cores")
-              } else {
-                language.text("Профиль импортирован", "Profile imported")
-              }
+              language.text(
+                "Подписка импортирована · $importedNodeSummary",
+                "Subscription imported · $importedNodeSummary",
+              )
             } else {
               language.text(
-                "Профиль импортирован, пропущено: ${result.rejectedProfiles}",
-                "Profile imported; skipped: ${result.rejectedProfiles}",
+                "Подписка импортирована · $importedNodeSummary · пропущено: ${result.rejectedProfiles}",
+                "Subscription imported · $importedNodeSummary · skipped: ${result.rejectedProfiles}",
               )
             },
           )
@@ -1603,6 +1613,8 @@ private data class EndpointPickerChoice(
   val tag: String,
   val name: String,
   val detail: String,
+  val country: NodeCountry?,
+  val automatic: Boolean,
   val builtIn: Boolean,
 )
 
@@ -1611,6 +1623,7 @@ private data class EndpointPickerGroup(
   val subscriptionName: String,
   val profileId: String,
   val builtIn: Boolean,
+  val serverCount: Int,
   val choices: List<EndpointPickerChoice>,
 )
 
@@ -1641,6 +1654,8 @@ private fun EndpointPicker(
               tag = ProfileSelection.AUTOMATIC_TAG,
               name = language.text("Автоматически", "Automatic"),
               detail = language.text("Лучший доступный узел", "Best available server"),
+              country = null,
+              automatic = true,
               builtIn = subscription.origin == SubscriptionOrigin.BuiltIn,
             ),
           )
@@ -1652,8 +1667,10 @@ private fun EndpointPicker(
               subscriptionName = subscription.name,
               profileId = profile.id,
               tag = node.tag,
-              name = node.name,
+              name = NodePresentation.displayName(node.name),
               detail = node.protocol,
+              country = NodePresentation.country(node.name),
+              automatic = false,
               builtIn = subscription.origin == SubscriptionOrigin.BuiltIn,
             ),
           )
@@ -1664,6 +1681,7 @@ private fun EndpointPicker(
         subscriptionName = subscription.name,
         profileId = profile.id,
         builtIn = subscription.origin == SubscriptionOrigin.BuiltIn,
+        serverCount = profile.nodes.size,
         choices = choices,
       )
     }
@@ -1674,6 +1692,8 @@ private fun EndpointPicker(
     ?.firstOrNull { it.tag == selectedNodeTag }
     ?: activeGroup?.choices?.firstOrNull()
   val totalChoices = groups.sumOf { it.choices.size }
+  val totalServers = groups.sumOf { it.serverCount }
+  val listState = rememberLazyListState()
   val needle = query.trim()
   val filteredGroups = remember(groups, needle) {
     if (needle.isEmpty()) groups else groups.mapNotNull { group ->
@@ -1703,7 +1723,11 @@ private fun EndpointPicker(
         shape = RoundedCornerShape(11.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
       ) {
-        Icon(Icons.Rounded.Language, null, Modifier.size(19.dp))
+        EndpointMark(
+          country = activeChoice?.country,
+          automatic = activeChoice?.automatic == true,
+          modifier = Modifier.size(22.dp),
+        )
         Column(Modifier.weight(1f).padding(horizontal = 11.dp)) {
           Text(
             activeChoice?.name ?: language.text("Нет доступных узлов", "No servers available"),
@@ -1743,7 +1767,10 @@ private fun EndpointPicker(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              language.text("Серверы · ${engine.displayName}", "Servers · ${engine.displayName}"),
+              language.text(
+                "Серверы · ${engine.displayName} · $totalServers",
+                "Servers · ${engine.displayName} · $totalServers",
+              ),
               modifier = Modifier.weight(1f),
               style = MaterialTheme.typography.titleMedium,
             )
@@ -1776,11 +1803,13 @@ private fun EndpointPicker(
               )
             }
           } else {
-            LazyColumn(
-              modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
-              contentPadding = PaddingValues(vertical = 4.dp),
-            ) {
-              filteredGroups.forEach { group ->
+            Box(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+              LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
+                contentPadding = PaddingValues(start = 0.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+              ) {
+                filteredGroups.forEach { group ->
                 item(key = "group-${group.subscriptionId}") {
                   Row(
                     modifier = Modifier.fillMaxWidth()
@@ -1799,7 +1828,7 @@ private fun EndpointPicker(
                       if (group.builtIn) {
                         language.text("Встроенная", "Built-in")
                       } else {
-                        language.text("${group.choices.size} серверов", "${group.choices.size} servers")
+                        language.text("${group.serverCount} серверов", "${group.serverCount} servers")
                       },
                       style = MaterialTheme.typography.bodySmall,
                       color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1835,15 +1864,10 @@ private fun EndpointPicker(
                         .padding(start = 12.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
                       verticalAlignment = Alignment.CenterVertically,
                     ) {
-                      Icon(
-                        if (selected) Icons.Rounded.Check else Icons.Rounded.Language,
-                        null,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (selected) {
-                          MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                          MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                      EndpointMark(
+                        country = choice.country,
+                        automatic = choice.automatic,
+                        modifier = Modifier.size(22.dp),
                       )
                       Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(
@@ -1875,15 +1899,48 @@ private fun EndpointPicker(
                           },
                         )
                       }
+                      if (selected) {
+                        Icon(
+                          Icons.Rounded.Check,
+                          null,
+                          modifier = Modifier.padding(start = 8.dp).size(18.dp),
+                          tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                      }
                     }
                   }
                 }
+                }
               }
+              VerticalScrollbar(
+                adapter = rememberScrollbarAdapter(listState),
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+                  .padding(vertical = 5.dp, horizontal = 2.dp),
+              )
             }
           }
         }
       }
     }
+  }
+}
+
+@Composable
+private fun EndpointMark(
+  country: NodeCountry?,
+  automatic: Boolean,
+  modifier: Modifier = Modifier,
+) {
+  when {
+    country != null -> Box(modifier, contentAlignment = Alignment.Center) {
+      Text(
+        country.flag,
+        style = MaterialTheme.typography.titleMedium,
+        maxLines = 1,
+      )
+    }
+    automatic -> Icon(Icons.Rounded.Tune, null, modifier)
+    else -> Icon(Icons.Rounded.Language, null, modifier)
   }
 }
 
@@ -3139,9 +3196,9 @@ private fun NodeDropdown(
   val choices = remember(profile.id, profile.engine, profile.nodes, language) {
     if (profile.engine == VpnEngine.SingBox) {
       listOf(ProfileSelection.AUTOMATIC_TAG to language.text("Автоматически", "Automatic")) +
-        profile.nodes.map { it.tag to it.name }
+        profile.nodes.map { it.tag to NodePresentation.displayName(it.name) }
     } else {
-      profile.nodes.map { it.tag to it.name }
+      profile.nodes.map { it.tag to NodePresentation.displayName(it.name) }
     }
   }
   val filteredChoices = remember(choices, query) {
@@ -3163,6 +3220,7 @@ private fun NodeDropdown(
   val activeName = choices.firstOrNull { it.first == activeTag }?.second
     ?: language.text("Нет узлов", "No servers")
   val activeLatency = activeTag?.let(latencies::get)
+  val activeNode = activeTag?.let(nodesByTag::get)
   val activeDetail = if (activeTag == ProfileSelection.AUTOMATIC_TAG) {
     language.text("Выбор по доступности узлов", "Select by availability")
   } else {
@@ -3195,7 +3253,11 @@ private fun NodeDropdown(
         vertical = if (compact) 7.dp else 13.dp,
       ),
     ) {
-      Icon(Icons.Rounded.Language, null, Modifier.size(19.dp))
+      EndpointMark(
+        country = activeNode?.let { NodePresentation.country(it.name) },
+        automatic = activeTag == ProfileSelection.AUTOMATIC_TAG,
+        modifier = Modifier.size(22.dp),
+      )
       Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
         Text(
           activeName,
@@ -3269,10 +3331,11 @@ private fun NodeDropdown(
                   modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
                   verticalAlignment = Alignment.CenterVertically,
                 ) {
-                Icon(
-                    if (selected) Icons.Rounded.Check else Icons.Rounded.Language,
-                  null,
-                    modifier = Modifier.size(18.dp),
+                  val node = nodesByTag[tag]
+                  EndpointMark(
+                    country = node?.let { NodePresentation.country(it.name) },
+                    automatic = tag == ProfileSelection.AUTOMATIC_TAG,
+                    modifier = Modifier.size(22.dp),
                   )
                   Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(name, fontWeight = FontWeight.Medium)
@@ -3280,7 +3343,7 @@ private fun NodeDropdown(
                       if (tag == ProfileSelection.AUTOMATIC_TAG) {
                         language.text("Выбор по доступности узлов", "Select by availability")
                       } else {
-                        nodesByTag[tag]?.protocol.orEmpty()
+                        node?.protocol.orEmpty()
                       },
                       style = MaterialTheme.typography.bodySmall,
                       color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -3289,22 +3352,30 @@ private fun NodeDropdown(
                     )
                   }
                   if (tag != ProfileSelection.AUTOMATIC_TAG) {
-                  val latency = latencies[tag]
-                  Text(
-                    when {
-                      latency == null -> "—"
-                      latency.available -> language.text("${latency.millis} мс", "${latency.millis} ms")
-                      else -> language.text("таймаут", "timeout")
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = when {
-                      latency?.available == true && (latency.millis ?: 9999) < 180 ->
-                        MaterialTheme.colorScheme.primary
-                      latency?.available == false -> MaterialTheme.colorScheme.error
-                      else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                  )
-                }
+                    val latency = latencies[tag]
+                    Text(
+                      when {
+                        latency == null -> "—"
+                        latency.available -> language.text("${latency.millis} мс", "${latency.millis} ms")
+                        else -> language.text("таймаут", "timeout")
+                      },
+                      style = MaterialTheme.typography.labelMedium,
+                      color = when {
+                        latency?.available == true && (latency.millis ?: 9999) < 180 ->
+                          MaterialTheme.colorScheme.primary
+                        latency?.available == false -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                      },
+                    )
+                  }
+                  if (selected) {
+                    Icon(
+                      Icons.Rounded.Check,
+                      null,
+                      modifier = Modifier.padding(start = 8.dp).size(18.dp),
+                      tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                  }
                 }
               }
             }

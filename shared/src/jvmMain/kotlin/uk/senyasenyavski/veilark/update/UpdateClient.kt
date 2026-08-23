@@ -374,26 +374,26 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 307
-    const val CURRENT_VERSION_NAME = "0.3.7"
+    const val CURRENT_VERSION_CODE = 308
+    const val CURRENT_VERSION_NAME = "0.3.8"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.7
-      • Главный экран выстроен по одной центральной оси: кнопка подключения увеличена до 120 dp, а статус, ядро, сервер и действия аккуратно расположены под ней.
-      • В проблемном состоянии выбор сервера и управление остаются в первом экране; подробности ошибки больше не сдвигают основные элементы.
-      • Исправлена зарубежная ветка режима «РФ напрямую»: TrustTunnel больше не отправляет каждое HTTPS-соединение через промежуточный fake upstream перед VPN.
-      • Подозреваемые российские исключения по-прежнему проверяются ядром, а ограниченное предварительное разрешение доменов сохраняет стабильную геомаршрутизацию без DNS-шторма.
-      • Veilark больше не перезаписывает MTU рабочей TrustTunnel-подписки и сохраняет значение, выбранное ядром или владельцем сервера.
-      • Цвета Material 3, компактное окно, вложенные серверы, обновление подписок, пинг и кнопка остановки сохранены.
+      Исправлено и добавлено в 0.3.8
+      • Remnawave и современные x-ui теперь получают корректный запрос sing-box вместо неоднозначного fallback-формата.
+      • Импорт читает все вложенные группы outbounds и JSON-конфигурации, а не только корневой набор серверов.
+      • Выпадающий список показывает точное число реальных серверов, не считая пункт «Автоматически» отдельным узлом.
+      • Список стал выше, получил видимую прокрутку и больше не создаёт впечатление, что после первых трёх протоколов серверов нет.
+      • Для названий стран и городов добавлены флаги; исходные имена, протоколы, выбранный узел и совместимость хранилища сохранены.
+      • После импорта и обновления приложение явно сообщает число узлов для каждого VPN-ядра.
       • Обновление устанавливается поверх версий 0.3.x с сохранением подписок, встроенной Veilark Trust, маршрутов и выбранных серверов.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.7
-      • Home now follows one centered action spine: the connection control is 120 dp, with status, core, server and secondary actions aligned beneath it.
-      • Server selection and controls stay in the first viewport during degraded states; diagnostic details no longer displace primary controls.
-      • The foreign branch of “Russia direct” is fixed: TrustTunnel no longer sends every HTTPS connection through a fake upstream before the VPN endpoint.
-      • Suspected Russian exclusions still receive core inspection, while bounded domain pre-resolution keeps geo routing stable without a DNS burst.
-      • Veilark no longer overwrites the MTU from a working TrustTunnel subscription and preserves the value selected by the core or server owner.
-      • Material 3 colors, the compact window, nested servers, subscription refresh, latency testing and the stop action are preserved.
+      Fixed and added in 0.3.8
+      • Remnawave and modern x-ui now receive an explicit sing-box request instead of an ambiguous fallback format.
+      • Import reads every nested outbounds group and embedded JSON config, not only the root server set.
+      • The server picker reports the real server count and no longer counts “Automatic” as an endpoint.
+      • The list is taller, has a visible scrollbar and no longer hides remaining locations below the first three protocols.
+      • Country and city names now receive flags while source names, protocols, selection and store compatibility are preserved.
+      • Import and refresh confirmations report the endpoint count for each VPN core.
       • The update installs over 0.3.x while preserving subscriptions, built-in Veilark Trust, routing and selected servers.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =

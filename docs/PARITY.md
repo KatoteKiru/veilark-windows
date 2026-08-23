@@ -6,20 +6,20 @@ Status values: **yes**, **partial**, **planned**, **Android-only**.
 |---|---:|---|
 | Native desktop UI | yes | Compose Desktop, 600×440 shell, hamburger navigation and gear settings |
 | sing-box 1.13.14 | yes | Official Windows amd64 binary, pinned SHA-256 |
-| TrustTunnel 1.1.5-rc.6 | partial | Official pinned Windows x86_64 client/setup wizard; config and package gates pass, elevated 0.3.7 traffic QA is user-run |
+| TrustTunnel 1.1.5-rc.6 | partial | Official pinned Windows x86_64 client/setup wizard; config and package gates pass, elevated 0.3.8 traffic QA is user-run |
 | Connect / disconnect facade | partial | Both runtimes and watchdog verified; isolated sing-box full-TUN route QA waits for competing Happ VPN to be closed |
 | UAC elevation | yes | Connect relaunches packaged Veilark with `runas` and resumes automatically |
-| HTTPS subscription import | yes | HTTPS-only, 4 MiB bound, rejects HTML |
+| HTTPS subscription import | yes | HTTPS-only, 4 MiB bound, rejects HTML; negotiates sing-box responses with Remnawave and modern x-ui |
 | Paste / file import | yes | URI, Base64, JSON, YAML |
 | VLESS / VMess / Trojan / SS | yes | Shared Android parser snapshot |
 | Hysteria2 / TUIC / AnyTLS | yes | Shared Android parser snapshot |
 | Xray JSON | yes | Compiled to sing-box |
 | Clash/Mihomo YAML | yes | Safe SnakeYAML parser |
 | Profile persistence | yes | Current-user DPAPI container; atomic write; no plaintext fallback |
-| Node selection | yes | Home and Profiles dropdowns retain all sing-box and TrustTunnel entries; selection persisted with DPAPI |
+| Node selection | yes | Home and Profiles retain all entries, show exact endpoint counts, flags and visible scrolling; selection persisted with DPAPI |
 | Subscription refresh | yes | Original HTTPS source is encrypted with DPAPI and can be refreshed manually |
 | Node latency | yes | Bounded parallel TCP probe for all nodes of either engine |
-| All-traffic routing | partial | Generated TUN config and core checks pass; elevated 0.3.7 live QA pending |
+| All-traffic routing | partial | Generated TUN config and core checks pass; elevated 0.3.8 live QA pending |
 | Manual / RU split routing | partial | Bundled RU SRS, direct foreign TrustTunnel path, preserved profile MTU and UI complete; elevated live route QA pending |
 | Process-based routing | planned | UI explicitly limits current rules to domain, IP, and CIDR |
 | TLS fragmentation | partial | Applied to compatible sing-box TLS outbounds; reconnect QA pending |
