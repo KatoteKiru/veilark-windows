@@ -83,11 +83,18 @@ object ProfileSelection {
     require(mode in setOf(ROUTING_ALL, ROUTING_MANUAL, ROUTING_RU_DIRECT, ROUTING_RU_VPN))
     val root = JSONObject(config)
     val route = root.getJSONObject("route")
+    val selectedOutbound = route.getString("final")
     route.remove("rules")
     route.remove("rule_set")
+    val dns = root.optJSONObject("dns")
+    dns?.remove("rules")
+    secureDns(root)?.put("detour", selectedOutbound)
     val rules = baseTunRules()
     when (mode) {
-      ROUTING_ALL -> route.put("rules", rules)
+      ROUTING_ALL -> {
+        route.put("rules", rules)
+        dns?.put("final", SECURE_DNS_TAG)
+      }
       ROUTING_MANUAL -> {
         val direct = parseRoutingEntries(directEntries)
         val vpn = parseRoutingEntries(vpnEntries)
@@ -100,6 +107,11 @@ object ProfileSelection {
         addRule(rules, vpn, route.getString("final"))
         addRule(rules, direct, "direct")
         route.put("rules", rules)
+        dns?.put("final", SECURE_DNS_TAG)
+        val dnsRules = JSONArray()
+        addDnsRule(dnsRules, vpn.domains, SECURE_DNS_TAG)
+        addDnsRule(dnsRules, direct.domains, LOCAL_DNS_TAG)
+        if (dnsRules.length() > 0) dns?.put("rules", dnsRules)
       }
       ROUTING_RU_DIRECT, ROUTING_RU_VPN -> {
         require(!geoIpRuPath.isNullOrBlank() && !geoSiteCategoryRuPath.isNullOrBlank()) {
@@ -111,7 +123,6 @@ object ProfileSelection {
             .put(localRuleSet(GEOIP_RU_TAG, geoIpRuPath))
             .put(localRuleSet(GEOSITE_CATEGORY_RU_TAG, geoSiteCategoryRuPath)),
         )
-        val selectedOutbound = route.getString("final")
         val targetOutbound = if (mode == ROUTING_RU_DIRECT) "direct" else selectedOutbound
         route.put(
           "rules",
@@ -123,7 +134,11 @@ object ProfileSelection {
         )
         if (mode == ROUTING_RU_VPN) {
           route.put("final", "direct")
-          secureDns(root)?.put("detour", "direct")
+          dns?.put("final", LOCAL_DNS_TAG)
+          dns?.put("rules", JSONArray().put(ruleSetDnsRule(GEOSITE_CATEGORY_RU_TAG, SECURE_DNS_TAG)))
+        } else {
+          dns?.put("final", SECURE_DNS_TAG)
+          dns?.put("rules", JSONArray().put(ruleSetDnsRule(GEOSITE_CATEGORY_RU_TAG, LOCAL_DNS_TAG)))
         }
       }
     }
@@ -195,6 +210,21 @@ object ProfileSelection {
       )
     }
   }
+
+  private fun addDnsRule(rules: JSONArray, domains: List<String>, server: String) {
+    if (domains.isEmpty()) return
+    rules.put(
+      JSONObject()
+        .put("domain_suffix", JSONArray(domains))
+        .put("action", "route")
+        .put("server", server),
+    )
+  }
+
+  private fun ruleSetDnsRule(ruleSet: String, server: String): JSONObject = JSONObject()
+    .put("rule_set", JSONArray().put(ruleSet))
+    .put("action", "route")
+    .put("server", server)
 
   /**
    * TUN traffic must keep these rules in every routing mode. In particular,
@@ -291,6 +321,8 @@ object ProfileSelection {
   private val IPV6 = Regex("""[0-9a-fA-F:]+""")
   private const val GEOIP_RU_TAG = "geoip-ru"
   private const val GEOSITE_CATEGORY_RU_TAG = "geosite-category-ru"
+  private const val LOCAL_DNS_TAG = "bootstrap-dns"
+  private const val SECURE_DNS_TAG = "secure-dns"
 }
 
 data class NormalizedRoutingEntries(

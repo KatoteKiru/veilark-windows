@@ -32,6 +32,7 @@ class WindowsVpnSession(
   private val healthChecksEveryTicks: Int = 10,
   private val disconnectJoinTimeoutMillis: Long = 10_000,
   private val logger: (String) -> Unit = SafeLog::write,
+  private val preConnectCheck: () -> String? = { null },
 ) : VpnSession {
   private val controllers = controllers.associateBy(EngineController::engine)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -48,6 +49,16 @@ class WindowsVpnSession(
   override suspend fun connect(profile: Profile) {
     val job = mutex.withLock {
       if (connectJob?.isActive == true || activeController?.isAlive() == true) return
+      preConnectCheck()?.let { message ->
+        publish(
+          SessionState(
+            engine = profile.engine,
+            phase = VpnPhase.Error(message, "COMPETING_TUNNEL"),
+            profile = profile,
+          ),
+        )
+        return
+      }
       val controller = controllers[profile.engine] ?: run {
         publish(
           SessionState(

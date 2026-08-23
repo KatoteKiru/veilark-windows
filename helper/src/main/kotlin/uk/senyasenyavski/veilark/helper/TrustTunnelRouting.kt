@@ -10,6 +10,7 @@ internal data class TrustTunnelRoutingPlan(
   val vpnMode: String,
   val exclusions: List<String>,
   val exclusionsTcpEarlyAckEnabled: Boolean = false,
+  val exclusionsPreresolveEnabled: Boolean = false,
 )
 
 /** Converts Veilark routing semantics to TrustTunnel 1.0.x TOML settings. */
@@ -72,13 +73,18 @@ internal object TrustTunnelRouting {
     val routingBlock = buildList {
       add("vpn_mode = \"${plan.vpnMode}\"")
       add("exclusions_tcp_early_ack_enabled = ${plan.exclusionsTcpEarlyAckEnabled}")
+      // Thousands of RU entries must not turn connection startup into a DNS
+      // pre-resolution pass. DNS interception plus early SNI matching handles
+      // domain exclusions while the pinned CIDRs are effective immediately.
+      add("exclusions_preresolve_enabled = ${plan.exclusionsPreresolveEnabled}")
       add("exclusions = [")
       plan.exclusions.forEach { add("  \"${tomlString(it)}\",") }
       add("]")
       add("")
     }
-    return (topLevel + routingBlock + lines.drop(firstSection)).joinToString("\n")
+    val routed = (topLevel + routingBlock + lines.drop(firstSection)).joinToString("\n")
       .trimEnd() + "\n"
+    return ensureTableAssignment(routed, "[listener.tun]", "change_system_dns", "true")
   }
 
   private fun requiredGeoExclusions(profile: Profile): List<String> =
@@ -111,6 +117,33 @@ internal object TrustTunnelRouting {
     return result
   }
 
+  private fun ensureTableAssignment(
+    source: String,
+    table: String,
+    key: String,
+    value: String,
+  ): String {
+    val lines = source.trimEnd().split('\n').toMutableList()
+    val tableIndex = lines.indexOfFirst { it.trim() == table }
+    require(tableIndex >= 0) { "TrustTunnel не создал секцию $table" }
+    val nextTable = lines.indexOfFirstFrom(tableIndex + 1) { TABLE_HEADER.matches(it) }
+      .let { if (it < 0) lines.size else it }
+    for (index in nextTable - 1 downTo tableIndex + 1) {
+      val assignment = ASSIGNMENT.matchEntire(lines[index])
+      if (assignment?.groupValues?.get(1) == key) lines.removeAt(index)
+    }
+    lines.add(tableIndex + 1, "$key = $value")
+    return lines.joinToString("\n").trimEnd() + "\n"
+  }
+
+  private inline fun <T> List<T>.indexOfFirstFrom(
+    startIndex: Int,
+    predicate: (T) -> Boolean,
+  ): Int {
+    for (index in startIndex until size) if (predicate(this[index])) return index
+    return -1
+  }
+
   private fun bracketDelta(value: String): Int {
     var quoted = false
     var escaped = false
@@ -134,5 +167,10 @@ internal object TrustTunnelRouting {
 
   private val TABLE_HEADER = Regex("""\s*\[.*]\s*(?:#.*)?""")
   private val ASSIGNMENT = Regex("""\s*([A-Za-z0-9_-]+)\s*=\s*(.*)""")
-  private val SETTINGS = setOf("vpn_mode", "exclusions", "exclusions_tcp_early_ack_enabled")
+  private val SETTINGS = setOf(
+    "vpn_mode",
+    "exclusions",
+    "exclusions_tcp_early_ack_enabled",
+    "exclusions_preresolve_enabled",
+  )
 }

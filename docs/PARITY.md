@@ -4,9 +4,9 @@ Status values: **yes**, **partial**, **planned**, **Android-only**.
 
 | Capability | Windows | Notes |
 |---|---:|---|
-| Native desktop UI | yes | Compose Desktop, navigation rail, 1050×680 minimum |
+| Native desktop UI | yes | Compose Desktop, 640×520 shell, hamburger navigation and gear settings |
 | sing-box 1.13.14 | yes | Official Windows amd64 binary, pinned SHA-256 |
-| TrustTunnel 1.0.49 | yes | Official Windows x86_64 client/setup wizard; live elevated WinTUN connect/disconnect passed |
+| TrustTunnel 1.1.5-rc.6 | partial | Official pinned Windows x86_64 client/setup wizard; config and package gates pass, elevated 0.3.5 traffic QA is user-run |
 | Connect / disconnect facade | partial | Both runtimes and watchdog verified; isolated sing-box full-TUN route QA waits for competing Happ VPN to be closed |
 | UAC elevation | yes | Connect relaunches packaged Veilark with `runas` and resumes automatically |
 | HTTPS subscription import | yes | HTTPS-only, 4 MiB bound, rejects HTML |
@@ -19,8 +19,8 @@ Status values: **yes**, **partial**, **planned**, **Android-only**.
 | Node selection | yes | Home and Profiles dropdowns retain all sing-box and TrustTunnel entries; selection persisted with DPAPI |
 | Subscription refresh | yes | Original HTTPS source is encrypted with DPAPI and can be refreshed manually |
 | Node latency | yes | Bounded parallel TCP probe for all nodes of either engine |
-| All-traffic routing | partial | Generated TUN config; live QA pending |
-| Manual domain/IP routing | partial | Config mutator and UI complete; elevated live route QA pending |
+| All-traffic routing | partial | Generated TUN config and core checks pass; elevated 0.3.5 live QA pending |
+| Manual / RU split routing | partial | Split DNS, bundled RU SRS, TrustTunnel exclusions and UI complete; elevated live route QA pending |
 | Process-based routing | planned | UI explicitly limits current rules to domain, IP, and CIDR |
 | TLS fragmentation | partial | Applied to compatible sing-box TLS outbounds; reconnect QA pending |
 | Diagnostics matrix | yes | Parallel HTTPS probes; OpenAI/Gemini auth failures count as reachable |
@@ -33,7 +33,7 @@ Status values: **yes**, **partial**, **planned**, **Android-only**.
 
 ## Better on Windows
 
-- wide desktop navigation instead of a mobile single column;
+- compact desktop app bar and popup navigation instead of a persistent sidebar;
 - native file chooser and file drag-and-drop;
 - explicit runtime log location and packaged native-core licenses.
 

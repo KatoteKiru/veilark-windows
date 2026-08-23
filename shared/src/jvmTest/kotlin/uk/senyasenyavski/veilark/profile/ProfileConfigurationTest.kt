@@ -126,7 +126,13 @@ class ProfileConfigurationTest {
     assertEquals(selectedTag, route.getJSONArray("rules").getJSONObject(3).getString("outbound"))
     val secureDns = JSONObject(configured.config).getJSONObject("dns").getJSONArray("servers")
       .getJSONObject(1)
-    assertEquals("direct", secureDns.getString("detour"))
+    assertEquals(selectedTag, secureDns.getString("detour"))
+    val dns = JSONObject(configured.config).getJSONObject("dns")
+    assertEquals("bootstrap-dns", dns.getString("final"))
+    assertEquals(
+      "secure-dns",
+      dns.getJSONArray("rules").getJSONObject(0).getString("server"),
+    )
   }
 
   @Test

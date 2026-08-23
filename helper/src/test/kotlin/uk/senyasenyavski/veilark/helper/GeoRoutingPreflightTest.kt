@@ -92,6 +92,36 @@ class GeoRoutingPreflightTest {
   }
 
   @Test
+  fun `bundled snapshot seeds an empty cache without network`() = runBlocking {
+    val directory = Files.createTempDirectory("veilark-geo-seeded")
+    val bundled = Files.createTempDirectory("veilark-geo-bundled")
+    try {
+      Files.writeString(bundled.resolve("geoip-ru.srs"), "bundled geoip")
+      Files.writeString(bundled.resolve("geosite-category-ru.srs"), "bundled geosite")
+      val cache = GeoRuleSetCache(
+        directory,
+        failingDownloader(),
+        FakeDecompiler,
+        false,
+        bundled,
+      )
+
+      val seeded = cache.loadValidOrSeed()
+      val loaded = cache.loadValid()
+
+      assertEquals(seeded, loaded)
+      assertTrue(Files.isRegularFile(directory.resolve("current.json")))
+      assertEquals(
+        listOf("5.8.0.0/13", "2a00:f00::/29", "example.ru", "ru", "*.ru"),
+        loaded.trustTunnelExclusions,
+      )
+    } finally {
+      deleteTree(directory)
+      deleteTree(bundled)
+    }
+  }
+
+  @Test
   fun `Windows downloader is bounded and uses Schannel without proxy bypass`() {
     val command = WindowsGeoRuleSetDownloader.command(
       Path.of("C:\\Windows\\System32\\curl.exe"),

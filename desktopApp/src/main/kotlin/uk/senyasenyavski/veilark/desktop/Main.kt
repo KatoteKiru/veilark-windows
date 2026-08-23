@@ -2,7 +2,7 @@
  * THESIS: Veilark is a desktop connection console; it refuses a mobile dashboard stretched into a window.
  * OWN-WORLD: restrained Material 3 blue, dense tonal planes, 12–16 dp geometry, native Windows typography.
  * STORY: choose engine and endpoint, connect or stop, then inspect only the evidence needed to trust the tunnel.
- * FIRST VIEWPORT: compact nav, one status-and-control console, hierarchical server picker, dominant action, routing summary.
+ * FIRST VIEWPORT: hamburger and gear, one circular connection action, then the grouped server picker.
  * FORM: unified connection console, ranked structure 3, seed dec4465c.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
@@ -138,6 +138,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.example.veilark.profile.ProfileSelection
 import uk.senyasenyavski.veilark.helper.VeilarkPaths
+import uk.senyasenyavski.veilark.helper.ActiveTunnelConflict
 import uk.senyasenyavski.veilark.helper.ElevationManager
 import uk.senyasenyavski.veilark.helper.GeoRoutingPreflight
 import uk.senyasenyavski.veilark.helper.ProfileStore
@@ -202,7 +203,9 @@ fun main(args: Array<String>) {
   }
   try {
     application {
-  val session = remember { WindowsVpnSession() }
+  val session = remember {
+    WindowsVpnSession(preConnectCheck = ActiveTunnelConflict::message)
+  }
   val elevationManager = remember { ElevationManager() }
   val actions = remember { DesktopActions() }
   val sessionState by session.state.collectAsState()
@@ -302,10 +305,10 @@ fun main(args: Array<String>) {
     visible = windowVisible,
     title = "Veilark",
     icon = painterResource("veilark-logo.png"),
-    state = rememberWindowState(width = 940.dp, height = 640.dp),
+    state = rememberWindowState(width = 640.dp, height = 520.dp),
   ) {
     DisposableEffect(Unit) {
-      window.minimumSize = java.awt.Dimension(820, 560)
+      window.minimumSize = java.awt.Dimension(560, 500)
       window.transferHandler = object : TransferHandler() {
         override fun canImport(support: TransferSupport): Boolean =
           support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
@@ -822,10 +825,10 @@ private fun VeilarkApp(
     }
   }
 
-  Row(
+  Column(
     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
   ) {
-    AppNavigation(
+    CompactAppBar(
       destination = destination,
       phase = state.phase,
       engine = selectedEngine,
@@ -833,7 +836,7 @@ private fun VeilarkApp(
       onLanguage = onLanguage,
     )
     Scaffold(
-      modifier = Modifier.weight(1f).fillMaxHeight(),
+      modifier = Modifier.weight(1f).fillMaxWidth(),
       containerColor = MaterialTheme.colorScheme.background,
       snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -851,7 +854,6 @@ private fun VeilarkApp(
           Destination.Home -> HomeScreen(
             phase = state.phase,
             traffic = state.traffic,
-            routing = routingSettings,
             elevated = elevated,
             profile = profile,
             selectedEngine = selectedEngine,
@@ -881,7 +883,6 @@ private fun VeilarkApp(
             },
             onRefresh = { activeSubscription?.let(::refreshSubscription) },
             onProbe = { profile?.let(::probeNodes) },
-            onOpenRouting = { destination = Destination.Routing },
             onOpenLogs = { destination = Destination.Logs },
           )
           Destination.Profiles -> ProfilesScreen(
@@ -1117,7 +1118,6 @@ private fun ProfileStoreUnavailable(onExit: () -> Unit) {
 private fun HomeScreen(
   phase: VpnPhase,
   traffic: TrafficSnapshot?,
-  routing: RoutingSettings,
   elevated: Boolean,
   profile: Profile?,
   selectedEngine: VpnEngine,
@@ -1135,7 +1135,6 @@ private fun HomeScreen(
   onImport: () -> Unit,
   onRefresh: () -> Unit,
   onProbe: () -> Unit,
-  onOpenRouting: () -> Unit,
   onOpenLogs: () -> Unit,
 ) {
   val connected = phase is VpnPhase.Connected || phase is VpnPhase.Degraded
@@ -1169,13 +1168,6 @@ private fun HomeScreen(
       onRefresh = onRefresh,
       onProbe = onProbe,
       onOpenLogs = onOpenLogs,
-    )
-    RoutingShortcut(
-      routing = routing,
-      engine = selectedEngine,
-      connected = connected,
-      onOpen = onOpenRouting,
-      modifier = Modifier.padding(top = 10.dp),
     )
   }
 }
@@ -1224,7 +1216,7 @@ private fun CompactConnectionWorkspace(
       healthy -> MaterialTheme.colorScheme.primary
       degraded -> MaterialTheme.colorScheme.tertiaryContainer
       failed -> MaterialTheme.colorScheme.errorContainer
-      else -> MaterialTheme.colorScheme.surfaceContainerLowest
+      else -> MaterialTheme.colorScheme.primaryContainer
     },
     animationSpec = tween(220),
   )
@@ -1233,214 +1225,183 @@ private fun CompactConnectionWorkspace(
       healthy -> MaterialTheme.colorScheme.onPrimary
       degraded -> MaterialTheme.colorScheme.onTertiaryContainer
       failed -> MaterialTheme.colorScheme.onErrorContainer
-      else -> MaterialTheme.colorScheme.primary
+      else -> MaterialTheme.colorScheme.onPrimaryContainer
     },
     animationSpec = tween(220),
   )
 
-  CardSection(Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Surface(
-          modifier = Modifier.size(44.dp),
-          color = statusContainerColor,
-          contentColor = statusContentColor,
-          shape = CircleShape,
-        ) {
-          Box(contentAlignment = Alignment.Center) {
-            AnimatedContent(
-              targetState = busy,
-              transitionSpec = {
-                (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .92f))
-                  .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .92f))
-              },
-            ) { isBusy ->
-              if (isBusy) {
-                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.25.dp)
-              } else {
-                ShieldMark(
-                  checked = connected,
-                  color = LocalContentColor.current,
-                  modifier = Modifier.size(25.dp),
-                )
-              }
-            }
-          }
+  val actionLabel = when {
+    profile == null -> language.text("Добавить", "Add")
+    phase is VpnPhase.Stopping -> language.text("Остановка", "Stopping")
+    phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Остановить", "Stop")
+    connected -> language.text("Отключить", "Disconnect")
+    else -> language.text("Подключить", "Connect")
+  }
+
+  Column(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Text(
+      when (phase) {
+        VpnPhase.Idle -> language.text("Отключено", "Disconnected")
+        VpnPhase.NeedsElevation -> language.text("Требуются права Windows", "Windows admin access required")
+        VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
+        VpnPhase.Connecting -> language.text("Подключение", "Connecting")
+        is VpnPhase.Connected -> language.text("Подключено", "Connected")
+        is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
+        VpnPhase.Stopping -> language.text("Остановка", "Stopping")
+        is VpnPhase.Error -> language.text("Ошибка подключения", "Connection error")
+      },
+      style = MaterialTheme.typography.titleLarge,
+      fontWeight = FontWeight.SemiBold,
+    )
+    Text(
+      statusSummary,
+      modifier = Modifier.padding(top = 2.dp).widthIn(max = 500.dp),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis,
+      textAlign = TextAlign.Center,
+    )
+
+    Surface(
+      modifier = Modifier.padding(top = 14.dp).size(118.dp)
+        .clickable(
+          enabled = phase !is VpnPhase.Stopping,
+          role = Role.Button,
+          onClick = if (profile == null) onImport else onAction,
+        ),
+      color = statusContainerColor,
+      contentColor = statusContentColor,
+      shape = CircleShape,
+      tonalElevation = 2.dp,
+    ) {
+      Box(contentAlignment = Alignment.Center) {
+        if (busy) {
+          CircularProgressIndicator(
+            modifier = Modifier.size(90.dp),
+            color = LocalContentColor.current,
+            strokeWidth = 3.dp,
+          )
         }
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-          Text(
-            when (phase) {
-              VpnPhase.Idle -> language.text("Отключено", "Disconnected")
-              VpnPhase.NeedsElevation -> language.text("Требуются права Windows", "Windows admin access required")
-              VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
-              VpnPhase.Connecting -> language.text("Подключение", "Connecting")
-              is VpnPhase.Connected -> language.text("Подключено", "Connected")
-              is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
-              VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-              is VpnPhase.Error -> language.text("Ошибка подключения", "Connection error")
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          AnimatedContent(
+            targetState = busy,
+            transitionSpec = {
+              (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .9f))
+                .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .9f))
             },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-          )
-          Text(
-            statusSummary,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
-        if (connected) {
-          CompactTrafficEvidence(
-            phase = phase,
-            traffic = traffic,
-            modifier = Modifier.padding(start = 16.dp),
-          )
-        }
-      }
-
-      AnimatedVisibility(
-        visible = degraded || failed,
-        enter = fadeIn(tween(160)),
-        exit = fadeOut(tween(120)),
-      ) {
-        PhaseProblemStrip(
-          phase = phase,
-          message = statusMessage,
-          onOpenLogs = onOpenLogs,
-          modifier = Modifier.padding(top = 12.dp),
-        )
-      }
-
-      HorizontalDivider(Modifier.padding(vertical = 10.dp))
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        Surface(
-          modifier = Modifier.width(310.dp),
-          color = MaterialTheme.colorScheme.surfaceContainerHigh,
-          shape = RoundedCornerShape(11.dp),
-        ) {
-          Row(
-            modifier = Modifier.fillMaxWidth().padding(2.dp).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-          ) {
-            VpnEngine.entries.forEach { engine ->
-              EngineChoice(
-                engine = engine,
-                selected = selectedEngine == engine,
-                configured = engine in availableEngines,
-                enabled = !configurationLocked,
-                modifier = Modifier.weight(1f),
-                onSelect = onEngineSelect,
+          ) { isBusy ->
+            if (isBusy) {
+              Icon(Icons.Rounded.StopCircle, null, Modifier.size(34.dp))
+            } else {
+              ShieldMark(
+                checked = connected,
+                color = LocalContentColor.current,
+                modifier = Modifier.size(42.dp),
               )
             }
           }
-        }
-        if (profile == null) {
           Text(
-            language.text(
-              "Нет профиля ${selectedEngine.displayName}. Добавьте подписку.",
-              "No ${selectedEngine.displayName} profile. Add a subscription.",
-            ),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        } else {
-          EndpointPicker(
-            subscriptions = subscriptions,
-            engine = selectedEngine,
-            activeSubscriptionId = activeSubscriptionId,
-            selectedNodeTag = selectedNodeTag,
-            latencies = nodeLatencies,
-            enabled = !configurationLocked,
-            onSelect = onSelectEndpoint,
-            modifier = Modifier.weight(1f),
+            actionLabel,
+            modifier = Modifier.padding(top = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
           )
         }
       }
+    }
 
-      BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        val actionLabel = when {
-          profile == null -> language.text("Добавить подписку", "Add subscription")
-          phase is VpnPhase.Stopping -> language.text("Отключение…", "Disconnecting…")
-          phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Остановить", "Stop")
-          connected -> language.text("Отключить", "Disconnect")
-          else -> language.text("Подключить", "Connect")
+    if (connected) {
+      CompactTrafficEvidence(
+        phase = phase,
+        traffic = traffic,
+        modifier = Modifier.padding(top = 8.dp),
+      )
+    }
+
+    AnimatedVisibility(
+      visible = degraded || failed,
+      enter = fadeIn(tween(160)),
+      exit = fadeOut(tween(120)),
+    ) {
+      PhaseProblemStrip(
+        phase = phase,
+        message = statusMessage,
+        onOpenLogs = onOpenLogs,
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+      )
+    }
+
+    Surface(
+      modifier = Modifier.padding(top = 14.dp).widthIn(max = 300.dp).fillMaxWidth(),
+      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      shape = RoundedCornerShape(11.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth().padding(2.dp).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+      ) {
+        VpnEngine.entries.forEach { engine ->
+          EngineChoice(
+            engine = engine,
+            selected = selectedEngine == engine,
+            configured = engine in availableEngines,
+            enabled = !configurationLocked,
+            modifier = Modifier.weight(1f),
+            onSelect = onEngineSelect,
+          )
         }
-        if (maxWidth >= 580.dp) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-          ) {
-            if (profile != null) {
-              TextButton(onClick = onImport, enabled = !configurationLocked) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(17.dp))
-                Text(language.text("Подписка", "Subscription"), Modifier.padding(start = 6.dp))
-              }
-              OutlinedButton(
-                onClick = onRefresh,
-                enabled = !configurationLocked && !refreshing && profile.sourceUrl != null,
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp),
-              ) {
-                if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
-                Text(language.text("Обновить", "Refresh"), Modifier.padding(start = 6.dp))
-              }
-              OutlinedButton(
-                onClick = onProbe,
-                enabled = !configurationLocked && !probing,
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp),
-              ) {
-                if (probing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
-                Text(language.text("Пинг", "Ping"), Modifier.padding(start = 6.dp))
-              }
-            }
-            Spacer(Modifier.weight(1f))
-            ConnectionActionButton(
-              label = actionLabel,
-              connected = connected,
-              busy = busy,
-              enabled = phase !is VpnPhase.Stopping,
-              onClick = if (profile == null) onImport else onAction,
-              modifier = Modifier.widthIn(min = 176.dp).height(44.dp),
-            )
-          }
-        } else {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (profile != null) {
-              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                  onClick = onRefresh,
-                  enabled = !configurationLocked && !refreshing && profile.sourceUrl != null,
-                  modifier = Modifier.weight(1f),
-                ) { Text(language.text("Обновить", "Refresh")) }
-                OutlinedButton(
-                  onClick = onProbe,
-                  enabled = !configurationLocked && !probing,
-                  modifier = Modifier.weight(1f),
-                ) { Text(language.text("Пинг", "Ping")) }
-              }
-            }
-            ConnectionActionButton(
-              label = actionLabel,
-              connected = connected,
-              busy = busy,
-              enabled = phase !is VpnPhase.Stopping,
-              onClick = if (profile == null) onImport else onAction,
-              modifier = Modifier.fillMaxWidth().height(44.dp),
-            )
-          }
+      }
+    }
+
+    if (profile == null) {
+      Text(
+        language.text(
+          "Нет профиля ${selectedEngine.displayName}",
+          "No ${selectedEngine.displayName} profile",
+        ),
+        modifier = Modifier.padding(top = 10.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    } else {
+      EndpointPicker(
+        subscriptions = subscriptions,
+        engine = selectedEngine,
+        activeSubscriptionId = activeSubscriptionId,
+        selectedNodeTag = selectedNodeTag,
+        latencies = nodeLatencies,
+        enabled = !configurationLocked,
+        onSelect = onSelectEndpoint,
+        modifier = Modifier.padding(top = 10.dp).widthIn(max = 460.dp).fillMaxWidth(),
+      )
+    }
+
+    Row(
+      modifier = Modifier.padding(top = 2.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.Center,
+    ) {
+      TextButton(onClick = onImport, enabled = !configurationLocked) {
+        Icon(Icons.Rounded.Add, null, Modifier.size(17.dp))
+        Text(language.text("Добавить", "Add"), Modifier.padding(start = 5.dp))
+      }
+      if (profile != null) {
+        TextButton(
+          onClick = onRefresh,
+          enabled = !configurationLocked && !refreshing && profile.sourceUrl != null,
+        ) {
+          if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+          else Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
+          Text(language.text("Обновить", "Refresh"), Modifier.padding(start = 5.dp))
+        }
+        TextButton(onClick = onProbe, enabled = !configurationLocked && !probing) {
+          if (probing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+          else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
+          Text(language.text("Пинг", "Ping"), Modifier.padding(start = 5.dp))
         }
       }
     }
@@ -1499,6 +1460,11 @@ private fun conciseTechnicalMessage(
   if (normalized.isBlank()) return fallback
   val lower = normalized.lowercase(Locale.ROOT)
   return when {
+    lower.contains("активен другой vpn") || lower.contains("competing tunnel") ->
+      language.text(
+        normalized,
+        "Another VPN tunnel is active. Disconnect it, then try Veilark again.",
+      )
     lower.contains("pkix") ||
       lower.contains("certpath") ||
       lower.contains("certificate") ||
@@ -1644,6 +1610,7 @@ private fun EndpointPicker(
   val activeChoice = activeGroup?.choices
     ?.firstOrNull { it.tag == selectedNodeTag }
     ?: activeGroup?.choices?.firstOrNull()
+  val totalChoices = groups.sumOf { it.choices.size }
   val needle = query.trim()
   val filteredGroups = remember(groups, needle) {
     if (needle.isEmpty()) groups else groups.mapNotNull { group ->
@@ -1705,24 +1672,18 @@ private fun EndpointPicker(
           expanded = false
           query = ""
         },
-        width = 480.dp,
+        width = 460.dp,
       ) {
         Column(Modifier.fillMaxWidth()) {
           Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Column(Modifier.weight(1f)) {
-              Text(language.text("Выберите сервер", "Choose server"), style = MaterialTheme.typography.titleMedium)
-              Text(
-                language.text(
-                  "Все подписки и вложенные узлы ${engine.displayName}",
-                  "All subscriptions and nested ${engine.displayName} servers",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
+            Text(
+              language.text("Серверы · ${engine.displayName}", "Servers · ${engine.displayName}"),
+              modifier = Modifier.weight(1f),
+              style = MaterialTheme.typography.titleMedium,
+            )
             TextButton(
               onClick = {
                 expanded = false
@@ -1730,14 +1691,16 @@ private fun EndpointPicker(
               },
             ) { Text(language.text("Закрыть", "Close")) }
           }
-          OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            singleLine = true,
-            placeholder = { Text(language.text("Поиск подписки или узла", "Search subscriptions or servers")) },
-            shape = RoundedCornerShape(12.dp),
-          )
+          if (totalChoices > 8) {
+            OutlinedTextField(
+              value = query,
+              onValueChange = { query = it },
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+              singleLine = true,
+              placeholder = { Text(language.text("Найти сервер", "Find server")) },
+              shape = RoundedCornerShape(12.dp),
+            )
+          }
           HorizontalDivider()
           if (filteredGroups.isEmpty()) {
             Box(
@@ -1751,7 +1714,7 @@ private fun EndpointPicker(
             }
           } else {
             LazyColumn(
-              modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+              modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp),
               contentPadding = PaddingValues(vertical = 6.dp),
             ) {
               filteredGroups.forEach { group ->
@@ -1773,7 +1736,7 @@ private fun EndpointPicker(
                       if (group.builtIn) {
                         language.text("Встроенная", "Built-in")
                       } else {
-                        language.text("${group.choices.size} узл.", "${group.choices.size} servers")
+                        language.text("${group.choices.size} серверов", "${group.choices.size} servers")
                       },
                       style = MaterialTheme.typography.bodySmall,
                       color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2052,10 +2015,7 @@ private fun RoutingShortcut(
   }
 }
 
-/**
- * Explains up front that connecting needs elevation, so the UAC prompt that
- * appears after pressing "Подключить" is expected rather than alarming.
- */
+/** Keeps the UAC requirement visible without consuming the compact home screen. */
 @Composable
 private fun ElevationNotice(modifier: Modifier = Modifier) {
   val language = LocalUiLanguage.current
@@ -2066,26 +2026,20 @@ private fun ElevationNotice(modifier: Modifier = Modifier) {
     shape = RoundedCornerShape(12.dp),
   ) {
     Row(
-      Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+      Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(Icons.Rounded.AdminPanelSettings, null, Modifier.size(19.dp))
-      Column(Modifier.padding(start = 11.dp)) {
-        Text(
-          language.text(
-            "При подключении потребуются права администратора",
-            "Administrator access is required to connect",
-          ),
-          style = MaterialTheme.typography.labelLarge,
-        )
-        Text(
-          language.text(
-            "Windows покажет стандартный запрос UAC и перезапустит Veilark.",
-            "Windows will show a standard UAC prompt and restart Veilark.",
-          ),
-          style = MaterialTheme.typography.bodySmall,
-        )
-      }
+      Text(
+        language.text(
+          "При подключении Windows запросит права администратора",
+          "Windows will request administrator access when connecting",
+        ),
+        modifier = Modifier.padding(start = 11.dp),
+        style = MaterialTheme.typography.labelLarge,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
     }
   }
 }
@@ -4073,9 +4027,9 @@ private fun LogsScreen() {
 private fun Page(content: @Composable ColumnScope.() -> Unit) {
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
-      modifier = Modifier.fillMaxHeight().widthIn(max = 780.dp).fillMaxWidth()
+      modifier = Modifier.fillMaxHeight().widthIn(max = 620.dp).fillMaxWidth()
         .verticalScroll(rememberScrollState())
-        .padding(horizontal = 16.dp, vertical = 14.dp),
+        .padding(horizontal = 14.dp, vertical = 10.dp),
       content = content,
     )
   }

@@ -22,10 +22,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +42,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -197,7 +209,7 @@ internal enum class Destination(
 }
 
 @Composable
-internal fun AppNavigation(
+internal fun CompactAppBar(
   destination: Destination,
   phase: VpnPhase,
   engine: VpnEngine,
@@ -205,72 +217,57 @@ internal fun AppNavigation(
   onLanguage: (UiLanguage) -> Unit,
 ) {
   val language = LocalUiLanguage.current
+  var navigationExpanded by remember { mutableStateOf(false) }
+  var settingsExpanded by remember { mutableStateOf(false) }
   Surface(
-    modifier = Modifier.width(158.dp).fillMaxHeight(),
+    modifier = Modifier.fillMaxWidth().height(52.dp),
     color = MaterialTheme.colorScheme.surfaceContainerLow,
   ) {
-    Column(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
-      Row(
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Image(
-          painter = painterResource("veilark-logo.png"),
-          contentDescription = null,
-          modifier = Modifier.size(27.dp),
-        )
-        Column(Modifier.padding(start = 8.dp)) {
-          Text(
-            "Veilark",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-          )
-          Text(
-            "Windows VPN",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
+    Row(
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box {
+        IconButton(onClick = { navigationExpanded = true }) {
+          Icon(Icons.Rounded.Menu, language.text("Открыть меню", "Open menu"))
         }
-      }
-      Spacer(Modifier.height(8.dp))
-      Destination.entries.forEach { item ->
-        NavigationItem(
-          item = item,
-          selected = item == destination,
-          onClick = { onDestination(item) },
-        )
-        Spacer(Modifier.height(1.dp))
-      }
-      Spacer(Modifier.weight(1f))
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-        UiLanguage.entries.forEach { item ->
-          TextButton(
-            onClick = { onLanguage(item) },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-          ) {
-            Text(
-              item.code.uppercase(),
-              color = if (item == language) {
-                MaterialTheme.colorScheme.primary
+        DropdownMenu(
+          expanded = navigationExpanded,
+          onDismissRequest = { navigationExpanded = false },
+        ) {
+          listOf(
+            Destination.Home,
+            Destination.Profiles,
+            Destination.Diagnostics,
+            Destination.Updates,
+            Destination.Logs,
+          ).forEach { item ->
+            DropdownMenuItem(
+              text = { Text(item.title(language)) },
+              leadingIcon = { Icon(item.icon, null) },
+              trailingIcon = if (item == destination) {
+                { Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }
               } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+                null
               },
-              fontWeight = if (item == language) FontWeight.Bold else FontWeight.Medium,
+              onClick = {
+                navigationExpanded = false
+                onDestination(item)
+              },
             )
           }
         }
       }
-      Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-      ) {
-        Row(
-          Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
+      Image(
+        painter = painterResource("veilark-logo.png"),
+        contentDescription = null,
+        modifier = Modifier.size(24.dp),
+      )
+      Column(Modifier.weight(1f).padding(start = 8.dp)) {
+        Text("Veilark", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
           Box(
-            Modifier.size(8.dp).background(
+            Modifier.size(7.dp).background(
               when (phase) {
                 is VpnPhase.Connected -> MaterialTheme.colorScheme.primary
                 is VpnPhase.Degraded -> MaterialTheme.colorScheme.tertiary
@@ -280,75 +277,58 @@ internal fun AppNavigation(
               CircleShape,
             ),
           )
-          Column(Modifier.padding(start = 11.dp)) {
-            Text(
-              when (phase) {
-                VpnPhase.Idle -> language.text("Отключено", "Disconnected")
-                VpnPhase.NeedsElevation -> language.text("Нужны права", "Admin required")
-                VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
-                VpnPhase.Connecting -> language.text("Подключение", "Connecting")
-                is VpnPhase.Connected -> language.text("Подключено", "Connected")
-                is VpnPhase.Degraded -> language.text("Нестабильно", "Unstable")
-                VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-                is VpnPhase.Error -> language.text("Ошибка", "Error")
+          Text(
+            "${destination.title(language)} · ${when (engine) {
+              VpnEngine.SingBox -> "sing-box"
+              VpnEngine.TrustTunnel -> "TrustTunnel"
+            }}",
+            modifier = Modifier.padding(start = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+      }
+      Box {
+        IconButton(onClick = { settingsExpanded = true }) {
+          Icon(Icons.Rounded.Settings, language.text("Настройки", "Settings"))
+        }
+        DropdownMenu(
+          expanded = settingsExpanded,
+          onDismissRequest = { settingsExpanded = false },
+        ) {
+          DropdownMenuItem(
+            text = { Text(Destination.Routing.title(language)) },
+            leadingIcon = { Icon(Icons.Rounded.Route, null) },
+            trailingIcon = if (destination == Destination.Routing) {
+              { Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }
+            } else {
+              null
+            },
+            onClick = {
+              settingsExpanded = false
+              onDestination(Destination.Routing)
+            },
+          )
+          HorizontalDivider()
+          UiLanguage.entries.forEach { item ->
+            DropdownMenuItem(
+              text = { Text(if (item == UiLanguage.Russian) "Русский" else "English") },
+              leadingIcon = { Icon(Icons.Rounded.Language, null) },
+              trailingIcon = if (item == language) {
+                { Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }
+              } else {
+                null
               },
-              style = MaterialTheme.typography.labelLarge,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-              when (engine) {
-                VpnEngine.SingBox -> "sing-box 1.13.14"
-                VpnEngine.TrustTunnel -> "TrustTunnel 1.0.49"
+              onClick = {
+                settingsExpanded = false
+                onLanguage(item)
               },
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
         }
       }
-    }
-  }
-}
-
-@Composable
-private fun NavigationItem(
-  item: Destination,
-  selected: Boolean,
-  onClick: () -> Unit,
-) {
-  Surface(
-    modifier = Modifier.fillMaxWidth().height(38.dp)
-      .selectable(
-        selected = selected,
-        role = Role.Tab,
-        onClick = onClick,
-      ),
-    color = if (selected) {
-      MaterialTheme.colorScheme.secondaryContainer
-    } else {
-      Color.Transparent
-    },
-    contentColor = if (selected) {
-      MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-      MaterialTheme.colorScheme.onSurfaceVariant
-    },
-    shape = RoundedCornerShape(10.dp),
-  ) {
-    Row(
-      Modifier.padding(horizontal = 8.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Icon(item.icon, null, modifier = Modifier.size(18.dp))
-      Text(
-        item.title(LocalUiLanguage.current),
-        modifier = Modifier.padding(start = 7.dp),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
     }
   }
 }

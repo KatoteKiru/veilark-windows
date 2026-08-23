@@ -309,25 +309,29 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 304
-    const val CURRENT_VERSION_NAME = "0.3.4"
+    const val CURRENT_VERSION_CODE = 305
+    const val CURRENT_VERSION_NAME = "0.3.5"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.4
-      • Исправлен DNS в TUN: сайты больше не зависают после включения маршрутизации, а режим «Россия через VPN» не привязывает прямой трафик к VPN-DNS.
-      • Для TrustTunnel доменные правила охватывают основной домен и все поддомены; выбор маршрута выполняется до отправки трафика.
-      • Интерфейс стал заметно компактнее: окно 940×640, узкая навигация, рабочая область 780 dp и плотная строка ядра/сервера/действий.
-      • Добавлен сохраняемый переключатель русского и английского интерфейса.
-      • Обновление считается успешным только после проверки реально установленной версии Veilark.
-      • Сохранены оба ядра, вложенные узлы всех подписок, обновление, пинг, удаление/отмена удаления и встроенная Veilark Trust.
+      Исправлено и добавлено в 0.3.5
+      • Главное окно уменьшено до 640×520: боковая панель убрана в hamburger-меню, маршруты и язык — в шестерёнку.
+      • Возвращён круг подключения. Он же отключает VPN и мгновенно останавливает незавершённую попытку.
+      • Список серверов стал обычным сгруппированным меню: подписки, все вложенные узлы обоих ядер, выбранный сервер и пинг видны без отдельных экранов.
+      • Исправлена маршрутизация «Россия напрямую»: RU-домены используют локальный DNS и прямой маршрут, остальной трафик — защищённый DNS и VPN. Обратный режим работает симметрично.
+      • Проверенные RU-правила теперь входят в установщик и не требуют доступа к GitHub перед подключением.
+      • TrustTunnel обновлён до 1.1.5-rc.6: исправлены выбор сетевого интерфейса Windows, split-routing и аварийное завершение при проверке нескольких адресов.
+      • При активном стороннем TUN Veilark больше не изображает успешное подключение: запуск блокируется с названием конфликтующего VPN.
+      • Обновление устанавливается поверх 0.3.1 с сохранением подписок, встроенной Veilark Trust и выбранных серверов.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.4
-      • Fixed TUN DNS so sites no longer hang after routing is enabled; Russia-through-VPN no longer makes direct traffic depend on VPN DNS.
-      • TrustTunnel domain rules now cover both the apex and all subdomains, with route selection completed before traffic is sent.
-      • The interface is substantially more compact: a 940×640 window, narrow navigation, a 780 dp workspace and a dense core/server/action row.
-      • Added a persistent Russian/English interface switch.
-      • An update is reported as successful only after the actually installed Veilark version is verified.
-      • Preserved both cores, nested servers from every subscription, refresh, ping, delete/undo and the built-in Veilark Trust subscription.
+      Fixed and added in 0.3.5
+      • The main window is now 640×520: the sidebar moved into a hamburger menu, while routing and language live under the settings gear.
+      • The circular connection control is back. The same control disconnects and immediately stops an unfinished attempt.
+      • Server selection is a standard grouped menu showing subscriptions, every nested server from both cores, selection and latency.
+      • Fixed Russia-direct routing: RU domains use local DNS and direct egress, while other traffic uses secure DNS and the VPN. The inverse preset is symmetrical.
+      • Verified RU rule sets are bundled with the installer, so connecting no longer depends on GitHub access.
+      • TrustTunnel is updated to 1.1.5-rc.6 with Windows interface selection, split-routing and multi-address pinger crash fixes.
+      • If another TUN is active, Veilark now blocks startup and names the conflicting VPN instead of presenting a false success.
+      • The update installs over 0.3.1 while preserving subscriptions, built-in Veilark Trust and selected servers.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

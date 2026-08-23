@@ -12,10 +12,12 @@ if ([string]::IsNullOrWhiteSpace($Destination)) {
 
 $singBoxVersion = '1.13.14'
 $winTunVersion = '0.14.1'
-$trustTunnelVersion = '1.0.49'
+$trustTunnelVersion = '1.1.5-rc.6'
 $singBoxSha256 = 'F580782C6DD10F7691C66CEA1D7C421813C5FBF7E305D1EE7CE0C3A40D196341'
 $winTunSha256 = '07C256185D6EE3652E09FA55C0B673E2624B565E02C4B9091C79CA7D2F24EF51'
-$trustTunnelSha256 = '0E11150E77C083C828593E6FAB7F76A159DD55B9AD9101DD70C4568DA3CDF11B'
+$trustTunnelSha256 = 'ECF95542B675C89A64B52CF6A3A795BD5F2E1B0E05D71CC021DF53A3738A300C'
+$geoIpRuSha256 = '1A8115AF741918FF24B37B87D3C6DA21ECCABC58F1EEC059E461DCA8BAC16FF7'
+$geoSiteRuSha256 = 'C36E157ADF86EDF7B722B51F3ACB93BBB2A7F8083932DAE29B4B5EF2C1CED870'
 $singBoxUrl = "https://github.com/SagerNet/sing-box/releases/download/v$singBoxVersion/sing-box-$singBoxVersion-windows-amd64.zip"
 $winTunUrl = "https://www.wintun.net/builds/wintun-$winTunVersion.zip"
 $trustTunnelUrl = "https://github.com/TrustTunnel/TrustTunnelClient/releases/download/v$trustTunnelVersion/trusttunnel_client-v$trustTunnelVersion-windows-x86_64.zip"
@@ -70,6 +72,21 @@ Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'wintun\wintun\LICENS
 Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\trusttunnel_client.exe') -Destination $resolvedDestination
 Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\setup_wizard.exe') -Destination $resolvedDestination
 Copy-Item -Force -LiteralPath (Join-Path $extractDirectory 'trusttunnel\LICENSE.txt') -Destination (Join-Path $resolvedDestination 'LICENSE-TrustTunnel.txt')
+
+$geoDirectory = Join-Path $resolvedDestination 'geo'
+$geoAssets = @(
+  @{ Path = (Join-Path $geoDirectory 'geoip-ru.srs'); Sha256 = $geoIpRuSha256 },
+  @{ Path = (Join-Path $geoDirectory 'geosite-category-ru.srs'); Sha256 = $geoSiteRuSha256 }
+)
+foreach ($asset in $geoAssets) {
+  if (-not (Test-Path -LiteralPath $asset.Path -PathType Leaf)) {
+    throw "Missing bundled routing asset: $($asset.Path)"
+  }
+  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset.Path).Hash
+  if ($actual -ne $asset.Sha256) {
+    throw "SHA-256 mismatch for $($asset.Path). Expected $($asset.Sha256), got $actual"
+  }
+}
 
 & (Join-Path $resolvedDestination 'sing-box.exe') version
 & (Join-Path $resolvedDestination 'trusttunnel_client.exe') --version

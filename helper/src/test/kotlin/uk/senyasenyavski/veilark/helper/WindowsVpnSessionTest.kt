@@ -24,6 +24,22 @@ import uk.senyasenyavski.veilark.model.VpnPhase
 
 class WindowsVpnSessionTest {
   @Test
+  fun `active competing tunnel fails before a core is started`() = runBlocking {
+    val controller = FakeController(VpnEngine.SingBox)
+    val session = WindowsVpnSession(
+      controllers = listOf(controller),
+      logger = {},
+      preConnectCheck = { "Активен другой VPN «happ-tun»" },
+    )
+
+    session.connect(profile(VpnEngine.SingBox))
+
+    val error = assertIs<VpnPhase.Error>(session.state.value.phase)
+    assertEquals("COMPETING_TUNNEL", error.code)
+    assertFalse(controller.started)
+  }
+
+  @Test
   fun `session launches the controller matching the profile engine`() {
     runBlocking {
       val singBox = FakeController(VpnEngine.SingBox)

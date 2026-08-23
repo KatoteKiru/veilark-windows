@@ -5,7 +5,8 @@
 Windows W1 uses two official upstream runtimes:
 
 - sing-box 1.13.14, matching Android 0.8.0-rc4;
-- TrustTunnelClient 1.0.49 for Windows x86_64.
+- TrustTunnelClient 1.1.5-rc.6 for Windows x86_64, pinned to the official
+  release asset SHA-256.
 
 The Android TrustTunnel AAR/JNI is not reused. Veilark packages the official
 Windows CLI, its setup wizard, WinTUN, and upstream licenses. `tt://` links are
@@ -22,7 +23,8 @@ files are also accepted.
   encrypted with current-user Windows DPAPI and written atomically;
 - `%LOCALAPPDATA%\Veilark\logs\veilark.log` — bounded-input redacted journal;
 - packaged resources — `sing-box.exe`, `trusttunnel_client.exe`,
-  `setup_wizard.exe`, `libcronet.dll`, `wintun.dll`, and licenses.
+  `setup_wizard.exe`, `libcronet.dll`, `wintun.dll`, pinned RU SRS rule sets,
+  and licenses.
 
 Profile configuration and its source are persisted only inside the DPAPI
 container. There is no plaintext preference fallback.
@@ -30,7 +32,10 @@ container. There is no plaintext preference fallback.
 Manual direct/VPN domain, IP, and CIDR rules plus TLS ClientHello fragmentation
 are stored alongside the profiles and applied to a fresh sing-box configuration
 before every connection. TrustTunnel keeps its own runtime configuration; the
-sing-box-specific controls are not silently translated to it.
+sing-box-specific controls are not silently translated to it. RU presets split
+DNS together with traffic: direct RU traffic uses the local resolver while the
+VPN branch uses secure DNS. TrustTunnel uses DNS interception, CIDR exclusions,
+and early SNI matching with pre-resolution disabled to keep startup bounded.
 
 The selected node is persisted separately for each engine. Automatic sing-box
 mode keeps the urltest outbound; explicit selection updates the final route,
@@ -87,6 +92,8 @@ complete WFP kill-switch.
   redacted journal and retry. The UI never keeps showing a stale connected state.
 - `CORE_START_FAILED` after TUN creation: the tunnel-bound traffic check failed;
   test another node and ensure no competing full-tunnel VPN owns the routes.
+- `COMPETING_TUNNEL`: the named WinTUN/WireGuard adapter is already active;
+  Veilark blocks startup before changing routes.
 - Antivirus warning: verify the pinned hashes and upstream signatures. Do not
   substitute third-party WinTUN builds.
 

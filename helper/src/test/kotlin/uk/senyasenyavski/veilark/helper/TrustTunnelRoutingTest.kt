@@ -23,6 +23,8 @@ class TrustTunnelRoutingTest {
     assertEquals("general", plan.vpnMode)
     assertTrue(result.contains("vpn_mode = \"general\""))
     assertTrue(result.contains("exclusions_tcp_early_ack_enabled = true"))
+    assertTrue(result.contains("exclusions_preresolve_enabled = false"))
+    assertTrue(result.contains("change_system_dns = true"))
     assertTrue(result.contains("\"5.8.0.0/13\""))
     assertTrue(result.contains("\"*.ru\""))
     assertTrue(result.contains("password = \"test-secret\""))
@@ -46,7 +48,7 @@ class TrustTunnelRoutingTest {
     val plan = TrustTunnelRouting.plan(profile(RoutingMode.All))
     val result = TrustTunnelRouting.apply(TOML, plan)
 
-    assertEquals(TrustTunnelRoutingPlan("general", emptyList(), false), plan)
+    assertEquals(TrustTunnelRoutingPlan("general", emptyList(), false, false), plan)
     assertTrue(result.contains("exclusions = [\n]"))
     assertTrue(result.contains("exclusions_tcp_early_ack_enabled = false"))
   }

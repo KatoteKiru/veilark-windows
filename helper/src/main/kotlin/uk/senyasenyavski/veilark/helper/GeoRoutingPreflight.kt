@@ -20,28 +20,27 @@ class GeoRoutingUnavailableException internal constructor(message: String) :
   IllegalStateException(message)
 
 /**
- * Geo data has two deliberately separate phases:
- *
- * 1. [refresh] is the network operation. The UI may run it in the background
- *    on application start or when a geo preset is selected.
- * 2. [requirePrepared] is the local-only pre-connect gate. It never contacts
- *    GitHub and fails before a VPN core or network adapter is touched.
+ * The installer ships a hash-pinned RU rule-set snapshot. Both public methods
+ * are therefore local-only: selecting split routing never depends on GitHub
+ * being reachable and never delays connection with a network download.
  */
 class GeoRoutingPreflight(
   executableOverride: Path? = null,
   directory: Path = VeilarkPaths.geoDirectory,
+  bundledDirectoryOverride: Path? = null,
 ) {
   private val cache = GeoRuleSetCache(
     directory = directory,
     downloader = WindowsGeoRuleSetDownloader,
     decompiler = NativeSingBoxRuleSetDecompiler(resolveSingBox(executableOverride)),
+    bundledDirectory = resolveBundledDirectory(bundledDirectoryOverride),
   )
 
-  suspend fun refresh(): GeoRoutingAssets = safely(REFRESH_ERROR) { cache.refresh() }
+  suspend fun refresh(): GeoRoutingAssets = safely(MISSING_ERROR) { cache.loadValidOrSeed() }
 
   suspend fun requirePrepared(routing: RoutingSettings): GeoRoutingAssets? {
     if (!routing.mode.requiresGeoData) return null
-    return safely(MISSING_ERROR) { cache.loadValid() }
+    return safely(MISSING_ERROR) { cache.loadValidOrSeed() }
   }
 
   private suspend fun <T> safely(message: String, action: suspend () -> T): T = try {
@@ -56,9 +55,6 @@ class GeoRoutingPreflight(
   private companion object {
     const val MISSING_ERROR =
       "Геоданные маршрутизации не готовы. Обновите их и повторите подключение."
-    const val REFRESH_ERROR =
-      "Не удалось безопасно обновить геоданные. Сохранена предыдущая версия."
-
     fun resolveSingBox(override: Path?): Path {
       val candidates = buildList {
         override?.let(::add)
@@ -69,6 +65,18 @@ class GeoRoutingPreflight(
         add(Path.of("packaging", "resources", "windows", "sing-box.exe").toAbsolutePath())
       }
       return candidates.firstOrNull(Files::isRegularFile)
+        ?: throw GeoRoutingUnavailableException(MISSING_ERROR)
+    }
+
+    fun resolveBundledDirectory(override: Path?): Path {
+      val candidates = buildList {
+        override?.let(::add)
+        System.getProperty("compose.application.resources.dir")
+          ?.takeIf(String::isNotBlank)
+          ?.let { add(Path.of(it, "geo")) }
+        add(Path.of("packaging", "resources", "windows", "geo").toAbsolutePath())
+      }
+      return candidates.firstOrNull(Files::isDirectory)
         ?: throw GeoRoutingUnavailableException(MISSING_ERROR)
     }
   }
@@ -90,6 +98,7 @@ internal class GeoRuleSetCache(
   private val downloader: GeoRuleSetDownloader,
   private val decompiler: SingBoxRuleSetDecompiler,
   private val verifyOfficialHashes: Boolean = true,
+  private val bundledDirectory: Path? = null,
 ) {
   private val mutex = Mutex()
 
@@ -119,18 +128,55 @@ internal class GeoRuleSetCache(
   }
 
   suspend fun loadValid(): GeoRoutingAssets = mutex.withLock {
+    withContext(Dispatchers.IO) { loadValidUnlocked() }
+  }
+
+  suspend fun loadValidOrSeed(): GeoRoutingAssets = mutex.withLock {
     withContext(Dispatchers.IO) {
-      val generation = readGeneration()
-      val generationDirectory = directory.resolve(generation).normalize()
-      check(generationDirectory.parent == directory.normalize())
-      val geoIp = generationDirectory.resolve(GEOIP.fileName)
-      val geoSite = generationDirectory.resolve(GEOSITE.fileName)
+      runCatching { loadValidUnlocked() }.getOrElse {
+        installBundledSnapshot()
+      }
+    }
+  }
+
+  private suspend fun loadValidUnlocked(): GeoRoutingAssets {
+    val generation = readGeneration()
+    val generationDirectory = directory.resolve(generation).normalize()
+    check(generationDirectory.parent == directory.normalize())
+    val geoIp = generationDirectory.resolve(GEOIP.fileName)
+    val geoSite = generationDirectory.resolve(GEOSITE.fileName)
+    validateBinary(geoIp, GEOIP)
+    validateBinary(geoSite, GEOSITE)
+    return assets(
+      generationDirectory,
+      validateAndExtract(geoIp, geoSite, generationDirectory),
+    )
+  }
+
+  private suspend fun installBundledSnapshot(): GeoRoutingAssets {
+    val sourceDirectory = bundledDirectory ?: error("bundled geo data unavailable")
+    val sourceGeoIp = sourceDirectory.resolve(GEOIP.fileName)
+    val sourceGeoSite = sourceDirectory.resolve(GEOSITE.fileName)
+    validateBinary(sourceGeoIp, GEOIP)
+    validateBinary(sourceGeoSite, GEOSITE)
+    Files.createDirectories(directory)
+    val generation = UUID.randomUUID().toString().replace("-", "")
+    val staging = directory.resolve(".staging-$generation")
+    val completed = directory.resolve(generation)
+    Files.createDirectory(staging)
+    try {
+      val geoIp = staging.resolve(GEOIP.fileName)
+      val geoSite = staging.resolve(GEOSITE.fileName)
+      Files.copy(sourceGeoIp, geoIp)
+      Files.copy(sourceGeoSite, geoSite)
       validateBinary(geoIp, GEOIP)
       validateBinary(geoSite, GEOSITE)
-      assets(
-        generationDirectory,
-        validateAndExtract(geoIp, geoSite, generationDirectory),
-      )
+      val exclusions = validateAndExtract(geoIp, geoSite, staging)
+      Files.move(staging, completed, StandardCopyOption.ATOMIC_MOVE)
+      publishManifest(generation)
+      return assets(completed, exclusions)
+    } finally {
+      deleteStaging(staging)
     }
   }
 
