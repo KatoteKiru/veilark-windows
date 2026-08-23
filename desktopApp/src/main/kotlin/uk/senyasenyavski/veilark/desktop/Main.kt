@@ -1250,91 +1250,34 @@ private fun CompactConnectionWorkspace(
   }
 
   Column(
-    modifier = Modifier.fillMaxWidth().widthIn(max = 500.dp),
+    modifier = Modifier.fillMaxWidth().widthIn(max = 456.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-      if (maxWidth >= 450.dp) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.Center,
-        ) {
-          ConnectionCircle(
-            busy = busy,
-            connected = connected,
-            enabled = phase !is VpnPhase.Stopping,
-            actionLabel = actionLabel,
-            stateLabel = statusTitle,
-            containerColor = statusContainerColor,
-            contentColor = statusContentColor,
-            onClick = if (profile == null) onImport else onAction,
-          )
-          Column(
-            modifier = Modifier.weight(1f).padding(start = 16.dp),
-            horizontalAlignment = Alignment.Start,
-          ) {
-            ConnectionStatus(
-              title = statusTitle,
-              summary = statusSummary,
-              connected = connected,
-              phase = phase,
-              traffic = traffic,
-              textAlign = TextAlign.Start,
-            )
-            EngineSelector(
-              selectedEngine = selectedEngine,
-              availableEngines = availableEngines,
-              enabled = !configurationLocked,
-              onEngineSelect = onEngineSelect,
-              modifier = Modifier.padding(top = 8.dp).widthIn(max = 280.dp),
-            )
-          }
-        }
-      } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          ConnectionStatus(
-            title = statusTitle,
-            summary = statusSummary,
-            connected = connected,
-            phase = phase,
-            traffic = traffic,
-            textAlign = TextAlign.Center,
-          )
-          ConnectionCircle(
-            busy = busy,
-            connected = connected,
-            enabled = phase !is VpnPhase.Stopping,
-            actionLabel = actionLabel,
-            stateLabel = statusTitle,
-            containerColor = statusContainerColor,
-            contentColor = statusContentColor,
-            onClick = if (profile == null) onImport else onAction,
-            modifier = Modifier.padding(top = 10.dp),
-          )
-          EngineSelector(
-            selectedEngine = selectedEngine,
-            availableEngines = availableEngines,
-            enabled = !configurationLocked,
-            onEngineSelect = onEngineSelect,
-            modifier = Modifier.padding(top = 10.dp).widthIn(max = 280.dp),
-          )
-        }
-      }
-    }
-
-    AnimatedVisibility(
-      visible = degraded || failed,
-      enter = fadeIn(tween(160)),
-      exit = fadeOut(tween(120)),
-    ) {
-      PhaseProblemStrip(
-        phase = phase,
-        message = statusMessage,
-        onOpenLogs = onOpenLogs,
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-      )
-    }
+    ConnectionCircle(
+      busy = busy,
+      connected = connected,
+      enabled = phase !is VpnPhase.Stopping,
+      actionLabel = actionLabel,
+      stateLabel = statusTitle,
+      containerColor = statusContainerColor,
+      contentColor = statusContentColor,
+      onClick = if (profile == null) onImport else onAction,
+    )
+    ConnectionStatus(
+      title = statusTitle,
+      summary = statusSummary,
+      connected = connected,
+      phase = phase,
+      traffic = traffic,
+      modifier = Modifier.padding(top = 8.dp).widthIn(max = 420.dp),
+    )
+    EngineSelector(
+      selectedEngine = selectedEngine,
+      availableEngines = availableEngines,
+      enabled = !configurationLocked,
+      onEngineSelect = onEngineSelect,
+      modifier = Modifier.padding(top = 10.dp).widthIn(max = 320.dp),
+    )
 
     if (profile == null) {
       Text(
@@ -1355,7 +1298,7 @@ private fun CompactConnectionWorkspace(
         latencies = nodeLatencies,
         enabled = !configurationLocked,
         onSelect = onSelectEndpoint,
-        modifier = Modifier.padding(top = 10.dp).widthIn(max = 420.dp).fillMaxWidth(),
+        modifier = Modifier.padding(top = 10.dp).widthIn(max = 448.dp).fillMaxWidth(),
       )
     }
 
@@ -1384,6 +1327,19 @@ private fun CompactConnectionWorkspace(
         }
       }
     }
+
+    AnimatedVisibility(
+      visible = degraded || failed,
+      enter = fadeIn(tween(160)),
+      exit = fadeOut(tween(120)),
+    ) {
+      PhaseProblemStrip(
+        phase = phase,
+        message = statusMessage,
+        onOpenLogs = onOpenLogs,
+        modifier = Modifier.fillMaxWidth().widthIn(max = 448.dp).padding(top = 4.dp),
+      )
+    }
   }
 }
 
@@ -1394,32 +1350,34 @@ private fun ConnectionStatus(
   connected: Boolean,
   phase: VpnPhase,
   traffic: TrafficSnapshot?,
-  textAlign: TextAlign,
+  modifier: Modifier = Modifier,
 ) {
-  Text(
-    title,
-    modifier = Modifier.fillMaxWidth(),
-    style = MaterialTheme.typography.titleLarge,
-    fontWeight = FontWeight.SemiBold,
-    maxLines = 1,
-    overflow = TextOverflow.Ellipsis,
-    textAlign = textAlign,
-  )
-  Text(
-    summary,
-    modifier = Modifier.fillMaxWidth().padding(top = 1.dp),
-    style = MaterialTheme.typography.bodySmall,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-    maxLines = 2,
-    overflow = TextOverflow.Ellipsis,
-    textAlign = textAlign,
-  )
-  if (connected) {
-    CompactTrafficEvidence(
-      phase = phase,
-      traffic = traffic,
-      modifier = Modifier.padding(top = 4.dp),
+  Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Text(
+      title,
+      modifier = Modifier.fillMaxWidth(),
+      style = MaterialTheme.typography.titleLarge,
+      fontWeight = FontWeight.SemiBold,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      textAlign = TextAlign.Center,
     )
+    Text(
+      summary,
+      modifier = Modifier.fillMaxWidth().padding(top = 1.dp),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis,
+      textAlign = TextAlign.Center,
+    )
+    if (connected) {
+      CompactTrafficEvidence(
+        phase = phase,
+        traffic = traffic,
+        modifier = Modifier.padding(top = 4.dp),
+      )
+    }
   }
 }
 
@@ -1436,7 +1394,7 @@ private fun ConnectionCircle(
   modifier: Modifier = Modifier,
 ) {
   Surface(
-    modifier = modifier.size(100.dp)
+    modifier = modifier.size(120.dp)
       .semantics { stateDescription = stateLabel }
       .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
     color = containerColor,
@@ -1447,7 +1405,7 @@ private fun ConnectionCircle(
     Box(contentAlignment = Alignment.Center) {
       if (busy) {
         CircularProgressIndicator(
-          modifier = Modifier.size(76.dp),
+          modifier = Modifier.size(92.dp),
           color = LocalContentColor.current,
           strokeWidth = 3.dp,
         )
@@ -1461,19 +1419,19 @@ private fun ConnectionCircle(
           },
         ) { isBusy ->
           if (isBusy) {
-            Icon(Icons.Rounded.StopCircle, null, Modifier.size(30.dp))
+            Icon(Icons.Rounded.StopCircle, null, Modifier.size(34.dp))
           } else {
             ShieldMark(
               checked = connected,
               color = LocalContentColor.current,
-              modifier = Modifier.size(35.dp),
+              modifier = Modifier.size(40.dp),
             )
           }
         }
         Text(
           actionLabel,
-          modifier = Modifier.padding(top = 4.dp),
-          style = MaterialTheme.typography.labelMedium,
+          modifier = Modifier.padding(top = 5.dp),
+          style = MaterialTheme.typography.labelLarge,
           fontWeight = FontWeight.SemiBold,
           maxLines = 1,
         )
@@ -2039,7 +1997,7 @@ private fun CompactTrafficEvidence(
       delay(1_000)
     }
   }
-  Column(modifier, horizontalAlignment = Alignment.End) {
+  Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
     Text(
       "${traffic?.let { formatBytes(it.bytesIn) } ?: "—"} / " +
         (traffic?.let { formatBytes(it.bytesOut) } ?: "—"),
@@ -2053,6 +2011,7 @@ private fun CompactTrafficEvidence(
       },
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
+      textAlign = TextAlign.Center,
     )
   }
 }

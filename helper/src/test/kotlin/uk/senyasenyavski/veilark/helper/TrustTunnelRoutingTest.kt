@@ -22,11 +22,11 @@ class TrustTunnelRoutingTest {
 
     assertEquals("general", plan.vpnMode)
     assertTrue(result.contains("vpn_mode = \"general\""))
-    assertTrue(result.contains("exclusions_tcp_early_ack_enabled = true"))
+    assertTrue(result.contains("exclusions_tcp_early_ack_enabled = false"))
     assertTrue(result.contains("exclusions_preresolve_enabled = true"))
     assertTrue(result.contains("exclusions_preresolve_max_queries = 50"))
     assertTrue(result.contains("change_system_dns = true"))
-    assertTrue(result.contains("mtu_size = 1280"))
+    assertTrue(result.contains("mtu_size = 1350"))
     assertTrue(result.contains("\"5.8.0.0/13\""))
     assertTrue(result.contains("\"*.ru\""))
     assertTrue(result.contains("password = \"test-secret\""))
@@ -42,7 +42,7 @@ class TrustTunnelRoutingTest {
     assertEquals("selective", plan.vpnMode)
     assertTrue(result.contains("vpn_mode = \"selective\""))
     assertEquals(listOf("5.8.0.0/13", "*.ru"), plan.exclusions)
-    assertTrue(plan.exclusionsTcpEarlyAckEnabled)
+    assertFalse(plan.exclusionsTcpEarlyAckEnabled)
     assertTrue(plan.exclusionsPreresolveEnabled)
   }
 
@@ -71,7 +71,7 @@ class TrustTunnelRoutingTest {
 
     assertEquals("general", plan.vpnMode)
     assertEquals(listOf("10.0.0.0/8", "direct.test", "*.direct.test"), plan.exclusions)
-    assertTrue(plan.exclusionsTcpEarlyAckEnabled)
+    assertFalse(plan.exclusionsTcpEarlyAckEnabled)
     assertTrue(plan.exclusionsPreresolveEnabled)
   }
 

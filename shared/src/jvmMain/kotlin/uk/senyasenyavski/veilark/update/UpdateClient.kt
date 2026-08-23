@@ -374,26 +374,26 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 306
-    const val CURRENT_VERSION_NAME = "0.3.6"
+    const val CURRENT_VERSION_CODE = 307
+    const val CURRENT_VERSION_NAME = "0.3.7"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.6
-      • Окно стало компактным 600×440: круг подключения, статус и выбор ядра собраны в один блок; пустые растянутые карточки убраны.
-      • Главное меню серверов показывает подписки и все вложенные узлы sing-box и TrustTunnel; выбор и пинг доступны на главном экране.
-      • Исправлена частичная загрузка сайтов в split-routing: sing-box дольше распознаёт TLS/QUIC, а TrustTunnel ограниченно предварительно разрешает домены без DNS-шторма.
-      • MTU обоих ядер согласован на 1280, чтобы не терять крупные HTTPS/QUIC-пакеты на сетях с меньшим эффективным MTU.
-      • Кнопка Stop больше не гоняется с повторным Connect; отмена пинга завершает setup wizard, а ошибка счётчиков или health-check не убивает монитор сессии.
-      • Ответы подписок и OTA-манифеста ограничиваются ещё во время чтения; завершённая часть OTA проверяется и не скачивается повторно.
+      Исправлено и добавлено в 0.3.7
+      • Главный экран выстроен по одной центральной оси: кнопка подключения увеличена до 120 dp, а статус, ядро, сервер и действия аккуратно расположены под ней.
+      • В проблемном состоянии выбор сервера и управление остаются в первом экране; подробности ошибки больше не сдвигают основные элементы.
+      • Исправлена зарубежная ветка режима «РФ напрямую»: TrustTunnel больше не отправляет каждое HTTPS-соединение через промежуточный fake upstream перед VPN.
+      • Подозреваемые российские исключения по-прежнему проверяются ядром, а ограниченное предварительное разрешение доменов сохраняет стабильную геомаршрутизацию без DNS-шторма.
+      • Veilark больше не перезаписывает MTU рабочей TrustTunnel-подписки и сохраняет значение, выбранное ядром или владельцем сервера.
+      • Цвета Material 3, компактное окно, вложенные серверы, обновление подписок, пинг и кнопка остановки сохранены.
       • Обновление устанавливается поверх версий 0.3.x с сохранением подписок, встроенной Veilark Trust, маршрутов и выбранных серверов.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.6
-      • The window is now a compact 600×440: connection circle, status and core selection form one block, with empty stretched cards removed.
-      • The Home server menu groups subscriptions and every nested sing-box and TrustTunnel endpoint; selection and latency testing stay on Home.
-      • Partial page loading in split routing is addressed: sing-box allows longer TLS/QUIC sniffing, while TrustTunnel performs bounded domain pre-resolution without a DNS burst.
-      • Both cores use an MTU of 1280 to avoid black-holed large HTTPS/QUIC packets on paths with a smaller effective MTU.
-      • Stop no longer races a repeated Connect; cancelling a ping terminates its setup wizard, and counter or health-check failures no longer silently kill session monitoring.
-      • Subscription and OTA manifest bodies are bounded while being read; a complete OTA partial is verified and promoted without another download.
+      Fixed and added in 0.3.7
+      • Home now follows one centered action spine: the connection control is 120 dp, with status, core, server and secondary actions aligned beneath it.
+      • Server selection and controls stay in the first viewport during degraded states; diagnostic details no longer displace primary controls.
+      • The foreign branch of “Russia direct” is fixed: TrustTunnel no longer sends every HTTPS connection through a fake upstream before the VPN endpoint.
+      • Suspected Russian exclusions still receive core inspection, while bounded domain pre-resolution keeps geo routing stable without a DNS burst.
+      • Veilark no longer overwrites the MTU from a working TrustTunnel subscription and preserves the value selected by the core or server owner.
+      • Material 3 colors, the compact window, nested servers, subscription refresh, latency testing and the stop action are preserved.
       • The update installs over 0.3.x while preserving subscriptions, built-in Veilark Trust, routing and selected servers.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
