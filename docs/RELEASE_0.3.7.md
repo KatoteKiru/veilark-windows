@@ -38,8 +38,8 @@ Release date: 2026-08-23
 ## Package identity
 
 - Version code/name: `307` / `0.3.7`.
-- OTA installer path before publication:
-  `desktopApp/build-isolated/compose/binaries/main-release/ota/Veilark-0.3.7.exe`.
+- Public OTA installer:
+  `https://nl2.senyasenyavski.uk:2096/veilark/windows/Veilark-0.3.7.exe`.
 - OTA wrapper size/SHA-256: `129677824` /
   `A21518E7D942AB9C5CAD76C8E4AE81D037C6CCA4798CD915850AAE0D383206E4`.
 - Inner jpackage EXE size/SHA-256: `129668608` /
@@ -51,6 +51,9 @@ Release date: 2026-08-23
 - MSI UpgradeCode: `{47A6CDD8-9630-4FA5-A2FD-C29C5774DC1A}` (unchanged).
 - The production wrapper contains a `requireAdministrator` manifest. It was not
   executed or installed during release preparation.
+- The live signed manifest passes the production `UpdateClient` Ed25519
+  validator. HTTP HEAD and Range checks pass, and a complete public redownload
+  matches the local wrapper byte-for-byte by size and SHA-256.
 - The wrapper is not Authenticode-signed; Windows can show an unknown-publisher
   warning.
 
