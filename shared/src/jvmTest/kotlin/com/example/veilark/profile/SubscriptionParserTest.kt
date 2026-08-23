@@ -667,4 +667,126 @@ class SubscriptionParserTest {
       config.delete()
     }
   }
+
+  @Test
+  fun keepsSingBoxNodesWhenEnvelopeAlsoContainsXray() {
+    val source = JSONObject()
+      .put(
+        "outbounds",
+        org.json.JSONArray()
+          .put(
+            JSONObject()
+              .put("type", "hysteria2")
+              .put("tag", "Finland")
+              .put("server", "203.0.113.41")
+              .put("server_port", 443)
+              .put("password", "secret"),
+          )
+          .put(
+            JSONObject()
+              .put("type", "vless")
+              .put("tag", "Netherlands")
+              .put("server", "203.0.113.42")
+              .put("server_port", 443)
+              .put("uuid", "11111111-1111-1111-1111-111111111111"),
+          ),
+      )
+      .put(
+        "xray",
+        org.json.JSONArray().put(
+          JSONObject()
+            .put("protocol", "vless")
+            .put("tag", "Germany")
+            .put(
+              "settings",
+              JSONObject().put(
+                "vnext",
+                org.json.JSONArray().put(
+                  JSONObject()
+                    .put("address", "203.0.113.43")
+                    .put("port", 443)
+                    .put(
+                      "users",
+                      org.json.JSONArray().put(
+                        JSONObject().put("id", "11111111-1111-1111-1111-111111111111"),
+                      ),
+                    ),
+                ),
+              ),
+            ),
+        ),
+      )
+
+    val result = parser.compile(source.toString().toByteArray())
+
+    assertEquals(3, result.profileCount)
+    assertTrue(result.nodes.map(ConnectionNode::name).containsAll(listOf("Finland", "Netherlands", "Germany")))
+    assertTrue(result.nodes.any { it.protocol == "Hysteria 2" })
+  }
+
+  @Test
+  fun decodesNestedBase64SingBoxConfigs() {
+    val finland = JSONObject()
+      .put(
+        "outbounds",
+        org.json.JSONArray().put(
+          JSONObject()
+            .put("type", "trojan")
+            .put("tag", "Finland")
+            .put("server", "203.0.113.51")
+            .put("server_port", 443)
+            .put("password", "secret"),
+        ),
+      )
+    val source = JSONObject()
+      .put(
+        "config",
+        JSONObject().put(
+          "outbounds",
+          org.json.JSONArray().put(
+            JSONObject()
+              .put("type", "vless")
+              .put("tag", "Germany")
+              .put("server", "203.0.113.52")
+              .put("server_port", 443)
+              .put("uuid", "11111111-1111-1111-1111-111111111111"),
+          ),
+        ),
+      )
+      .put("encoded", Base64.getEncoder().encodeToString(finland.toString().toByteArray()))
+
+    val result = parser.compile(source.toString().toByteArray())
+
+    assertEquals(2, result.profileCount)
+    assertEquals(listOf("Germany", "Finland"), result.nodes.map(ConnectionNode::name))
+  }
+
+  @Test
+  fun mergesShareLinksAfterPartialJsonDocument() {
+    val source = JSONObject()
+      .put(
+        "outbounds",
+        org.json.JSONArray().put(
+          JSONObject()
+            .put("type", "vless")
+            .put("tag", "Germany")
+            .put("server", "203.0.113.61")
+            .put("server_port", 443)
+            .put("uuid", "11111111-1111-1111-1111-111111111111"),
+        ),
+      )
+      .put(
+        "links",
+        "trojan://secret@203.0.113.62:443?security=tls&sni=example.com#Netherlands\n" +
+          "hysteria2://password@203.0.113.63:443?sni=example.com#Finland",
+      )
+
+    val result = parser.compile(source.toString().toByteArray())
+
+    assertEquals(3, result.profileCount)
+    assertEquals(
+      listOf("VLESS", "Trojan", "Hysteria 2"),
+      result.nodes.map(ConnectionNode::protocol),
+    )
+  }
 }

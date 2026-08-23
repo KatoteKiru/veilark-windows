@@ -1,23 +1,28 @@
 /*
- * THESIS: Veilark is a desktop connection console; it refuses a mobile dashboard stretched into a window.
- * OWN-WORLD: restrained Material 3 blue, dense tonal planes, 12–16 dp geometry, native Windows typography.
+ * THESIS: Veilark is a compact Google Material 3 VPN; it refuses a hamburger and a wide empty rail.
+ * OWN-WORLD: Android Veilark tokens, Noto Sans, 16 dp cards, drawn flags, the same logo in a tonal circle.
  * STORY: choose engine and endpoint, connect or stop, then inspect only the evidence needed to trust the tunnel.
- * FIRST VIEWPORT: hamburger and gear, one circular connection action, then the grouped server picker.
- * FORM: unified connection console, ranked structure 3, seed dec4465c.
+ * FIRST VIEWPORT: compact app bar, a tonal connection card, then the server picker.
+ * FORM: Google Material 3 operate canon, pinned by the product owner.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
 package uk.senyasenyavski.veilark.desktop
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -310,10 +315,10 @@ fun main(args: Array<String>) {
     visible = windowVisible,
     title = "Veilark",
     icon = painterResource("veilark-logo.png"),
-    state = rememberWindowState(width = 600.dp, height = 440.dp),
+    state = rememberWindowState(width = 820.dp, height = 580.dp),
   ) {
     DisposableEffect(Unit) {
-      window.minimumSize = java.awt.Dimension(520, 420)
+      window.minimumSize = java.awt.Dimension(680, 520)
       window.transferHandler = object : TransferHandler() {
         override fun canImport(support: TransferSupport): Boolean =
           support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
@@ -835,30 +840,45 @@ private fun VeilarkApp(
     }
   }
 
-  Column(
-    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-  ) {
-    CompactAppBar(
-      destination = destination,
-      phase = state.phase,
-      engine = selectedEngine,
-      onDestination = { destination = it },
-      onLanguage = onLanguage,
-    )
-    Scaffold(
-      modifier = Modifier.weight(1f).fillMaxWidth(),
-      containerColor = MaterialTheme.colorScheme.background,
-      snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-      Column(Modifier.fillMaxSize().padding(padding)) {
+  Scaffold(
+    modifier = Modifier.fillMaxSize(),
+    containerColor = MaterialTheme.colorScheme.background,
+    topBar = {
+      AppTopBar(
+        phase = state.phase,
+        onLanguage = onLanguage,
+      )
+    },
+    bottomBar = {
+      AppBottomBar(
+        destination = destination,
+        onDestination = { destination = it },
+      )
+    },
+    snackbarHost = { SnackbarHost(snackbar) },
+  ) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding)) {
+      if (destination != Destination.Updates) {
         UpdateBanner(
           state = updateState,
           onOpen = { destination = Destination.Updates },
         )
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-        Crossfade(
+      }
+      Box(Modifier.fillMaxWidth().weight(1f)) {
+        AnimatedContent(
           targetState = destination,
-          animationSpec = tween(180),
+          transitionSpec = {
+            val forward = targetState.ordinal >= initialState.ordinal
+            val enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+              slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) {
+                if (forward) it / 12 else -it / 12
+              }
+            val exit = fadeOut(tween(140)) +
+              slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) {
+                if (forward) -it / 14 else it / 14
+              }
+            enter.togetherWith(exit)
+          },
         ) { currentDestination ->
           when (currentDestination) {
           Destination.Home -> HomeScreen(
@@ -1020,7 +1040,6 @@ private fun VeilarkApp(
             Destination.Logs -> LogsScreen()
           }
         }
-        }
       }
     }
   }
@@ -1150,7 +1169,7 @@ private fun HomeScreen(
   val connected = phase is VpnPhase.Connected || phase is VpnPhase.Degraded
   val connecting = phase is VpnPhase.Preparing || phase is VpnPhase.Connecting
   val stopping = phase is VpnPhase.Stopping
-  Page(maxWidth = 520.dp, verticalPadding = 8.dp) {
+  Page(maxWidth = 440.dp, horizontalPadding = 16.dp, verticalPadding = 8.dp) {
     AnimatedVisibility(visible = !elevated && !connected) {
       ElevationNotice(Modifier.padding(bottom = 10.dp))
     }
@@ -1221,72 +1240,82 @@ private fun CompactConnectionWorkspace(
     is VpnPhase.Error -> language.text("Подключение не установлено", "Connection failed")
     else -> statusMessage
   }
-  val statusContainerColor by animateColorAsState(
+  val cardColor by animateColorAsState(
     targetValue = when {
-      healthy -> MaterialTheme.colorScheme.primary
+      healthy -> MaterialTheme.colorScheme.primaryContainer
       degraded -> MaterialTheme.colorScheme.tertiaryContainer
       failed -> MaterialTheme.colorScheme.errorContainer
-      else -> MaterialTheme.colorScheme.primaryContainer
+      else -> MaterialTheme.colorScheme.surfaceContainer
     },
-    animationSpec = tween(220),
-  )
-  val statusContentColor by animateColorAsState(
-    targetValue = when {
-      healthy -> MaterialTheme.colorScheme.onPrimary
-      degraded -> MaterialTheme.colorScheme.onTertiaryContainer
-      failed -> MaterialTheme.colorScheme.onErrorContainer
-      else -> MaterialTheme.colorScheme.onPrimaryContainer
-    },
-    animationSpec = tween(220),
+    animationSpec = VeilarkColorMotion,
   )
 
   val actionLabel = when {
-    profile == null -> language.text("Добавить", "Add")
+    profile == null -> language.text("Добавить профиль", "Add profile")
     phase is VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-    phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Остановить", "Stop")
+    phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Отменить", "Cancel")
     connected -> language.text("Отключить", "Disconnect")
     else -> language.text("Подключить", "Connect")
   }
 
   val statusTitle = when (phase) {
-    VpnPhase.Idle -> language.text("Отключено", "Disconnected")
-    VpnPhase.NeedsElevation -> language.text("Требуются права Windows", "Windows admin access required")
+    VpnPhase.Idle -> language.text("VPN выключен", "VPN is off")
+    VpnPhase.NeedsElevation -> language.text("Нужны права Windows", "Windows admin required")
     VpnPhase.Preparing -> language.text("Подготовка", "Preparing")
     VpnPhase.Connecting -> language.text("Подключение", "Connecting")
-    is VpnPhase.Connected -> language.text("Подключено", "Connected")
+    is VpnPhase.Connected -> language.text("Соединение защищено", "Connection protected")
     is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
     VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-    is VpnPhase.Error -> language.text("Ошибка подключения", "Connection error")
+    is VpnPhase.Error -> language.text("Не удалось подключиться", "Could not connect")
   }
 
   Column(
-    modifier = Modifier.fillMaxWidth().widthIn(max = 456.dp),
+    modifier = Modifier.fillMaxWidth().widthIn(max = 400.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    ConnectionCircle(
-      busy = busy,
-      connected = connected,
-      enabled = phase !is VpnPhase.Stopping,
-      actionLabel = actionLabel,
-      stateLabel = statusTitle,
-      containerColor = statusContainerColor,
-      contentColor = statusContentColor,
-      onClick = if (profile == null) onImport else onAction,
-    )
-    ConnectionStatus(
-      title = statusTitle,
-      summary = statusSummary,
-      connected = connected,
-      phase = phase,
-      traffic = traffic,
-      modifier = Modifier.padding(top = 8.dp).widthIn(max = 420.dp),
-    )
+    Surface(
+      modifier = Modifier.fillMaxWidth().animateContentSize(
+        animationSpec = tween(280, easing = FastOutSlowInEasing),
+      ),
+      color = cardColor,
+      shape = MaterialTheme.shapes.extraLarge,
+    ) {
+      Column(
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        ConnectionMark(
+          busy = busy,
+          connected = connected,
+          healthy = healthy,
+          degraded = degraded,
+          failed = failed,
+          stateLabel = statusTitle,
+        )
+        ConnectionStatus(
+          title = statusTitle,
+          summary = statusSummary,
+          connected = connected,
+          phase = phase,
+          traffic = traffic,
+          modifier = Modifier.padding(top = 14.dp).fillMaxWidth(),
+        )
+        ConnectionActionButton(
+          label = actionLabel,
+          connected = connected,
+          busy = busy,
+          enabled = phase !is VpnPhase.Stopping,
+          onClick = if (profile == null) onImport else onAction,
+          modifier = Modifier.padding(top = 18.dp).fillMaxWidth().height(52.dp),
+        )
+      }
+    }
     EngineSelector(
       selectedEngine = selectedEngine,
       availableEngines = availableEngines,
       enabled = !configurationLocked,
       onEngineSelect = onEngineSelect,
-      modifier = Modifier.padding(top = 10.dp).widthIn(max = 320.dp),
+      modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
     )
 
     if (profile == null) {
@@ -1308,7 +1337,7 @@ private fun CompactConnectionWorkspace(
         latencies = nodeLatencies,
         enabled = !configurationLocked,
         onSelect = onSelectEndpoint,
-        modifier = Modifier.padding(top = 10.dp).widthIn(max = 448.dp).fillMaxWidth(),
+        modifier = Modifier.padding(top = 8.dp).widthIn(max = 400.dp).fillMaxWidth(),
       )
     }
 
@@ -1347,7 +1376,7 @@ private fun CompactConnectionWorkspace(
         phase = phase,
         message = statusMessage,
         onOpenLogs = onOpenLogs,
-        modifier = Modifier.fillMaxWidth().widthIn(max = 448.dp).padding(top = 4.dp),
+        modifier = Modifier.fillMaxWidth().widthIn(max = 400.dp).padding(top = 4.dp),
       )
     }
   }
@@ -1362,16 +1391,29 @@ private fun ConnectionStatus(
   traffic: TrafficSnapshot?,
   modifier: Modifier = Modifier,
 ) {
-  Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(
-      title,
-      modifier = Modifier.fillMaxWidth(),
-      style = MaterialTheme.typography.titleLarge,
-      fontWeight = FontWeight.SemiBold,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-      textAlign = TextAlign.Center,
-    )
+  Column(
+    modifier = modifier.animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing)),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    AnimatedContent(
+      targetState = title,
+      transitionSpec = {
+        (fadeIn(tween(200)) + slideInVertically(tween(220, easing = FastOutSlowInEasing)) { it / 3 })
+          .togetherWith(
+            fadeOut(tween(140)) + slideOutVertically(tween(160)) { -it / 4 },
+          )
+      },
+    ) { currentTitle ->
+      Text(
+        currentTitle,
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+      )
+    }
     Text(
       summary,
       modifier = Modifier.fillMaxWidth().padding(top = 1.dp),
@@ -1392,58 +1434,65 @@ private fun ConnectionStatus(
 }
 
 @Composable
-private fun ConnectionCircle(
+private fun ConnectionMark(
   busy: Boolean,
   connected: Boolean,
-  enabled: Boolean,
-  actionLabel: String,
+  healthy: Boolean,
+  degraded: Boolean,
+  failed: Boolean,
   stateLabel: String,
-  containerColor: Color,
-  contentColor: Color,
-  onClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  Surface(
-    modifier = modifier.size(120.dp)
-      .semantics { stateDescription = stateLabel }
-      .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-    color = containerColor,
-    contentColor = contentColor,
-    shape = CircleShape,
-    tonalElevation = 2.dp,
-  ) {
-    Box(contentAlignment = Alignment.Center) {
-      if (busy) {
-        CircularProgressIndicator(
-          modifier = Modifier.size(92.dp),
-          color = LocalContentColor.current,
-          strokeWidth = 3.dp,
-        )
+  val fill by animateColorAsState(
+    targetValue = when {
+      healthy -> MaterialTheme.colorScheme.primary
+      degraded -> MaterialTheme.colorScheme.tertiary
+      failed -> MaterialTheme.colorScheme.error
+      else -> MaterialTheme.colorScheme.surfaceContainerLowest
+    },
+    animationSpec = VeilarkColorMotion,
+  )
+  val glyph by animateColorAsState(
+    targetValue = when {
+      healthy -> MaterialTheme.colorScheme.onPrimary
+      degraded -> MaterialTheme.colorScheme.onTertiary
+      failed -> MaterialTheme.colorScheme.onError
+      else -> MaterialTheme.colorScheme.primary
+    },
+    animationSpec = VeilarkColorMotion,
+  )
+  val scale by animateFloatAsState(
+    targetValue = if (busy) 0.98f else 1f,
+    animationSpec = VeilarkSpring,
+  )
+  Box(
+    modifier = modifier
+      .size(112.dp)
+      .graphicsLayer {
+        scaleX = scale
+        scaleY = scale
       }
-      Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        AnimatedContent(
-          targetState = busy,
-          transitionSpec = {
-            (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .9f))
-              .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .9f))
-          },
-        ) { isBusy ->
-          if (isBusy) {
-            Icon(Icons.Rounded.StopCircle, null, Modifier.size(34.dp))
-          } else {
-            ShieldMark(
-              checked = connected,
-              color = LocalContentColor.current,
-              modifier = Modifier.size(40.dp),
-            )
-          }
-        }
-        Text(
-          actionLabel,
-          modifier = Modifier.padding(top = 5.dp),
-          style = MaterialTheme.typography.labelLarge,
-          fontWeight = FontWeight.SemiBold,
-          maxLines = 1,
+      .semantics { stateDescription = stateLabel },
+    contentAlignment = Alignment.Center,
+  ) {
+    if (busy) {
+      CircularProgressIndicator(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        strokeWidth = 3.5.dp,
+      )
+    }
+    Surface(
+      modifier = Modifier.size(if (busy) 96.dp else 104.dp),
+      color = fill,
+      shape = CircleShape,
+    ) {
+      Box(contentAlignment = Alignment.Center) {
+        ShieldMark(
+          checked = connected && !busy,
+          color = glyph,
+          modifier = Modifier.size(48.dp),
         )
       }
     }
@@ -1461,10 +1510,10 @@ private fun EngineSelector(
   Surface(
     modifier = modifier.fillMaxWidth(),
     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    shape = RoundedCornerShape(11.dp),
+    shape = RoundedCornerShape(20.dp),
   ) {
     Row(
-      modifier = Modifier.fillMaxWidth().padding(2.dp).selectableGroup(),
+      modifier = Modifier.fillMaxWidth().padding(3.dp).selectableGroup(),
       horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
       VpnEngine.entries.forEach { engine ->
@@ -1570,7 +1619,7 @@ private fun PhaseProblemStrip(
   Surface(
     modifier = modifier.fillMaxWidth(),
     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    shape = RoundedCornerShape(12.dp),
+    shape = MaterialTheme.shapes.small,
   ) {
     Row(
       Modifier.padding(start = 12.dp, top = 8.dp, end = 6.dp, bottom = 8.dp),
@@ -1720,7 +1769,7 @@ private fun EndpointPicker(
         },
         enabled = enabled && groups.isNotEmpty(),
         modifier = Modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(11.dp),
+        shape = RoundedCornerShape(16.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
       ) {
         EndpointMark(
@@ -1932,13 +1981,7 @@ private fun EndpointMark(
   modifier: Modifier = Modifier,
 ) {
   when {
-    country != null -> Box(modifier, contentAlignment = Alignment.Center) {
-      Text(
-        country.flag,
-        style = MaterialTheme.typography.titleMedium,
-        maxLines = 1,
-      )
-    }
+    country != null -> CountryFlag(country, modifier)
     automatic -> Icon(Icons.Rounded.Tune, null, modifier)
     else -> Icon(Icons.Rounded.Language, null, modifier)
   }
@@ -2016,7 +2059,7 @@ private fun ConnectionActionButton(
     onClick = onClick,
     enabled = enabled,
     modifier = modifier,
-    shape = RoundedCornerShape(14.dp),
+    shape = MaterialTheme.shapes.medium,
     colors = if (connected || busy) {
       ButtonDefaults.filledTonalButtonColors()
     } else {
@@ -2028,13 +2071,7 @@ private fun ConnectionActionButton(
       transitionSpec = { fadeIn(tween(160)).togetherWith(fadeOut(tween(120))) },
       label = "connection-action-label",
     ) { currentLabel ->
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        if (busy && enabled) {
-          Icon(Icons.Rounded.StopCircle, null, Modifier.size(18.dp))
-          Spacer(Modifier.width(7.dp))
-        }
-        Text(currentLabel, style = MaterialTheme.typography.labelLarge)
-      }
+      Text(currentLabel, style = MaterialTheme.typography.labelLarge)
     }
   }
 }
@@ -2144,7 +2181,7 @@ private fun ElevationNotice(modifier: Modifier = Modifier) {
     modifier = modifier.fillMaxWidth(),
     color = MaterialTheme.colorScheme.secondaryContainer,
     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    shape = RoundedCornerShape(12.dp),
+    shape = MaterialTheme.shapes.small,
   ) {
     Row(
       Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -2786,7 +2823,7 @@ private fun EngineChoice(
     } else {
       Color.Transparent
     },
-    animationSpec = tween(160),
+    animationSpec = VeilarkColorMotion,
   )
   val contentColor by animateColorAsState(
     targetValue = if (selected) {
@@ -2794,11 +2831,11 @@ private fun EngineChoice(
     } else {
       MaterialTheme.colorScheme.onSurfaceVariant
     },
-    animationSpec = tween(160),
+    animationSpec = VeilarkColorMotion,
   )
   Surface(
     modifier = modifier
-      .height(44.dp)
+      .height(40.dp)
       .selectable(
         selected = selected,
         enabled = enabled,
@@ -2807,7 +2844,7 @@ private fun EngineChoice(
       ),
     color = containerColor,
     contentColor = contentColor,
-    shape = RoundedCornerShape(12.dp),
+    shape = RoundedCornerShape(18.dp),
   ) {
     Row(
       Modifier.padding(horizontal = 14.dp),
@@ -3945,12 +3982,8 @@ private fun UpdateBanner(
           )
           TextButton(onClick = onOpen) { Text(language.text("Открыть", "Open")) }
         }
-        if (state is DesktopUpdateState.Downloading) {
-          LinearProgressIndicator(
-            progress = { state.progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth(),
-          )
-        }
+        // Progress lives only on the Updates screen. The banner is a notice,
+        // not a second determinate bar.
       }
     }
   }

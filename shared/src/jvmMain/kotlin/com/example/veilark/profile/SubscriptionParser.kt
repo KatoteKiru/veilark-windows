@@ -18,33 +18,35 @@ class SubscriptionParser {
   fun compile(payload: ByteArray): CompiledSubscription {
     require(payload.size <= MAX_SUBSCRIPTION_SIZE) { "Подписка больше 4 МБ" }
     val decoded = decodePayload(payload)
-    compileJsonDocument(decoded)?.let { return it }
-    compileClashDocument(decoded)?.let { return it }
-    val links = extractShareLinks(decoded)
-    require(links.isNotEmpty()) {
-      "Поддерживаемые ссылки не найдены. Нужна подписка для sing-box или v2rayNG"
-    }
-    val trustTunnelLinks = links.filter {
+    val fromJson = compileJsonDocument(decoded)
+    val fromClash = if (fromJson == null) compileClashDocument(decoded) else null
+    val shareLinks = extractShareLinks(decoded)
+    val trustTunnelLinks = shareLinks.filter {
       it.startsWith("tt://", ignoreCase = true)
     }
-    val proxyLinks = links.filterNot {
+    val proxyLinks = shareLinks.filterNot {
       it.startsWith("tt://", ignoreCase = true)
     }
-
     val errors = mutableListOf<String>()
-    val parsedOutbounds = proxyLinks.mapIndexedNotNull { index, link ->
+    val fromLinks = proxyLinks.mapIndexedNotNull { index, link ->
       runCatching { parseLink(link, index) }
         .onFailure { errors += "Профиль ${index + 1}: ${it.message}" }
         .getOrNull()
     }
+    val parsedOutbounds = mergeOutbounds(
+      fromJson?.let(::proxyOutboundsFromCompiled).orEmpty() +
+        fromClash?.let(::proxyOutboundsFromCompiled).orEmpty() +
+        fromLinks,
+    )
     require(parsedOutbounds.isNotEmpty()) {
       errors.firstOrNull() ?: "Поддерживаемые профили не найдены"
     }
-
     return buildSubscription(
       parsedOutbounds,
-      trustTunnelLinks,
-      errors.size,
+      (fromJson?.trustTunnelLinks.orEmpty() +
+        fromClash?.trustTunnelLinks.orEmpty() +
+        trustTunnelLinks).distinct(),
+      (fromJson?.rejectedCount ?: 0) + (fromClash?.rejectedCount ?: 0) + errors.size,
       errors.take(MAX_REPORTED_ERRORS),
     )
   }
@@ -376,18 +378,19 @@ class SubscriptionParser {
     } ?: return null
     val sourceOutbounds = collectOutboundObjects(root)
     if (sourceOutbounds.length() == 0) return null
-    if ((0 until sourceOutbounds.length()).any {
-        sourceOutbounds.optJSONObject(it)?.optString("protocol")?.lowercase() in
-          XRAY_PROTOCOLS
-      }
-    ) {
-      return compileXrayJson(sourceOutbounds)
-    }
+    val singBox = compileSingBoxOutbounds(sourceOutbounds)
+    val xray = compileXrayOutbounds(sourceOutbounds)
+    val merged = mergeOutbounds(singBox + xray.outbounds)
+    if (merged.isEmpty()) return null
+    return buildSubscription(merged, emptyList(), xray.rejected)
+  }
+
+  private fun compileSingBoxOutbounds(sourceOutbounds: JSONArray): List<ParsedOutbound> {
     val links = mutableListOf<ParsedOutbound>()
     for (index in 0 until sourceOutbounds.length()) {
       val outbound = sourceOutbounds.optJSONObject(index) ?: continue
       val type = outbound.optString("type")
-      if (type !in SING_BOX_PROTOCOLS) continue
+      if (type !in SING_BOX_PROTOCOLS || outbound.optString("server").isBlank()) continue
       val name = outbound.optString("tag").ifBlank { "${protocolName(type)} ${index + 1}" }
         .take(64)
       val tag = uniqueTag(name, links.size)
@@ -397,8 +400,7 @@ class SubscriptionParser {
         ConnectionNode(tag, name, protocolName(type)),
       )
     }
-    if (links.isEmpty()) return null
-    return buildSubscription(links, emptyList(), 0)
+    return links
   }
 
   /**
@@ -431,6 +433,7 @@ class SubscriptionParser {
             value.optJSONArray("outbounds")?.let { outbounds ->
               repeat(outbounds.length()) { index ->
                 val outbound = outbounds.optJSONObject(index) ?: return@repeat
+                if (!isProxyOutbound(outbound)) return@repeat
                 val serialized = outbound.toString()
                 if (seen.add(serialized) && collected.length() < MAX_PROFILE_LINKS) {
                   collected.put(JSONObject(serialized))
@@ -447,19 +450,22 @@ class SubscriptionParser {
             visit(value.opt(index), depth + 1)
           }
           is String -> {
-            val embedded = value.trim()
-            if (
-              embedded.length <= MAX_SUBSCRIPTION_SIZE &&
-              parsedDocuments.add(embedded) &&
-              (embedded.startsWith("{") || embedded.startsWith("["))
-            ) {
-              val document = if (embedded.startsWith("{")) {
-                runCatching { JSONObject(embedded) }.getOrNull()
-              } else {
-                runCatching { JSONArray(embedded) }.getOrNull()
-              }
-              document?.let {
-                visit(it, depth + 1)
+            val candidates = buildList {
+              add(value.trim())
+              decodeBase64OrNull(value.trim())?.trim()?.let(::add)
+            }
+            candidates.forEach { embedded ->
+              if (
+                embedded.length <= MAX_SUBSCRIPTION_SIZE &&
+                parsedDocuments.add(embedded) &&
+                (embedded.startsWith("{") || embedded.startsWith("["))
+              ) {
+                val document = if (embedded.startsWith("{")) {
+                  runCatching { JSONObject(embedded) }.getOrNull()
+                } else {
+                  runCatching { JSONArray(embedded) }.getOrNull()
+                }
+                document?.let { visit(it, depth + 1) }
               }
             }
           }
@@ -470,14 +476,18 @@ class SubscriptionParser {
     return collected
   }
 
-  private fun compileXrayJson(sourceOutbounds: JSONArray): CompiledSubscription {
+  private data class XrayCompileResult(
+    val outbounds: List<ParsedOutbound>,
+    val rejected: Int,
+  )
+
+  private fun compileXrayOutbounds(sourceOutbounds: JSONArray): XrayCompileResult {
     val parsed = mutableListOf<ParsedOutbound>()
     var rejected = 0
     repeat(sourceOutbounds.length()) { outboundIndex ->
       val source = sourceOutbounds.optJSONObject(outboundIndex) ?: return@repeat
       val protocol = source.optString("protocol").lowercase()
-      if (protocol !in XRAY_PROTOCOLS) {
-        rejected += 1
+      if (protocol !in XRAY_PROTOCOLS || !source.has("settings")) {
         return@repeat
       }
       val settings = source.optJSONObject("settings") ?: JSONObject()
@@ -535,8 +545,7 @@ class SubscriptionParser {
         }
       }
     }
-    require(parsed.isNotEmpty()) { "В Xray JSON нет поддерживаемых серверов" }
-    return buildSubscription(parsed, emptyList(), rejected)
+    return XrayCompileResult(parsed, rejected)
   }
 
   private fun xrayTls(stream: JSONObject): JSONObject? {
@@ -1011,6 +1020,52 @@ class SubscriptionParser {
       )
     else -> error("transport ${uri.query["type"]} пока не поддерживается")
   }
+
+  private fun isProxyOutbound(outbound: JSONObject): Boolean {
+    val type = outbound.optString("type").lowercase()
+    val protocol = outbound.optString("protocol").lowercase()
+    return (type in SING_BOX_PROTOCOLS && outbound.optString("server").isNotBlank()) ||
+      (protocol in XRAY_PROTOCOLS && outbound.has("settings"))
+  }
+
+  private fun proxyOutboundsFromCompiled(result: CompiledSubscription): List<ParsedOutbound> {
+    val array = JSONObject(result.json).optJSONArray("outbounds") ?: return emptyList()
+    val byTag = result.nodes.associateBy(ConnectionNode::tag)
+    val parsed = mutableListOf<ParsedOutbound>()
+    repeat(array.length()) { index ->
+      val outbound = array.optJSONObject(index) ?: return@repeat
+      val type = outbound.optString("type")
+      if (type !in SING_BOX_PROTOCOLS) return@repeat
+      val tag = outbound.optString("tag")
+      val node = byTag[tag] ?: ConnectionNode(tag, tag, protocolName(type))
+      parsed += ParsedOutbound(JSONObject(outbound.toString()), node)
+    }
+    return parsed
+  }
+
+  private fun mergeOutbounds(outbounds: List<ParsedOutbound>): List<ParsedOutbound> {
+    val seen = linkedSetOf<String>()
+    val merged = mutableListOf<ParsedOutbound>()
+    outbounds.forEach { outbound ->
+      val fingerprint = outboundFingerprint(outbound.json)
+      if (seen.add(fingerprint)) merged += outbound
+    }
+    return merged.mapIndexed { index, outbound ->
+      val name = outbound.node.name
+      val tag = uniqueTag(name, index)
+      outbound.json.put("tag", tag)
+      outbound.copy(json = outbound.json, node = outbound.node.copy(tag = tag))
+    }
+  }
+
+  private fun outboundFingerprint(outbound: JSONObject): String =
+    listOf(
+      outbound.optString("type").lowercase(),
+      outbound.optString("server").lowercase(),
+      outbound.opt("server_port")?.toString().orEmpty(),
+      outbound.optString("uuid"),
+      outbound.optString("password"),
+    ).joinToString("|")
 
   private fun uniqueTag(name: String, index: Int): String {
     val cleaned = name.replace(Regex("""[\u0000-\u001F]"""), "").trim().take(64)

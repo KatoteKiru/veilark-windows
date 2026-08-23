@@ -374,27 +374,23 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 308
-    const val CURRENT_VERSION_NAME = "0.3.8"
+    const val CURRENT_VERSION_CODE = 310
+    const val CURRENT_VERSION_NAME = "0.3.10"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.8
-      • Remnawave и современные x-ui теперь получают корректный запрос sing-box вместо неоднозначного fallback-формата.
-      • Импорт читает все вложенные группы outbounds и JSON-конфигурации, а не только корневой набор серверов.
-      • Выпадающий список показывает точное число реальных серверов, не считая пункт «Автоматически» отдельным узлом.
-      • Список стал выше, получил видимую прокрутку и больше не создаёт впечатление, что после первых трёх протоколов серверов нет.
-      • Для названий стран и городов добавлены флаги; исходные имена, протоколы, выбранный узел и совместимость хранилища сохранены.
-      • После импорта и обновления приложение явно сообщает число узлов для каждого VPN-ядра.
-      • Обновление устанавливается поверх версий 0.3.x с сохранением подписок, встроенной Veilark Trust, маршрутов и выбранных серверов.
+      Исправлено и добавлено в 0.3.10
+      • Оболочка как у обычного приложения Google: компактный app bar, нижняя навигация и тональный логотип без чёрного квадрата.
+      • Подключение — карточка со щитом и отдельной кнопкой; прогресс идёт кольцом по краю, а не колесом внутри кнопки.
+      • Страницы сменяются коротким fade и сдвигом; ядро переключается сегментом-пилюлей.
+      • Окно компактное, без широкой пустой рельсы и без гамбургера.
+      • Обновление ставится поверх 0.3.x с сохранением подписок, маршрутов и выбранных серверов.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.8
-      • Remnawave and modern x-ui now receive an explicit sing-box request instead of an ambiguous fallback format.
-      • Import reads every nested outbounds group and embedded JSON config, not only the root server set.
-      • The server picker reports the real server count and no longer counts “Automatic” as an endpoint.
-      • The list is taller, has a visible scrollbar and no longer hides remaining locations below the first three protocols.
-      • Country and city names now receive flags while source names, protocols, selection and store compatibility are preserved.
-      • Import and refresh confirmations report the endpoint count for each VPN core.
-      • The update installs over 0.3.x while preserving subscriptions, built-in Veilark Trust, routing and selected servers.
+      Fixed and added in 0.3.10
+      • The shell is a compact Google Material 3 app: top bar, bottom navigation, and the same logo in a tonal circle.
+      • Connection is a status card with a separate button; progress is a rim ring, not a spinner inside the control.
+      • Pages fade and slide; the engine control is a pill segmented switch.
+      • The window is compact: no wide empty rail and no hamburger drawer.
+      • The update installs over 0.3.x while preserving subscriptions, routing and selected servers.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

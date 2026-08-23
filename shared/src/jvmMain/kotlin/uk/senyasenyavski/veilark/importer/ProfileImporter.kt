@@ -48,7 +48,8 @@ class ProfileImporter(
         subscriptionUserAgent(),
       )
       .header("X-Client", "Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}")
-      .header("Accept", "application/json, text/plain, application/yaml, */*")
+      .header("Accept", "application/json, text/yaml, application/yaml, text/plain, */*")
+      .header("Accept-Encoding", "identity")
       .GET()
       .build()
     val response = client.send(request, HttpResponse.BodyHandlers.ofByteArray())
@@ -190,8 +191,7 @@ class ProfileImporter(
     private const val MAX_BYTES = 4L * 1024 * 1024
 
     internal fun subscriptionUserAgent(): String =
-      "sing-box/$SING_BOX_COMPAT_VERSION " +
-        "(Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}; Windows)"
+      "SFA/$SING_BOX_COMPAT_VERSION Veilark/${UpdateClient.CURRENT_VERSION_NAME}"
   }
 
   private fun Throwable.safeMessage(): String = when (this) {

@@ -67,9 +67,9 @@ object NodePresentation {
   }
 
   private val COUNTRY_ALIASES = linkedMapOf(
-    "DE" to listOf("germany", "deutschland", "германия", "frankfurt", "berlin", "франкфурт", "берлин"),
-    "NL" to listOf("netherlands", "holland", "нидерланды", "голландия", "amsterdam", "амстердам"),
-    "FI" to listOf("finland", "финляндия", "helsinki", "хельсинки"),
+    "DE" to listOf("germany", "deutschland", "германия", "frankfurt", "berlin", "франкфурт", "берлин", "fra"),
+    "NL" to listOf("netherlands", "holland", "нидерланды", "голландия", "amsterdam", "амстердам", "ams"),
+    "FI" to listOf("finland", "финляндия", "helsinki", "хельсинки", "hel"),
     "RU" to listOf("russia", "россия", "moscow", "москва", "saint petersburg", "санкт-петербург", "spb"),
     "FR" to listOf("france", "франция", "paris", "париж"),
     "GB" to listOf("united kingdom", "great britain", "britain", "великобритания", "london", "лондон", "uk"),

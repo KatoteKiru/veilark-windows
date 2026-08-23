@@ -6,7 +6,7 @@ layout and an explicit `VpnSession` boundary.
 
 ## Current status
 
-Windows 0.3.8 recovery candidate is implemented:
+Windows 0.3.10 release candidate is implemented:
 
 - Compose Desktop shell with compact desktop navigation and persistent RU/EN actionable states;
 - tunnel detection through the Windows IP Helper API, so the adapter is matched
@@ -51,9 +51,8 @@ Windows 0.3.8 recovery candidate is implemented:
   drag-and-drop, and redacted log copy;
 - signed Windows OTA channel with HTTPS origin allowlist, Ed25519 manifest
   verification, resumable downloads, size bounds, and installer SHA-256;
-- compact 600×440 Material 3 shell with hamburger navigation, gear settings,
-  a centered 120 dp connect/stop action, grouped server selection beneath it,
-  and restrained motion;
+- compact Google Material 3 shell with a top app bar, bottom navigation,
+  Noto Sans, drawn country flags, and a single update progress indicator;
 - redacted technical journal;
 - release MSI and EXE installers.
 
@@ -80,13 +79,13 @@ Creating installers (the repository downloads the pinned WiX toolset):
 
 Release artifacts:
 
-- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.8.exe`
-- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.8.msi`
+- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.10.exe`
+- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.10.msi`
 
 After installing, verify the package and the unstripped JNA runtime:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.8
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.10
 ```
 
 Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.8 fixes sing-box format

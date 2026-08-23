@@ -9,12 +9,11 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 
 class ProfileImporterTest {
   @Test
-  fun `subscription request identifies the sing-box core`() {
+  fun `subscription request identifies the SFA client like Android`() {
     val userAgent = ProfileImporter.subscriptionUserAgent()
 
-    assertTrue(userAgent.startsWith("sing-box/1.13.14 "))
-    assertTrue(userAgent.contains("Veilark-Windows/"))
-    assertTrue(userAgent.endsWith("; Windows)"))
+    assertTrue(userAgent.startsWith("SFA/1.13.14 Veilark/"))
+    assertTrue(userAgent.contains(uk.senyasenyavski.veilark.update.UpdateClient.CURRENT_VERSION_NAME))
   }
 
   @Test
