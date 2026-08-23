@@ -48,8 +48,10 @@ Release date: 2026-08-23
 - MSI UpgradeCode: `{47A6CDD8-9630-4FA5-A2FD-C29C5774DC1A}` (unchanged).
 - The production wrapper contains a `requireAdministrator` manifest; it was not
   executed during release preparation.
-- The live signed manifest and a complete public redownload are verified after
-  publication.
+- The live signed manifest passed the production `UpdateClient` Ed25519
+  validator.
+- A complete public redownload matched the local OTA wrapper byte-for-byte by
+  size and SHA-256.
 - The wrapper is not Authenticode-signed; Windows can show an unknown-publisher
   warning.
 
