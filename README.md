@@ -23,7 +23,7 @@ Windows 0.3.10 release candidate is implemented:
   `curl.exe` / Schannel, with process exit reported as `CORE_EXITED`;
 - automatic UAC relaunch on Connect with encrypted state handoff, profile-load
   synchronization, and exactly one auto-connect attempt after elevation;
-- official sing-box 1.13.14, TrustTunnel 1.1.5-rc.6, and WinTUN 0.14.1 bootstrap
+- official sing-box 1.13.19, TrustTunnel 1.1.5-rc.6, and WinTUN 0.14.1 bootstrap
   with pinned SHA-256;
 - `sing-box check` before every sing-box launch and the official TrustTunnel
   setup wizard for `tt://` and endpoint TOML profiles;
@@ -79,26 +79,25 @@ Creating installers (the repository downloads the pinned WiX toolset):
 
 Release artifacts:
 
-- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.10.exe`
-- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.10.msi`
+- `desktopApp/build-isolated/compose/binaries/main-release/exe/Veilark-0.3.11.exe`
+- `desktopApp/build-isolated/compose/binaries/main-release/msi/Veilark-0.3.11.msi`
 
 After installing, verify the package and the unstripped JNA runtime:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.10
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -ExpectedVersion 0.3.11
 ```
 
-Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.8 fixes sing-box format
-negotiation, imports nested server groups, and makes every location visibly
-discoverable in the compact selector without changing the Material 3 palette. The signed
+Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.11 retains the compact
+Material 3 interface and updates the stable sing-box runtime to 1.13.19. The signed
 public OTA channel uses a self-elevating bootstrap so an installed 0.3.0 or
 0.3.1 can be replaced in place after the user accepts the Windows UAC prompt.
 The artifacts are not Authenticode-signed, so Windows SmartScreen may show the
 publisher as unknown. Real-PC tunnel acceptance is still required before calling
-0.3.8 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
+0.3.11 fully accepted. A signed least-privilege Windows Service and WFP kill-switch
 remain required before declaring a final 1.0 security release.
 
 See [Windows notes](docs/WINDOWS.md) and the
 [parity matrix](docs/PARITY.md). The current acceptance evidence is recorded in
-[0.3.8 release evidence](docs/RELEASE_0.3.8.md); the remaining elevated checks
-are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.8.md).
+[0.3.11 release evidence](docs/RELEASE_0.3.11.md); the remaining elevated checks
+are listed in [PC acceptance](docs/PC_ACCEPTANCE_0.3.11.md).

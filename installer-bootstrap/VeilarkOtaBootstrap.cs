@@ -10,15 +10,15 @@ using System.Text;
 [assembly: AssemblyCompany("Veilark")]
 [assembly: AssemblyProduct("Veilark")]
 [assembly: AssemblyCopyright("Copyright (c) Veilark")]
-[assembly: AssemblyVersion("0.3.10.0")]
-[assembly: AssemblyFileVersion("0.3.10.0")]
+[assembly: AssemblyVersion("0.3.11.0")]
+[assembly: AssemblyFileVersion("0.3.11.0")]
 
 internal static class VeilarkOtaBootstrap
 {
     private const string PayloadResource = "Veilark.InstallerPayload";
-    private const long ExpectedPayloadSize = 129684992L;
+    private const long ExpectedPayloadSize = 130987520L;
     private const string ExpectedPayloadSha256 =
-        "2840CB877C2647CF6A4678657414E003A398C691C44836766AF066A6B9915A87";
+        "2AEAAC6FC8E024E3A3266618095FACF3EB19F847DC0E6AFEF3B6A0A92A191C24";
 
     [STAThread]
     private static int Main(string[] args)
@@ -32,7 +32,7 @@ internal static class VeilarkOtaBootstrap
 
         string payloadPath = Path.Combine(
             directory,
-            ".Veilark-0.3.10-payload-" + Process.GetCurrentProcess().Id + ".exe");
+            ".Veilark-0.3.11-payload-" + Process.GetCurrentProcess().Id + ".exe");
 
         try
         {
@@ -194,7 +194,7 @@ internal static class VeilarkOtaBootstrap
     {
         try
         {
-            string logPath = Path.Combine(directory, "bootstrap-310.log");
+            string logPath = Path.Combine(directory, "bootstrap-311.log");
             File.AppendAllText(
                 logPath,
                 DateTime.UtcNow.ToString("O") + " " + error + Environment.NewLine,

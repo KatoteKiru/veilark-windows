@@ -146,7 +146,8 @@ def main() -> None:
     OTA_DIR.mkdir(parents=True, exist_ok=True)
     local_installer = OTA_DIR / installer_name
     local_manifest = OTA_DIR / "manifest.json"
-    shutil.copyfile(installer, local_installer)
+    if installer != local_installer.resolve():
+        shutil.copyfile(installer, local_installer)
     local_manifest.write_text(
         json.dumps(manifest, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",

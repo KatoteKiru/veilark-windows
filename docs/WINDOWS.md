@@ -4,7 +4,7 @@
 
 Windows W1 uses two official upstream runtimes:
 
-- sing-box 1.13.14, matching Android 0.8.0-rc4;
+- sing-box 1.13.19, matching the current Android production core;
 - TrustTunnelClient 1.1.5-rc.6 for Windows x86_64, pinned to the official
   release asset SHA-256.
 

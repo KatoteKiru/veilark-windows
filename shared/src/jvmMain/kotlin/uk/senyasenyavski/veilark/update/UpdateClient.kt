@@ -374,23 +374,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 310
-    const val CURRENT_VERSION_NAME = "0.3.10"
+    const val CURRENT_VERSION_CODE = 311
+    const val CURRENT_VERSION_NAME = "0.3.11"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.10
-      • Оболочка как у обычного приложения Google: компактный app bar, нижняя навигация и тональный логотип без чёрного квадрата.
-      • Подключение — карточка со щитом и отдельной кнопкой; прогресс идёт кольцом по краю, а не колесом внутри кнопки.
-      • Страницы сменяются коротким fade и сдвигом; ядро переключается сегментом-пилюлей.
-      • Окно компактное, без широкой пустой рельсы и без гамбургера.
-      • Обновление ставится поверх 0.3.x с сохранением подписок, маршрутов и выбранных серверов.
+      Исправлено и добавлено в 0.3.11
+      • Стабильное ядро sing-box обновлено с 1.13.14 до 1.13.19.
+      • Официальный архив Windows проверяется по опубликованному SHA-256 до упаковки.
+      • Формат запроса подписок синхронизирован с версией встроенного ядра.
+      • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.10
-      • The shell is a compact Google Material 3 app: top bar, bottom navigation, and the same logo in a tonal circle.
-      • Connection is a status card with a separate button; progress is a rim ring, not a spinner inside the control.
-      • Pages fade and slide; the engine control is a pill segmented switch.
-      • The window is compact: no wide empty rail and no hamburger drawer.
-      • The update installs over 0.3.x while preserving subscriptions, routing and selected servers.
+      Fixed and added in 0.3.11
+      • The stable sing-box core is updated from 1.13.14 to 1.13.19.
+      • The official Windows archive is verified against its published SHA-256 before packaging.
+      • Subscription request compatibility now matches the bundled core version.
+      • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
