@@ -35,7 +35,9 @@ before every connection. TrustTunnel keeps its own runtime configuration; the
 sing-box-specific controls are not silently translated to it. RU presets split
 DNS together with traffic: direct RU traffic uses the local resolver while the
 VPN branch uses secure DNS. TrustTunnel uses DNS interception, CIDR exclusions,
-and early SNI matching with pre-resolution disabled to keep startup bounded.
+and early SNI matching. Pre-resolution is enabled only for geographic or
+manual domain exclusions and is capped at 50 queries, so QUIC/secure-DNS apps
+can match exclusions without an unbounded startup DNS burst.
 
 The selected node is persisted separately for each engine. Automatic sing-box
 mode keeps the urltest outbound; explicit selection updates the final route,

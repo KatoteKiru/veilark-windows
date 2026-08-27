@@ -6,7 +6,7 @@ layout and an explicit `VpnSession` boundary.
 
 ## Current status
 
-Windows 0.3.10 release candidate is implemented:
+Windows 0.3.11 release candidate is implemented:
 
 - Compose Desktop shell with compact desktop navigation and persistent RU/EN actionable states;
 - tunnel detection through the Windows IP Helper API, so the adapter is matched
