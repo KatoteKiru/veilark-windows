@@ -25,5 +25,8 @@ jobs:
           cache: gradle
       - shell: powershell
         run: .\scripts\bootstrap-runtime.ps1
+      - name: Validate OTA publisher
+        shell: powershell
+        run: python -m py_compile .\scripts\publish_ota.py
       - shell: powershell
         run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --stacktrace
