@@ -26,4 +26,4 @@ jobs:
       - shell: powershell
         run: .\scripts\bootstrap-runtime.ps1
       - shell: powershell
-        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin -PveilarkAllowFixtureTrustProfiles=true --stacktrace
+        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --stacktrace

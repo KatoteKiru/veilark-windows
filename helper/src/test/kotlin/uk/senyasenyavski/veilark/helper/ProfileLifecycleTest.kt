@@ -24,7 +24,7 @@ class ProfileLifecycleTest {
     assertEquals("second", stored.profiles.single { it.engine == VpnEngine.SingBox }.id)
 
     val result = assertIs<ProfileRemovalResult.Removed>(
-      ProfileLifecycle.remove(stored, second.id, BUILT_INS),
+      ProfileLifecycle.remove(stored, second.id),
     )
 
     assertEquals(first.id, result.stored.selectedSubscriptionIds[VpnEngine.SingBox])
@@ -99,61 +99,39 @@ class ProfileLifecycleTest {
     val stored = SubscriptionCatalog.put(StoredProfiles(), dual)
 
     val result = assertIs<ProfileRemovalResult.Removed>(
-      ProfileLifecycle.remove(stored, dual.id, BUILT_INS),
+      ProfileLifecycle.remove(stored, dual.id),
     )
 
     assertEquals(setOf(VpnEngine.SingBox, VpnEngine.TrustTunnel), result.engines)
-    assertEquals(listOf(SubscriptionRecord.BUILT_IN_TRUST_ID), result.stored.subscriptions.map { it.id })
-    assertEquals(listOf(VpnEngine.TrustTunnel), result.stored.profiles.map(Profile::engine))
-    assertEquals(VpnEngine.TrustTunnel, result.stored.selectedEngine)
-    assertEquals(setOf(VpnEngine.TrustTunnel), result.stored.selectedNodeTags.keys)
+    assertTrue(result.stored.subscriptions.isEmpty())
+    assertTrue(result.stored.profiles.isEmpty())
+    assertEquals(VpnEngine.SingBox, result.stored.selectedEngine)
+    assertTrue(result.stored.selectedNodeTags.isEmpty())
   }
 
   @Test
-  fun `removes custom Trust subscription while retaining protected built-in`() {
+  fun `removes custom Trust subscription without installing a replacement`() {
     val custom = SubscriptionRecord.user(listOf(customTrustProfile()))
     val stored = SubscriptionCatalog.put(StoredProfiles(), custom)
 
     val result = assertIs<ProfileRemovalResult.Removed>(
-      ProfileLifecycle.remove(stored, custom.id, BUILT_INS),
+      ProfileLifecycle.remove(stored, custom.id),
     )
-    val trust = result.stored.profiles.single { it.engine == VpnEngine.TrustTunnel }
 
-    assertEquals(SubscriptionRecord.BUILT_IN_TRUST_ID, result.stored.selectedSubscriptionIds[VpnEngine.TrustTunnel])
-    assertEquals("Veilark Trust", trust.name)
-    assertEquals(2, trust.nodes.size)
-    assertEquals(trust.nodes.first().tag, result.stored.selectedNodeTags[VpnEngine.TrustTunnel])
+    assertTrue(result.stored.subscriptions.isEmpty())
+    assertTrue(result.stored.profiles.isEmpty())
+    assertTrue(result.stored.selectedSubscriptionIds.isEmpty())
   }
 
   @Test
-  fun `cannot remove Veilark Trust`() {
-    val installed = BuiltInTrustProfiles.install(StoredProfiles(), BUILT_INS)
-
-    val result = assertIs<ProfileRemovalResult.Protected>(
-      ProfileLifecycle.remove(installed, SubscriptionRecord.BUILT_IN_TRUST_ID, BUILT_INS),
+  fun `stale id is a no-op`() {
+    val stored = SubscriptionCatalog.put(
+      StoredProfiles(),
+      SubscriptionRecord.user(listOf(singBoxProfile())),
     )
-
-    assertEquals(installed, result.stored)
-  }
-
-  @Test
-  fun `invalid embedded data fails closed without deleting user subscription`() {
-    val user = SubscriptionRecord.user(listOf(singBoxProfile()))
-    val stored = SubscriptionCatalog.put(StoredProfiles(), user)
-
-    val result = assertIs<ProfileRemovalResult.Unavailable>(
-      ProfileLifecycle.remove(stored, user.id, "https://invalid.example/sub"),
-    )
-
-    assertEquals(stored, result.stored)
-  }
-
-  @Test
-  fun `stale id is a no-op even when embedded data is invalid`() {
-    val stored = StoredProfiles(profiles = listOf(singBoxProfile()))
 
     val result = assertIs<ProfileRemovalResult.NotFound>(
-      ProfileLifecycle.remove(stored, "stale-id", "invalid"),
+      ProfileLifecycle.remove(stored, "stale-id"),
     )
 
     assertEquals(stored, result.stored)
@@ -174,16 +152,13 @@ class ProfileLifecycleTest {
     )
 
     val result = assertIs<ProfileRemovalResult.Removed>(
-      ProfileLifecycle.remove(stored, second.id, BUILT_INS),
+      ProfileLifecycle.remove(stored, second.id),
     )
 
     assertEquals(VpnEngine.SingBox, result.stored.selectedEngine)
     assertEquals(first.id, result.stored.selectedSubscriptionIds[VpnEngine.SingBox])
     assertEquals(ProfileSelection.AUTOMATIC_TAG, result.stored.selectedNodeTags[VpnEngine.SingBox])
-    val trust = result.stored.profiles.single { it.engine == VpnEngine.TrustTunnel }
-    assertTrue(trust.nodes.any {
-      it.tag == result.stored.selectedNodeTags[VpnEngine.TrustTunnel]
-    })
+    assertEquals(setOf(VpnEngine.SingBox), result.stored.selectedNodeTags.keys)
   }
 
   private fun singBoxProfile(id: String = "sing-box-user") = Profile(
@@ -209,12 +184,5 @@ class ProfileLifecycleTest {
       endpointConfigs = mapOf(node.tag to config),
       sourceUrl = "https://example.test/$id",
     )
-  }
-
-  private companion object {
-    val BUILT_INS = """
-      tt://built-in-one.example/profile#Netherlands
-      tt://built-in-two.example/profile#Frankfurt
-    """.trimIndent()
   }
 }

@@ -56,14 +56,6 @@ data class SubscriptionRecord(
       )
     }
 
-    internal fun builtInTrust(profile: Profile): SubscriptionRecord = SubscriptionRecord(
-      id = BUILT_IN_TRUST_ID,
-      name = "Veilark Trust",
-      profiles = listOf(profile),
-      sourceLabel = "Veilark Trust",
-      origin = SubscriptionOrigin.BuiltIn,
-    )
-
     private fun stableId(value: String): String =
       MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))

@@ -12,64 +12,31 @@ sealed interface ProfileRemovalResult {
     val engines: Set<VpnEngine>,
   ) : ProfileRemovalResult
 
-  /** The requested profile is the built-in Veilark Trust profile and cannot be removed. */
+  /** Retained for compatibility with older callers; no current removal path returns it. */
   data class Protected(override val stored: StoredProfiles) : ProfileRemovalResult
 
   /** The UI held a stale profile id; storage was not changed. */
   data class NotFound(override val stored: StoredProfiles) : ProfileRemovalResult
 
-  /** Embedded Trust data could not be verified, so removal failed closed. */
+  /** Retained for compatibility with older callers; no current removal path returns it. */
   data class Unavailable(
     override val stored: StoredProfiles,
     val safeMessage: String,
   ) : ProfileRemovalResult
 }
 
-/**
- * Owns destructive profile operations and preserves the mandatory Veilark Trust profile.
- *
- * A subscription is removed as a source group, including both engine profiles it provided.
- * Veilark Trust is a separate [SubscriptionOrigin.BuiltIn] record and cannot be removed.
- */
+/** Owns destructive profile operations. A subscription is removed as one source group. */
 object ProfileLifecycle {
   fun remove(stored: StoredProfiles, subscriptionId: String): ProfileRemovalResult {
-    val payload = BuiltInTrustProfiles.loadPayload()
-      ?: return ProfileRemovalResult.Unavailable(
-        stored,
-        "Встроенная подписка Veilark Trust недоступна; удаление отменено",
-      )
-    return remove(stored, subscriptionId, payload)
-  }
-
-  internal fun remove(
-    stored: StoredProfiles,
-    subscriptionId: String,
-    builtInTrustPayload: String,
-  ): ProfileRemovalResult {
-    val migrated = SubscriptionCatalog.normalize(stored)
+    val migrated = LegacyBuiltInTrustMigration.remove(stored)
     val requested = migrated.subscriptions.firstOrNull { it.id == subscriptionId }
-      ?: return ProfileRemovalResult.NotFound(stored)
-    if (requested.origin == SubscriptionOrigin.BuiltIn) {
-      return ProfileRemovalResult.Protected(migrated)
-    }
-    val withBuiltIn = runCatching {
-      BuiltInTrustProfiles.install(migrated, builtInTrustPayload)
-    }.getOrElse {
-      return ProfileRemovalResult.Unavailable(
-        stored,
-        "Встроенная подписка Veilark Trust повреждена; удаление отменено",
-      )
-    }
-    // A legacy profile containing only embedded endpoints is migrated into the protected record.
-    if (withBuiltIn.subscriptions.none { it.id == requested.id }) {
-      return ProfileRemovalResult.Protected(withBuiltIn)
-    }
-    val remaining = withBuiltIn.subscriptions.filterNot { it.id == requested.id }
+      ?: return ProfileRemovalResult.NotFound(migrated)
+    val remaining = migrated.subscriptions.filterNot { it.id == requested.id }
     return ProfileRemovalResult.Removed(
       stored = SubscriptionCatalog.rebuild(
-        stored = withBuiltIn,
+        stored = migrated,
         subscriptions = remaining,
-        requestedSelections = withBuiltIn.selectedSubscriptionIds,
+        requestedSelections = migrated.selectedSubscriptionIds,
       ),
       subscriptionId = requested.id,
       engines = requested.profiles.mapTo(linkedSetOf()) { it.engine },

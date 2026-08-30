@@ -9,9 +9,6 @@ local.properties
 runtime/
 packaging/runtime/
 packaging/resources/windows/
-**/builtin_trust_profiles.txt
-**/generated/veilark/trust-resources/
-**/trust-resources/
 **/profiles.dat*
 **/LocalAppData/
 **/AppData/

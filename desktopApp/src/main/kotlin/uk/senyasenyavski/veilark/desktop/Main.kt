@@ -157,7 +157,7 @@ import uk.senyasenyavski.veilark.helper.SingleInstanceGate
 import uk.senyasenyavski.veilark.helper.NodeLatency
 import uk.senyasenyavski.veilark.helper.NodeLatencyProbe
 import uk.senyasenyavski.veilark.helper.StoredProfiles
-import uk.senyasenyavski.veilark.helper.BuiltInTrustProfiles
+import uk.senyasenyavski.veilark.helper.LegacyBuiltInTrustMigration
 import uk.senyasenyavski.veilark.helper.SubscriptionCatalog
 import uk.senyasenyavski.veilark.helper.SubscriptionOrigin
 import uk.senyasenyavski.veilark.helper.SubscriptionRecord
@@ -378,12 +378,10 @@ private fun VeilarkApp(
   val updateState by updates.state.collectAsState()
   val storedProfilesResult: Result<StoredProfiles> = remember {
     when (val loaded = profileStore.loadResult()) {
-      ProfileLoadResult.Missing -> runCatching {
-        BuiltInTrustProfiles.installFromResource(StoredProfiles()).also(profileStore::save)
-      }
+      ProfileLoadResult.Missing -> Result.success(StoredProfiles())
       is ProfileLoadResult.Loaded -> runCatching {
-        BuiltInTrustProfiles.installFromResource(loaded.stored).also { installed ->
-          if (installed != loaded.stored) profileStore.save(installed)
+        LegacyBuiltInTrustMigration.remove(loaded.stored).also { migrated ->
+          if (migrated != loaded.stored) profileStore.save(migrated)
         }
       }
       is ProfileLoadResult.Failed -> Result.failure(loaded.cause)
