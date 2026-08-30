@@ -942,6 +942,18 @@ private fun VeilarkApp(
               }
             },
             importing = importing,
+            onOpenSubscriptionAccount = {
+              if (!TelegramBotLink.openConfigured()) {
+                scope.launch {
+                  snackbar.showSnackbar(
+                    language.text(
+                      "Не удалось открыть Telegram. Откройте @senyavpn_bot вручную.",
+                      "Could not open Telegram. Open @senyavpn_bot manually.",
+                    ),
+                  )
+                }
+              }
+            },
             onPaste = {
               if (configurationLockedNow() || importing || refreshing) {
                 scope.launch { snackbar.showSnackbar(language.text("Сначала остановите VPN", "Stop VPN first")) }
@@ -2899,6 +2911,7 @@ private fun ProfilesScreen(
   onProbe: (Profile) -> Unit,
   onDelete: (SubscriptionRecord) -> Unit,
   importing: Boolean,
+  onOpenSubscriptionAccount: () -> Unit,
   onPaste: () -> Unit,
   onFile: () -> Unit,
   onUrl: () -> Unit,
@@ -2919,6 +2932,14 @@ private fun ProfilesScreen(
         }
       },
     )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.End,
+    ) {
+      OutlinedButton(onClick = onOpenSubscriptionAccount) {
+        Text(language.text("Получить / продлить подписку", "Get / renew subscription"))
+      }
+    }
     Row(
       modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp),
       verticalAlignment = Alignment.CenterVertically,
