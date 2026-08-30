@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import shlex
 import shutil
+import subprocess
 import uuid
 from urllib.request import Request, urlopen
 
@@ -21,6 +22,7 @@ REMOTE_DIR = "/var/www/html/veilark/windows"
 UPDATE_ORIGIN = "https://nl2.senyasenyavski.uk:2096"
 UPLOAD_CHUNK_SIZE = 256 * 1024
 UPLOAD_ATTEMPTS = 8
+MAX_NOTES_LENGTH = 4_000
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -36,7 +38,8 @@ def read_env(path: Path) -> dict[str, str]:
 
 def connect_node(env: dict[str, str]) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
     client.connect(
         env["NETHERLANDS_NEW_HOST"],
         username=env["NETHERLANDS_NEW_USER"],
@@ -47,6 +50,20 @@ def connect_node(env: dict[str, str]) -> paramiko.SSHClient:
     )
     client.get_transport().set_keepalive(10)
     return client
+
+
+def require_authenticode(path: Path) -> None:
+    command = (
+        "$signature = Get-AuthenticodeSignature -LiteralPath $args[0]; "
+        "if ($signature.Status -ne 'Valid') { "
+        "throw ('Authenticode status: ' + $signature.Status) }"
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command, str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def file_sha256(path: Path) -> str:
@@ -118,6 +135,9 @@ def main() -> None:
         raise FileNotFoundError(installer)
     if args.version_code < 1 or not args.version_name:
         raise ValueError("Invalid version")
+    if len(args.notes) > MAX_NOTES_LENGTH:
+        raise ValueError("Release notes exceed the client limit")
+    require_authenticode(installer)
 
     installer_name = f"Veilark-{args.version_name}.exe"
     sha256 = file_sha256(installer)
@@ -133,6 +153,9 @@ def main() -> None:
     )
     signature = private_key.sign(payload)
     private_key.public_key().verify(signature, payload)
+    notes_payload = payload + b"\n" + args.notes.encode("utf-8")
+    notes_signature = private_key.sign(notes_payload)
+    private_key.public_key().verify(notes_signature, notes_payload)
     manifest = {
         "versionCode": args.version_code,
         "versionName": args.version_name,
@@ -141,6 +164,7 @@ def main() -> None:
         "size": size,
         "notes": args.notes,
         "signature": base64.b64encode(signature).decode("ascii"),
+        "notesSignature": base64.b64encode(notes_signature).decode("ascii"),
     }
 
     OTA_DIR.mkdir(parents=True, exist_ok=True)

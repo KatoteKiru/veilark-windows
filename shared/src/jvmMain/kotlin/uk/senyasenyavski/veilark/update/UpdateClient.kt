@@ -75,9 +75,11 @@ class UpdateClient(
     require(response.body().size <= MAX_MANIFEST_SIZE) {
       "Манифест обновления слишком большой"
     }
-    return parseAndVerify(response.body().toString(Charsets.UTF_8))
-      .takeIf { it.versionCode > currentVersionCode }
+    return parseAvailableUpdate(response.body().toString(Charsets.UTF_8))
   }
+
+  fun parseAvailableUpdate(jsonValue: String): AppUpdate? =
+    parseAndVerify(jsonValue).takeIf { it.versionCode > currentVersionCode }
 
   fun parseAndVerify(jsonValue: String): AppUpdate {
     val json = JSONObject(jsonValue)
@@ -102,7 +104,16 @@ class UpdateClient(
       "Некорректная контрольная сумма"
     }
     requireTrustedUri(URI(update.installerUrl))
-    verifySignature(update, json.getString("signature"))
+    verifySignature(canonicalPayload(update), json.getString("signature"))
+    val notesSignature = json.optString("notesSignature").trim()
+    if (update.versionCode >= SIGNED_NOTES_VERSION_CODE) {
+      require(notesSignature.isNotBlank()) {
+        "Манифест обновления не подписывает описание версии"
+      }
+      verifySignature(canonicalPayloadWithNotes(update), notesSignature)
+    } else if (notesSignature.isNotBlank()) {
+      verifySignature(canonicalPayloadWithNotes(update), notesSignature)
+    }
     return update
   }
 
@@ -261,6 +272,12 @@ class UpdateClient(
     append(update.size)
   }
 
+  fun canonicalPayloadWithNotes(update: AppUpdate): String = buildString {
+    append(canonicalPayload(update))
+    append('\n')
+    append(update.notes)
+  }
+
   private fun requireTrustedUri(uri: URI) {
     require(
       uri.scheme.equals("https", ignoreCase = true) &&
@@ -273,13 +290,13 @@ class UpdateClient(
   private fun effectivePort(uri: URI): Int =
     if (uri.port >= 0) uri.port else if (uri.scheme.equals("https", true)) 443 else -1
 
-  private fun verifySignature(update: AppUpdate, signatureValue: String) {
+  private fun verifySignature(payload: String, signatureValue: String) {
     val key = KeyFactory.getInstance("Ed25519").generatePublic(
       X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)),
     )
     val verifier = Signature.getInstance("Ed25519")
     verifier.initVerify(key)
-    verifier.update(canonicalPayload(update).toByteArray(Charsets.UTF_8))
+    verifier.update(payload.toByteArray(Charsets.UTF_8))
     require(verifier.verify(Base64.getDecoder().decode(signatureValue))) {
       "Подпись манифеста обновления недействительна"
     }
@@ -397,6 +414,7 @@ class UpdateClient(
     private const val MAX_MANIFEST_SIZE = 128 * 1024
     private const val MAX_INSTALLER_SIZE = 300L * 1024L * 1024L
     private const val MAX_NOTES_LENGTH = 4_000
+    private const val SIGNED_NOTES_VERSION_CODE = 312
     private const val BUFFER_SIZE = 128 * 1024
     private const val CANCELLATION_POLL_MILLIS = 100L
     private const val DEFAULT_STALE_DOWNLOAD_AGE_MILLIS = 7L * 24L * 60L * 60L * 1_000L

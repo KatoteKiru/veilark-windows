@@ -16,6 +16,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalPathApi::class)
@@ -55,6 +56,44 @@ class UpdateClientTest {
     assertEquals(update, client.parseAndVerify(manifest))
     assertFailsWith<IllegalArgumentException> {
       client.parseAndVerify(JSONObject(manifest).put("size", 43).toString())
+    }
+  }
+
+  @Test
+  fun `312 manifest keeps legacy compatibility and signs release notes`() {
+    val keys = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    val client = UpdateClient(
+      manifestUri = URI("https://updates.example.test/manifest.json"),
+      publicKeyBase64 = Base64.getEncoder().encodeToString(keys.public.encoded),
+      currentVersionCode = 311,
+      allowedHost = "updates.example.test",
+      allowedPort = 443,
+    )
+    val update = AppUpdate(
+      versionCode = 312,
+      versionName = "0.3.12",
+      installerUrl = "https://updates.example.test/Veilark-0.3.12.exe",
+      sha256 = "B".repeat(64),
+      size = 84,
+      notes = "Signed release notes",
+    )
+    val manifest = manifest(client, update, keys, signNotes = true)
+
+    assertEquals(update, client.parseAvailableUpdate(manifest))
+    assertNull(UpdateClient(
+      manifestUri = URI("https://updates.example.test/manifest.json"),
+      publicKeyBase64 = Base64.getEncoder().encodeToString(keys.public.encoded),
+      currentVersionCode = 312,
+      allowedHost = "updates.example.test",
+      allowedPort = 443,
+    ).parseAvailableUpdate(manifest))
+    assertFailsWith<IllegalArgumentException> {
+      client.parseAndVerify(JSONObject(manifest).put("notes", "tampered").toString())
+    }
+    assertFailsWith<IllegalArgumentException> {
+      client.parseAndVerify(
+        JSONObject(manifest).apply { remove("notesSignature") }.toString(),
+      )
     }
   }
 
@@ -151,9 +190,58 @@ class UpdateClientTest {
   @Test
   fun `published manifest validates when live test is enabled`() {
     if (System.getenv("VEILARK_LIVE_OTA_TEST") != "1") return
-    val update = UpdateClient(currentVersionCode = 0).check()
-    assertNotNull(update)
-    assertTrue(update.versionCode in 1..UpdateClient.CURRENT_VERSION_CODE)
+    val published = assertNotNull(UpdateClient(currentVersionCode = 0).check())
+    assertTrue(published.versionCode in 1..UpdateClient.CURRENT_VERSION_CODE)
+    listOf(304, 305, 306, 307, 308, 310)
+      .filter { it < published.versionCode }
+      .forEach { oldVersion ->
+        assertEquals(
+          published.versionCode,
+          UpdateClient(currentVersionCode = oldVersion).check()?.versionCode,
+          "Published update was not selected for $oldVersion",
+        )
+      }
+    assertNull(UpdateClient(currentVersionCode = published.versionCode).check())
+  }
+
+  @Test
+  fun `published installer downloads and verifies when live test is enabled`() {
+    if (System.getenv("VEILARK_LIVE_OTA_DOWNLOAD_TEST") != "1") return
+    val client = UpdateClient(currentVersionCode = 0)
+    val update = assertNotNull(client.check())
+    val directory = Files.createTempDirectory("veilark-live-ota-download")
+    try {
+      val installer = client.download(update, directory)
+      assertEquals(update.size, Files.size(installer))
+      client.verifyDownloadedInstaller(installer, update)
+    } finally {
+      directory.deleteRecursively()
+    }
+  }
+
+  private fun manifest(
+    client: UpdateClient,
+    update: AppUpdate,
+    keys: java.security.KeyPair,
+    signNotes: Boolean,
+  ): String {
+    fun sign(payload: String): String = Signature.getInstance("Ed25519").run {
+      initSign(keys.private)
+      update(payload.toByteArray(Charsets.UTF_8))
+      Base64.getEncoder().encodeToString(sign())
+    }
+    return JSONObject()
+      .put("versionCode", update.versionCode)
+      .put("versionName", update.versionName)
+      .put("installerUrl", update.installerUrl)
+      .put("sha256", update.sha256)
+      .put("size", update.size)
+      .put("notes", update.notes)
+      .put("signature", sign(client.canonicalPayload(update)))
+      .apply {
+        if (signNotes) put("notesSignature", sign(client.canonicalPayloadWithNotes(update)))
+      }
+      .toString()
   }
 
   private fun client() = UpdateClient()

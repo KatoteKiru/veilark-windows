@@ -10,15 +10,11 @@ using System.Text;
 [assembly: AssemblyCompany("Veilark")]
 [assembly: AssemblyProduct("Veilark")]
 [assembly: AssemblyCopyright("Copyright (c) Veilark")]
-[assembly: AssemblyVersion("0.3.12.0")]
-[assembly: AssemblyFileVersion("0.3.12.0")]
-
 internal static class VeilarkOtaBootstrap
 {
     private const string PayloadResource = "Veilark.InstallerPayload";
-    private const long ExpectedPayloadSize = 130987520L;
-    private const string ExpectedPayloadSha256 =
-        "2AEAAC6FC8E024E3A3266618095FACF3EB19F847DC0E6AFEF3B6A0A92A191C24";
+    private const string PayloadSizeResource = "Veilark.PayloadSize";
+    private const string PayloadSha256Resource = "Veilark.PayloadSha256";
 
     [STAThread]
     private static int Main(string[] args)
@@ -32,16 +28,17 @@ internal static class VeilarkOtaBootstrap
 
         string payloadPath = Path.Combine(
             directory,
-            ".Veilark-0.3.12-payload-" + Process.GetCurrentProcess().Id + ".exe");
+            ".Veilark-payload-" + Process.GetCurrentProcess().Id + ".exe");
 
         try
         {
-            ExtractAndVerifyPayload(payloadPath);
+            PayloadMetadata expected = ReadPayloadMetadata();
+            ExtractAndVerifyPayload(payloadPath, expected);
 
             if (args.Length == 1 &&
                 String.Equals(args[0], "--bootstrap-verify-only", StringComparison.Ordinal))
             {
-                Console.Out.WriteLine(ExpectedPayloadSha256);
+                Console.Out.WriteLine(expected.Sha256);
                 return 0;
             }
 
@@ -73,7 +70,7 @@ internal static class VeilarkOtaBootstrap
         }
     }
 
-    private static void ExtractAndVerifyPayload(string payloadPath)
+    private static void ExtractAndVerifyPayload(string payloadPath, PayloadMetadata expected)
     {
         string temporaryPath = payloadPath + ".tmp";
         DeleteWithRetry(temporaryPath);
@@ -110,8 +107,8 @@ internal static class VeilarkOtaBootstrap
             }
         }
 
-        if (written != ExpectedPayloadSize ||
-            !String.Equals(copiedHash, ExpectedPayloadSha256, StringComparison.Ordinal))
+        if (written != expected.Size ||
+            !String.Equals(copiedHash, expected.Sha256, StringComparison.Ordinal))
         {
             DeleteWithRetry(temporaryPath);
             throw new InvalidDataException("Вложенный установщик Veilark повреждён.");
@@ -124,6 +121,55 @@ internal static class VeilarkOtaBootstrap
 
         File.Move(temporaryPath, payloadPath);
         File.SetAttributes(payloadPath, FileAttributes.Hidden);
+    }
+
+    private static PayloadMetadata ReadPayloadMetadata()
+    {
+        string sizeValue = ReadTextResource(PayloadSizeResource);
+        string sha256 = ReadTextResource(PayloadSha256Resource).ToUpperInvariant();
+        long size;
+        if (!Int64.TryParse(sizeValue, out size) || size <= 0L)
+        {
+            throw new InvalidDataException("В OTA-пакете указан неверный размер установщика.");
+        }
+
+        if (sha256.Length != 64 || !IsUpperHex(sha256))
+        {
+            throw new InvalidDataException("В OTA-пакете указана неверная контрольная сумма.");
+        }
+
+        return new PayloadMetadata(size, sha256);
+    }
+
+    private static string ReadTextResource(string name)
+    {
+        Assembly assembly = Assembly.GetExecutingAssembly();
+        using (Stream stream = assembly.GetManifestResourceStream(name))
+        {
+            if (stream == null)
+            {
+                throw new InvalidDataException("В OTA-пакете отсутствуют метаданные установщика.");
+            }
+
+            using (StreamReader reader = new StreamReader(stream, Encoding.ASCII, false))
+            {
+                return reader.ReadToEnd().Trim();
+            }
+        }
+    }
+
+    private static bool IsUpperHex(string value)
+    {
+        foreach (char character in value)
+        {
+            if (!((character >= '0' && character <= '9') ||
+                  (character >= 'A' && character <= 'F')))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static string BuildArguments(string[] args)
@@ -194,7 +240,7 @@ internal static class VeilarkOtaBootstrap
     {
         try
         {
-            string logPath = Path.Combine(directory, "bootstrap-311.log");
+            string logPath = Path.Combine(directory, "bootstrap.log");
             File.AppendAllText(
                 logPath,
                 DateTime.UtcNow.ToString("O") + " " + error + Environment.NewLine,
@@ -230,5 +276,17 @@ internal static class VeilarkOtaBootstrap
                 System.Threading.Thread.Sleep(200);
             }
         }
+    }
+
+    private sealed class PayloadMetadata
+    {
+        internal PayloadMetadata(long size, string sha256)
+        {
+            Size = size;
+            Sha256 = sha256;
+        }
+
+        internal long Size { get; private set; }
+        internal string Sha256 { get; private set; }
     }
 }
