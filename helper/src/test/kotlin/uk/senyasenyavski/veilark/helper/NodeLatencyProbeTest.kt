@@ -105,6 +105,7 @@ class NodeLatencyProbeTest {
         throw TimeoutException("simulated TCP timeout")
       },
       nanoTime = nowNanos::get,
+      awaitResult = { future, _ -> future.get() },
     )
     val result = requireNotNull(probe.probe(profile)["node"])
 

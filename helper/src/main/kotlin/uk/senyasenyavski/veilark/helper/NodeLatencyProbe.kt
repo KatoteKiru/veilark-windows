@@ -19,6 +19,7 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Callable
 import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.Future
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -36,6 +37,11 @@ class NodeLatencyProbe internal constructor(
   private val resolver: (String) -> Array<InetAddress>,
   private val connector: (InetAddress, Int, Int) -> Unit,
   private val nanoTime: () -> Long = System::nanoTime,
+  private val awaitResult: suspend (Future<*>, Int) -> Unit = { future, timeout ->
+    runInterruptible(Dispatchers.IO) {
+      future.get(timeout.toLong(), TimeUnit.MILLISECONDS)
+    }
+  },
 ) {
   constructor(
     timeoutMillis: Int = 4_000,
@@ -125,9 +131,7 @@ class NodeLatencyProbe internal constructor(
       },
     )
     try {
-      runInterruptible(Dispatchers.IO) {
-        future.get(remainingMillis(deadlineNanos).toLong(), TimeUnit.MILLISECONDS)
-      }
+      awaitResult(future, remainingMillis(deadlineNanos))
     } catch (timeout: TimeoutException) {
       future.cancel(true)
       throw timeout
