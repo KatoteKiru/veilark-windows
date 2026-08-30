@@ -374,20 +374,20 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 311
-    const val CURRENT_VERSION_NAME = "0.3.11"
+    const val CURRENT_VERSION_CODE = 312
+    const val CURRENT_VERSION_NAME = "0.3.12"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.11
-      • Стабильное ядро sing-box обновлено с 1.13.14 до 1.13.19.
-      • Официальный архив Windows проверяется по опубликованному SHA-256 до упаковки.
-      • Формат запроса подписок синхронизирован с версией встроенного ядра.
+      Исправлено и добавлено в 0.3.12
+      • Удалены встроенные профили доступа и старые автоматические подписки.
+      • Подписка и поддержка открываются только через официальный бот Veilark.
+      • Подменённые Telegram-ссылки и дополнительные параметры отклоняются.
       • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.11
-      • The stable sing-box core is updated from 1.13.14 to 1.13.19.
-      • The official Windows archive is verified against its published SHA-256 before packaging.
-      • Subscription request compatibility now matches the bundled core version.
+      Fixed and added in 0.3.12
+      • Embedded access profiles and legacy automatic subscriptions were removed.
+      • Subscription and support open only through the official Veilark bot.
+      • Lookalike Telegram links and extra parameters are rejected.
       • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =

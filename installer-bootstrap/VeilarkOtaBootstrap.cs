@@ -10,8 +10,8 @@ using System.Text;
 [assembly: AssemblyCompany("Veilark")]
 [assembly: AssemblyProduct("Veilark")]
 [assembly: AssemblyCopyright("Copyright (c) Veilark")]
-[assembly: AssemblyVersion("0.3.11.0")]
-[assembly: AssemblyFileVersion("0.3.11.0")]
+[assembly: AssemblyVersion("0.3.12.0")]
+[assembly: AssemblyFileVersion("0.3.12.0")]
 
 internal static class VeilarkOtaBootstrap
 {
@@ -32,7 +32,7 @@ internal static class VeilarkOtaBootstrap
 
         string payloadPath = Path.Combine(
             directory,
-            ".Veilark-0.3.11-payload-" + Process.GetCurrentProcess().Id + ".exe");
+            ".Veilark-0.3.12-payload-" + Process.GetCurrentProcess().Id + ".exe");
 
         try
         {
