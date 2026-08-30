@@ -35,6 +35,7 @@ class NodeLatencyProbe internal constructor(
   private val concurrency: Int = 6,
   private val resolver: (String) -> Array<InetAddress>,
   private val connector: (InetAddress, Int, Int) -> Unit,
+  private val nanoTime: () -> Long = System::nanoTime,
 ) {
   constructor(
     timeoutMillis: Int = 4_000,
@@ -49,6 +50,7 @@ class NodeLatencyProbe internal constructor(
         socket.connect(InetSocketAddress(address, port), connectTimeoutMillis)
       }
     },
+    nanoTime = System::nanoTime,
   )
 
   suspend fun probe(profile: Profile): Map<String, NodeLatency> = coroutineScope {
@@ -114,7 +116,7 @@ class NodeLatencyProbe internal constructor(
   /** Bounds DNS resolution and TCP connect by one wall-clock deadline. */
   private suspend fun probeTcp(host: String, port: Int) {
     require(timeoutMillis > 0) { "Тайм-аут проверки должен быть положительным" }
-    val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
+    val deadlineNanos = nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
     val future = PROBE_EXECUTOR.submit(
       Callable {
         val address = resolver(host).firstOrNull()
@@ -135,7 +137,7 @@ class NodeLatencyProbe internal constructor(
   }
 
   private fun remainingMillis(deadlineNanos: Long): Int {
-    val remainingNanos = deadlineNanos - System.nanoTime()
+    val remainingNanos = deadlineNanos - nanoTime()
     if (remainingNanos <= 0L) throw TimeoutException("Истёк тайм-аут проверки узла")
     return ((remainingNanos + NANOS_PER_MILLISECOND - 1L) / NANOS_PER_MILLISECOND)
       .coerceAtMost(Int.MAX_VALUE.toLong())

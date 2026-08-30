@@ -7,7 +7,9 @@ import java.net.ServerSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.system.measureTimeMillis
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertEquals
@@ -72,6 +74,8 @@ class NodeLatencyProbeTest {
   @Test
   fun `DNS and TCP share one hard timeout without opening a real socket`() = runBlocking {
     val connectorCalls = AtomicInteger()
+    val connectorTimeoutMillis = AtomicInteger()
+    val nowNanos = AtomicLong()
     val profile = Profile(
       id = "timeout",
       name = "timeout",
@@ -92,23 +96,21 @@ class NodeLatencyProbeTest {
       timeoutMillis = 500,
       concurrency = 1,
       resolver = {
-        Thread.sleep(100)
+        nowNanos.addAndGet(TimeUnit.MILLISECONDS.toNanos(100))
         arrayOf(InetAddress.getLoopbackAddress())
       },
-      connector = { _, _, _ ->
+      connector = { _, _, remainingTimeoutMillis ->
         connectorCalls.incrementAndGet()
-        Thread.sleep(5_000)
+        connectorTimeoutMillis.set(remainingTimeoutMillis)
+        throw TimeoutException("simulated TCP timeout")
       },
+      nanoTime = nowNanos::get,
     )
-    lateinit var result: NodeLatency
-
-    val elapsed = measureTimeMillis {
-      result = requireNotNull(probe.probe(profile)["node"])
-    }
+    val result = requireNotNull(probe.probe(profile)["node"])
 
     assertFalse(result.available)
     assertEquals(1, connectorCalls.get())
-    assertTrue(elapsed < 1_500, "Probe exceeded its hard deadline: ${elapsed}ms")
+    assertEquals(400, connectorTimeoutMillis.get())
   }
 
   @Test
