@@ -7,6 +7,8 @@ internal object TelegramBotLink {
   const val DEFAULT_URL = "https://t.me/senyavpn_bot?start=client_windows"
   private const val PROPERTY_NAME = "veilark.telegramBotUrl"
   private const val ENVIRONMENT_NAME = "VEILARK_TELEGRAM_BOT_URL"
+  private const val BOT_PATH = "/senyavpn_bot"
+  private const val START_QUERY = "start=client_windows"
   private val allowedHosts = setOf("t.me", "telegram.me")
 
   fun configuredUrl(): String =
@@ -21,7 +23,11 @@ internal object TelegramBotLink {
     return uri.takeIf {
       it.scheme.equals("https", ignoreCase = true) &&
         host in allowedHosts &&
-        it.userInfo == null
+        it.userInfo == null &&
+        it.port == -1 &&
+        it.rawPath == BOT_PATH &&
+        it.rawQuery == START_QUERY &&
+        it.rawFragment == null
     }
   }
 

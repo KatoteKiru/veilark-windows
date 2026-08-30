@@ -1771,7 +1771,10 @@ private fun EndpointPicker(
   )
 
   Column(modifier) {
-    Box(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+      // Keep the menu readable at normal scale while allowing it to fit
+      // narrow windows and high-DPI layouts without being clipped.
+      val popupWidth = (maxWidth - 16.dp).coerceAtMost(420.dp).coerceAtLeast(220.dp)
       OutlinedButton(
         onClick = {
           query = ""
@@ -1818,7 +1821,7 @@ private fun EndpointPicker(
           expanded = false
           query = ""
         },
-        width = 420.dp,
+        width = popupWidth,
       ) {
         Column(Modifier.fillMaxWidth()) {
           Row(
@@ -1906,7 +1909,10 @@ private fun EndpointPicker(
                   }
                   Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp)
-                      .clickable {
+                      .selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
+                      ) {
                         expanded = false
                         query = ""
                         onSelect(choice.subscriptionId, choice.tag)
@@ -2935,7 +2941,7 @@ private fun ProfilesScreen(
       horizontalArrangement = Arrangement.End,
     ) {
       OutlinedButton(onClick = onOpenSubscriptionAccount) {
-        Text(language.text("Получить / продлить подписку", "Get / renew subscription"))
+        Text(language.text("Подписка и поддержка", "Subscription & support"))
       }
     }
     Row(
@@ -3295,7 +3301,10 @@ private fun NodeDropdown(
     animationSpec = tween(160),
   )
 
-  Box(Modifier.fillMaxWidth().padding(if (compact) 0.dp else 16.dp)) {
+  BoxWithConstraints(Modifier.fillMaxWidth().padding(if (compact) 0.dp else 16.dp)) {
+    // The picker is anchored to the content area, so cap it to the available
+    // width instead of letting a 420 dp popup overflow on scaled displays.
+    val popupWidth = (maxWidth - 16.dp).coerceAtMost(420.dp).coerceAtLeast(220.dp)
     OutlinedButton(
       onClick = {
         query = ""
@@ -3339,7 +3348,7 @@ private fun NodeDropdown(
         expanded = false
         query = ""
       },
-      width = 420.dp,
+      width = popupWidth,
     ) {
       Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -3371,7 +3380,10 @@ private fun NodeDropdown(
               val selected = tag == activeTag
               Surface(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
-                  .clickable {
+                  .selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                  ) {
                     expanded = false
                     query = ""
                     onSelectNode(tag)
@@ -4320,7 +4332,9 @@ private fun ImportDialog(
           minLines = 3,
           maxLines = 8,
           shape = RoundedCornerShape(16.dp),
-          placeholder = { Text("https://… · vless://… · tt://…") },
+          placeholder = {
+            Text(language.text("Ссылка или конфигурация", "Link or configuration"))
+          },
         )
       }
     },

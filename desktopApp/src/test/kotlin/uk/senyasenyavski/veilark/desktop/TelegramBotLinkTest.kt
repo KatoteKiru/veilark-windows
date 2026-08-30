@@ -23,6 +23,11 @@ class TelegramBotLinkTest {
     assertNull(TelegramBotLink.validate("tg://resolve?domain=senyavpn_bot"))
     assertNull(TelegramBotLink.validate("https://t.me.evil.example/senyavpn_bot"))
     assertNull(TelegramBotLink.validate("https://user@t.me/senyavpn_bot"))
+    assertNull(TelegramBotLink.validate("https://t.me/another_bot?start=client_windows"))
+    assertNull(TelegramBotLink.validate("https://t.me/senyavpn_bot"))
+    assertNull(TelegramBotLink.validate("https://t.me/senyavpn_bot?start=client_windows&next=evil"))
+    assertNull(TelegramBotLink.validate("https://t.me:443/senyavpn_bot?start=client_windows"))
+    assertNull(TelegramBotLink.validate("https://t.me/senyavpn_bot?start=client_windows#fragment"))
     assertNull(TelegramBotLink.validate("not a url"))
   }
 }
