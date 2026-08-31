@@ -30,6 +30,7 @@ class SingleInstanceGate(
   private var server: ServerSocket? = null
   private val activationHandler = AtomicReference<(() -> Unit)?>(null)
   private val activationPending = AtomicBoolean(false)
+  private val activationStateLock = Any()
   private val closed = AtomicBoolean(false)
   private var token: String? = null
 
@@ -40,8 +41,11 @@ class SingleInstanceGate(
   }
 
   fun setActivationHandler(handler: () -> Unit) {
-    activationHandler.set(handler)
-    if (activationPending.getAndSet(false)) SwingUtilities.invokeLater(handler)
+    val dispatchPending = synchronized(activationStateLock) {
+      activationHandler.set(handler)
+      activationPending.getAndSet(false)
+    }
+    if (dispatchPending) dispatchActivation(handler)
   }
 
   fun notifyPrimary(): Boolean {
@@ -110,17 +114,26 @@ class SingleInstanceGate(
           val received = runCatching {
             socket.getInputStream().bufferedReader().readLine()
           }.getOrNull()
-          if (received == activationToken) {
-            val handler = activationHandler.get()
-            if (handler == null) {
-              activationPending.set(true)
-            } else {
-              SwingUtilities.invokeLater(handler)
-            }
-          }
+          if (received == activationToken) enqueueActivation()
         }
       }
     }
+  }
+
+  private fun enqueueActivation() {
+    val handler = synchronized(activationStateLock) {
+      activationHandler.get()?.also {
+        activationPending.set(false)
+      } ?: run {
+        activationPending.set(true)
+        null
+      }
+    }
+    handler?.let(::dispatchActivation)
+  }
+
+  private fun dispatchActivation(handler: () -> Unit) {
+    if (!closed.get()) SwingUtilities.invokeLater(handler)
   }
 
   private fun readEndpoint(): Pair<Int, String>? = runCatching {

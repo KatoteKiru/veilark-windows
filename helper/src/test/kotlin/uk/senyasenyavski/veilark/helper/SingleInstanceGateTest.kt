@@ -35,4 +35,28 @@ class SingleInstanceGateTest {
       Files.deleteIfExists(directory)
     }
   }
+
+  @Test
+  fun `activation received before handler registration is delivered`() {
+    val directory = Files.createTempDirectory("veilark-instance-pending-test")
+    val lockPath = directory.resolve("instance.lock")
+    try {
+      val activated = CountDownLatch(1)
+      SingleInstanceGate(lockPath).use { primary ->
+        assertTrue(primary.isPrimary)
+
+        SingleInstanceGate(lockPath).use { secondary ->
+          assertFalse(secondary.isPrimary)
+          assertTrue(secondary.notifyPrimary())
+        }
+
+        primary.setActivationHandler { activated.countDown() }
+        assertTrue(activated.await(3, TimeUnit.SECONDS))
+      }
+    } finally {
+      Files.deleteIfExists(lockPath.resolveSibling("${lockPath.fileName}.endpoint"))
+      Files.deleteIfExists(lockPath)
+      Files.deleteIfExists(directory)
+    }
+  }
 }
