@@ -66,12 +66,7 @@ internal object TrustTunnelRouting {
 
   internal fun apply(source: String, plan: TrustTunnelRoutingPlan): String {
     require(plan.vpnMode == "general" || plan.vpnMode == "selective")
-    require(source.lineSequence().any { it.trim() == "[endpoint]" }) {
-      "TrustTunnel не создал секцию endpoint"
-    }
-    require(source.lineSequence().any { it.trim() == "[listener.tun]" }) {
-      "TrustTunnel не создал TUN-конфигурацию"
-    }
+    validateNativeConfigContract(source)
     val lines = source.replace("\r\n", "\n").split('\n')
     val firstSection = lines.indexOfFirst { TABLE_HEADER.matches(it) }
     check(firstSection >= 0)
@@ -94,7 +89,34 @@ internal object TrustTunnelRouting {
       .trimEnd() + "\n"
     // Preserve the endpoint's MTU. TrustTunnel 1.1.5 defaults to 1350 and
     // imported subscriptions may deliberately choose another tested value.
-    return ensureTableAssignment(routed, "[listener.tun]", "change_system_dns", "true")
+    val result = ensureTableAssignment(routed, "[listener.tun]", "change_system_dns", "true")
+    validateNativeConfigContract(result)
+    return result
+  }
+
+  /**
+   * TrustTunnel 1.1.5 has no check-only CLI command. Keep this mandatory
+   * contract before any adapter cleanup, while the official client remains
+   * the final native TOML parser when it is started below.
+   */
+  internal fun validateNativeConfigContract(source: String) {
+    val normalized = source.replace("\r\n", "\n")
+    require(normalized.lineSequence().count { it.trim() == "[endpoint]" } == 1) {
+      "TrustTunnel не создал единственную секцию endpoint"
+    }
+    require(normalized.lineSequence().count { it.trim() == "[listener.tun]" } == 1) {
+      "TrustTunnel не создал единственную TUN-конфигурацию"
+    }
+    require(normalized.lineSequence().none { it.trimStart().startsWith("tt://") }) {
+      "TrustTunnel deeplink не был преобразован setup wizard"
+    }
+    require(normalized.lineSequence().any { line ->
+      line.trimStart().startsWith("endpoint =") ||
+        line.trim().startsWith("hostname =") ||
+        line.trim().startsWith("addresses =")
+    }) {
+      "TrustTunnel endpoint не содержит адрес"
+    }
   }
 
   private fun requiredGeoExclusions(profile: Profile): List<String> =

@@ -45,6 +45,7 @@ class TrustTunnelProcessController(
       prepareConfig(profile.config, wizard)
       // tt:// and endpoint TOML must first be expanded by the official wizard;
       // routing is then applied to the complete generated client settings.
+      TrustTunnelRouting.validateNativeConfigContract(Files.readString(trustConfig, Charsets.UTF_8))
       TrustTunnelRouting.apply(trustConfig, routingPlan)
       CoreProcessJanitor.terminateOrphans(client)
       WinTunJanitor.removeGhostAdapters()

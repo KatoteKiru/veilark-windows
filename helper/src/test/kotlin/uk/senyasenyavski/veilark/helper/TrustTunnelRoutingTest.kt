@@ -82,6 +82,21 @@ class TrustTunnelRoutingTest {
     }
   }
 
+  @Test
+  fun `native config contract rejects an unexpanded deeplink`() {
+    assertFailsWith<IllegalArgumentException> {
+      TrustTunnelRouting.validateNativeConfigContract(
+        """
+        [endpoint]
+        hostname = "vpn.example.test"
+        [listener.tun]
+        bound_if = ""
+        tt://not-expanded
+        """.trimIndent(),
+      )
+    }
+  }
+
   private fun profile(mode: RoutingMode) = Profile(
     id = "trust",
     name = "TrustTunnel",
