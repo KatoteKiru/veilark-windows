@@ -20,9 +20,9 @@ class GeoRoutingUnavailableException internal constructor(message: String) :
   IllegalStateException(message)
 
 /**
- * The installer ships a hash-pinned RU rule-set snapshot. Both public methods
- * are therefore local-only: selecting split routing never depends on GitHub
- * being reachable and never delays connection with a network download.
+ * The installer ships a hash-pinned RU rule-set snapshot. Connections always
+ * use the last validated local generation. A network refresh happens only
+ * after an explicit user action and atomically publishes both rule sets.
  */
 class GeoRoutingPreflight(
   executableOverride: Path? = null,
@@ -36,7 +36,7 @@ class GeoRoutingPreflight(
     bundledDirectory = resolveBundledDirectory(bundledDirectoryOverride),
   )
 
-  suspend fun refresh(): GeoRoutingAssets = safely(MISSING_ERROR) { cache.loadValidOrSeed() }
+  suspend fun refresh(): GeoRoutingAssets = safely(UPDATE_ERROR) { cache.refresh() }
 
   suspend fun requirePrepared(routing: RoutingSettings): GeoRoutingAssets? {
     if (!routing.mode.requiresGeoData) return null
@@ -53,6 +53,8 @@ class GeoRoutingPreflight(
   }
 
   private companion object {
+    const val UPDATE_ERROR =
+      "Не удалось обновить геоданные. Предыдущая проверенная версия сохранена."
     const val MISSING_ERROR =
       "Геоданные маршрутизации не готовы. Обновите их и повторите подключение."
     fun resolveSingBox(override: Path?): Path {
@@ -113,13 +115,14 @@ internal class GeoRuleSetCache(
         val geoIp = staging.resolve(GEOIP.fileName)
         val geoSite = staging.resolve(GEOSITE.fileName)
         downloader.download(GEOIP.url, geoIp)
-        validateBinary(geoIp, GEOIP)
+        validateBinary(geoIp)
         downloader.download(GEOSITE.url, geoSite)
-        validateBinary(geoSite, GEOSITE)
+        validateBinary(geoSite)
         val exclusions = validateAndExtract(geoIp, geoSite, staging)
+        val digests = RuleSetDigests(sha256(geoIp), sha256(geoSite))
 
         Files.move(staging, completed, StandardCopyOption.ATOMIC_MOVE)
-        publishManifest(generation)
+        publishManifest(generation, digests)
         assets(completed, exclusions)
       } finally {
         deleteStaging(staging)
@@ -140,13 +143,13 @@ internal class GeoRuleSetCache(
   }
 
   private suspend fun loadValidUnlocked(): GeoRoutingAssets {
-    val generation = readGeneration()
-    val generationDirectory = directory.resolve(generation).normalize()
+    val manifest = readManifest()
+    val generationDirectory = directory.resolve(manifest.generation).normalize()
     check(generationDirectory.parent == directory.normalize())
     val geoIp = generationDirectory.resolve(GEOIP.fileName)
     val geoSite = generationDirectory.resolve(GEOSITE.fileName)
-    validateBinary(geoIp, GEOIP)
-    validateBinary(geoSite, GEOSITE)
+    validateBinary(geoIp, manifest.digests.geoIp)
+    validateBinary(geoSite, manifest.digests.geoSite)
     return assets(
       generationDirectory,
       validateAndExtract(geoIp, geoSite, generationDirectory),
@@ -157,8 +160,8 @@ internal class GeoRuleSetCache(
     val sourceDirectory = bundledDirectory ?: error("bundled geo data unavailable")
     val sourceGeoIp = sourceDirectory.resolve(GEOIP.fileName)
     val sourceGeoSite = sourceDirectory.resolve(GEOSITE.fileName)
-    validateBinary(sourceGeoIp, GEOIP)
-    validateBinary(sourceGeoSite, GEOSITE)
+    validateBinary(sourceGeoIp, GEOIP.bundledSha256)
+    validateBinary(sourceGeoSite, GEOSITE.bundledSha256)
     Files.createDirectories(directory)
     val generation = UUID.randomUUID().toString().replace("-", "")
     val staging = directory.resolve(".staging-$generation")
@@ -169,11 +172,12 @@ internal class GeoRuleSetCache(
       val geoSite = staging.resolve(GEOSITE.fileName)
       Files.copy(sourceGeoIp, geoIp)
       Files.copy(sourceGeoSite, geoSite)
-      validateBinary(geoIp, GEOIP)
-      validateBinary(geoSite, GEOSITE)
+      validateBinary(geoIp, GEOIP.bundledSha256)
+      validateBinary(geoSite, GEOSITE.bundledSha256)
       val exclusions = validateAndExtract(geoIp, geoSite, staging)
+      val digests = RuleSetDigests(sha256(geoIp), sha256(geoSite))
       Files.move(staging, completed, StandardCopyOption.ATOMIC_MOVE)
-      publishManifest(generation)
+      publishManifest(generation, digests)
       return assets(completed, exclusions)
     } finally {
       deleteStaging(staging)
@@ -211,11 +215,16 @@ internal class GeoRuleSetCache(
     trustTunnelExclusions = exclusions,
   )
 
-  private fun publishManifest(generation: String) {
+  private fun publishManifest(generation: String, digests: RuleSetDigests) {
     val temporary = directory.resolve("$MANIFEST.tmp")
     Files.writeString(
       temporary,
-      JSONObject().put("version", MANIFEST_VERSION).put("generation", generation).toString(),
+      JSONObject()
+        .put("version", MANIFEST_VERSION)
+        .put("generation", generation)
+        .put("geoip_sha256", digests.geoIp)
+        .put("geosite_sha256", digests.geoSite)
+        .toString(),
       Charsets.UTF_8,
     )
     Files.move(
@@ -226,18 +235,23 @@ internal class GeoRuleSetCache(
     )
   }
 
-  private fun readGeneration(): String {
+  private fun readManifest(): GenerationManifest {
     val manifest = directory.resolve(MANIFEST)
     check(Files.isRegularFile(manifest) && Files.size(manifest) in 1..MAX_MANIFEST_BYTES)
     val root = JSONObject(Files.readString(manifest, Charsets.UTF_8))
     check(root.getInt("version") == MANIFEST_VERSION)
-    return root.getString("generation").also { check(it.matches(GENERATION)) }
+    val generation = root.getString("generation").also { check(it.matches(GENERATION)) }
+    val geoIp = root.getString("geoip_sha256").also { check(it.matches(SHA256)) }
+    val geoSite = root.getString("geosite_sha256").also { check(it.matches(SHA256)) }
+    return GenerationManifest(generation, RuleSetDigests(geoIp, geoSite))
   }
 
-  private fun validateBinary(path: Path, asset: Asset) {
+  private fun validateBinary(path: Path, expectedSha256: String? = null) {
     check(Files.isRegularFile(path) && Files.size(path) in 1..MAX_SRS_BYTES)
-    if (verifyOfficialHashes) {
-      check(sha256(path) == asset.sha256) { "unexpected rule-set digest" }
+    if (verifyOfficialHashes && expectedSha256 != null) {
+      check(sha256(path).equals(expectedSha256, ignoreCase = true)) {
+        "unexpected rule-set digest"
+      }
     }
   }
 
@@ -263,26 +277,31 @@ internal class GeoRuleSetCache(
   private data class Asset(
     val fileName: String,
     val url: String,
-    val sha256: String,
+    val bundledSha256: String,
+  )
+
+  private data class RuleSetDigests(val geoIp: String, val geoSite: String)
+  private data class GenerationManifest(
+    val generation: String,
+    val digests: RuleSetDigests,
   )
 
   private companion object {
     val GEOIP = Asset(
       "geoip-ru.srs",
-      "https://raw.githubusercontent.com/SagerNet/sing-geoip/" +
-        "b9c5e675b4d5359d4b47f4434fa7ae77e9991306/geoip-ru.srs",
+      "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
       "1A8115AF741918FF24B37B87D3C6DA21ECCABC58F1EEC059E461DCA8BAC16FF7",
     )
     val GEOSITE = Asset(
       "geosite-category-ru.srs",
-      "https://raw.githubusercontent.com/SagerNet/sing-geosite/" +
-        "a70ce9f1f078f129cd40500f0bc0aee6eb6d59cd/" +
+      "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/" +
         "geosite-category-ru.srs",
       "C36E157ADF86EDF7B722B51F3ACB93BBB2A7F8083932DAE29B4B5EF2C1CED870",
     )
     val GENERATION = Regex("""[0-9a-f]{32}""")
+    val SHA256 = Regex("""[0-9A-Fa-f]{64}""")
     const val MANIFEST = "current.json"
-    const val MANIFEST_VERSION = 1
+    const val MANIFEST_VERSION = 2
     const val MAX_MANIFEST_BYTES = 4_096L
     const val MAX_SRS_BYTES = 32L * 1024 * 1024
   }

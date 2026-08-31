@@ -445,14 +445,18 @@ private fun VeilarkApp(
     }
   }
 
-  LaunchedEffect(routingSettings.mode) {
-    if (
-      routingSettings.mode == RoutingMode.RussiaDirect ||
-      routingSettings.mode == RoutingMode.RussiaVpn
-    ) {
-      geoRefreshing = true
+  fun refreshGeoData() {
+    if (geoRefreshing || configurationLocked) return
+    geoRefreshing = true
+    scope.launch {
       try {
         withContext(Dispatchers.IO) { geoPreflight.value.refresh() }
+        snackbar.showSnackbar(
+          language.text(
+            "Геоданные обновлены. Новые правила применятся при следующем подключении.",
+            "Geo data updated. New rules will apply on the next connection.",
+          ),
+        )
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (error: Throwable) {
@@ -996,6 +1000,7 @@ private fun VeilarkApp(
             hasSingBoxProfile = profiles[VpnEngine.SingBox] != null,
             configurationEnabled = !configurationLocked,
             geoRefreshing = geoRefreshing,
+            onRefreshGeo = ::refreshGeoData,
             onSave = { updated ->
               if (configurationLockedNow()) {
                 scope.launch { snackbar.showSnackbar(language.text("Сначала остановите VPN", "Stop VPN first")) }
@@ -3495,6 +3500,7 @@ private fun RoutingScreen(
   hasSingBoxProfile: Boolean,
   configurationEnabled: Boolean,
   geoRefreshing: Boolean,
+  onRefreshGeo: () -> Unit,
   onSave: (RoutingSettings) -> Unit,
 ) {
   val language = LocalUiLanguage.current
@@ -3518,10 +3524,26 @@ private fun RoutingScreen(
     PageHeader(
       language.text("Маршрутизация", "Routing"),
       language.text(
-        "Один понятный маршрут для sing-box и TrustTunnel",
-        "One clear routing policy for sing-box and TrustTunnel",
+        "Готовые режимы и собственные правила direct/VPN",
+        "Presets and custom direct/VPN rules",
       ),
       action = {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(
+            onClick = onRefreshGeo,
+            enabled = configurationEnabled && !geoRefreshing,
+            shape = RoundedCornerShape(12.dp),
+          ) {
+            if (geoRefreshing) {
+              CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+            } else {
+              Icon(Icons.Rounded.Refresh, null, Modifier.size(17.dp))
+            }
+            Text(
+              language.text("Обновить GEO", "Update GEO"),
+              Modifier.padding(start = 7.dp),
+            )
+          }
         Button(
           onClick = {
             onSave(
@@ -3541,12 +3563,8 @@ private fun RoutingScreen(
           enabled = enabled,
           shape = RoundedCornerShape(12.dp),
         ) {
-          if (geoRefreshing) {
-            CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-            Text(language.text("Обновляем геоданные", "Updating geo data"), Modifier.padding(start = 7.dp))
-          } else {
-            Text(language.text("Сохранить", "Save"))
-          }
+          Text(language.text("Сохранить", "Save"))
+        }
         }
       },
     )
