@@ -110,6 +110,43 @@ class ProfileConfigurationTest {
   }
 
   @Test
+  fun `Russia direct keeps foreign traffic on VPN and RU DNS local`() {
+    val compiled = SubscriptionParser().compile(
+      "trojan://secret@203.0.113.2:443?security=tls&sni=example.com#NL".toByteArray(),
+    )
+    val selectedTag = compiled.nodes.single().tag
+    val configured = ProfileConfiguration.apply(
+      Profile(
+        "id",
+        "profile",
+        VpnEngine.SingBox,
+        compiled.json,
+        compiled.nodes.map { Node(it.tag, it.name, it.protocol) },
+        "test",
+      ),
+      RoutingSettings(mode = RoutingMode.RussiaDirect),
+      selectedTag,
+      geoAssets(),
+    )
+    val root = JSONObject(configured.config)
+    val route = root.getJSONObject("route")
+    val geoRule = route.getJSONArray("rules").getJSONObject(3)
+    assertEquals(selectedTag, route.getString("final"))
+    assertEquals("route", geoRule.getString("action"))
+    assertEquals("direct", geoRule.getString("outbound"))
+    val dns = root.getJSONObject("dns")
+    assertEquals("secure-dns", dns.getString("final"))
+    assertEquals(
+      "bootstrap-dns",
+      dns.getJSONArray("rules").getJSONObject(0).getString("server"),
+    )
+    assertEquals(
+      selectedTag,
+      dns.getJSONArray("servers").getJSONObject(1).getString("detour"),
+    )
+  }
+
+  @Test
   fun `Russia VPN routes only Russian rule sets through selected node`() {
     val compiled = SubscriptionParser().compile(
       "trojan://secret@203.0.113.2:443?security=tls&sni=example.com#NL".toByteArray(),
