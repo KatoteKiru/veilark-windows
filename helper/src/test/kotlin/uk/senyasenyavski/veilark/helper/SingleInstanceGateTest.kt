@@ -3,11 +3,21 @@ package uk.senyasenyavski.veilark.helper
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.swing.SwingUtilities
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SingleInstanceGateTest {
+  @BeforeTest
+  fun warmUpEventDispatchThread() {
+    // notifyPrimary confirms socket delivery; activation itself is queued on the EDT.
+    if (!SwingUtilities.isEventDispatchThread()) {
+      SwingUtilities.invokeAndWait { }
+    }
+  }
+
   @Test
   fun `secondary instance activates primary and lock is reusable`() {
     val directory = Files.createTempDirectory("veilark-instance-test")
