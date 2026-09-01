@@ -23,7 +23,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
       - shell: powershell
         run: .\scripts\bootstrap-runtime.ps1
       - name: Validate OTA publisher
