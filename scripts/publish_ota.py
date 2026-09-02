@@ -23,6 +23,8 @@ UPDATE_ORIGIN = "https://nl2.senyasenyavski.uk:2096"
 UPLOAD_CHUNK_SIZE = 256 * 1024
 UPLOAD_ATTEMPTS = 8
 MAX_NOTES_LENGTH = 4_000
+KNOWN_HOSTS = WORKSPACE / "secrets" / "vpn-production-known-hosts"
+DEPLOY_KEY = WORKSPACE / "secrets" / "veilark-automation-ed25519-20260831"
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -38,12 +40,17 @@ def read_env(path: Path) -> dict[str, str]:
 
 def connect_node(env: dict[str, str]) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
+    if KNOWN_HOSTS.is_file():
+        client.load_host_keys(str(KNOWN_HOSTS))
     client.load_system_host_keys()
     client.set_missing_host_key_policy(paramiko.RejectPolicy())
     client.connect(
         env["NETHERLANDS_NEW_HOST"],
         username=env["NETHERLANDS_NEW_USER"],
-        password=env["NETHERLANDS_NEW_PASSWORD"],
+        key_filename=str(DEPLOY_KEY) if DEPLOY_KEY.is_file() else None,
+        password=None if DEPLOY_KEY.is_file() else env["NETHERLANDS_NEW_PASSWORD"],
+        look_for_keys=False,
+        allow_agent=False,
         timeout=20,
         banner_timeout=20,
         auth_timeout=20,
@@ -52,18 +59,18 @@ def connect_node(env: dict[str, str]) -> paramiko.SSHClient:
     return client
 
 
-def require_authenticode(path: Path) -> None:
+def authenticode_status(path: Path) -> str:
     command = (
         "$signature = Get-AuthenticodeSignature -LiteralPath $args[0]; "
-        "if ($signature.Status -ne 'Valid') { "
-        "throw ('Authenticode status: ' + $signature.Status) }"
+        "$signature.Status.ToString()"
     )
-    subprocess.run(
+    result = subprocess.run(
         ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command, str(path)],
         check=True,
         capture_output=True,
         text=True,
     )
+    return result.stdout.strip()
 
 
 def file_sha256(path: Path) -> str:
@@ -128,6 +135,14 @@ def main() -> None:
     parser.add_argument("--version-code", type=int, required=True)
     parser.add_argument("--version-name", required=True)
     parser.add_argument("--notes", required=True)
+    parser.add_argument(
+        "--allow-unsigned-windows-publisher",
+        action="store_true",
+        help=(
+            "Publish an installer without a trusted Authenticode identity. "
+            "The Ed25519 manifest signature and SHA-256 checks remain mandatory."
+        ),
+    )
     args = parser.parse_args()
 
     installer = args.installer.resolve()
@@ -137,7 +152,15 @@ def main() -> None:
         raise ValueError("Invalid version")
     if len(args.notes) > MAX_NOTES_LENGTH:
         raise ValueError("Release notes exceed the client limit")
-    require_authenticode(installer)
+    publisher_status = authenticode_status(installer)
+    if publisher_status != "Valid":
+        if not args.allow_unsigned_windows_publisher:
+            raise RuntimeError(f"Authenticode status: {publisher_status}")
+        if publisher_status != "NotSigned":
+            raise RuntimeError(
+                "Only a clean unsigned installer may use the explicit publisher override; "
+                f"current status: {publisher_status}"
+            )
 
     installer_name = f"Veilark-{args.version_name}.exe"
     sha256 = file_sha256(installer)
@@ -243,6 +266,7 @@ def main() -> None:
                 "installerUrl": installer_url,
                 "sha256": sha256,
                 "size": size,
+                "authenticode": publisher_status,
             },
             ensure_ascii=False,
         )
