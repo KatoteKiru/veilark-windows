@@ -192,7 +192,7 @@ class UpdateClientTest {
     if (System.getenv("VEILARK_LIVE_OTA_TEST") != "1") return
     val published = assertNotNull(UpdateClient(currentVersionCode = 0).check())
     assertTrue(published.versionCode in 1..UpdateClient.CURRENT_VERSION_CODE)
-    listOf(304, 305, 306, 307, 308, 310)
+    listOf(304, 305, 306, 307, 308, 310, 311)
       .filter { it < published.versionCode }
       .forEach { oldVersion ->
         assertEquals(
