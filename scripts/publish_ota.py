@@ -4,6 +4,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import shlex
 import shutil
@@ -60,15 +61,22 @@ def connect_node(env: dict[str, str]) -> paramiko.SSHClient:
 
 
 def authenticode_status(path: Path) -> str:
+    quoted_path = str(path).replace("'", "''")
     command = (
-        "$signature = Get-AuthenticodeSignature -LiteralPath $args[0]; "
-        "$signature.Status.ToString()"
+        "Import-Module Microsoft.PowerShell.Security -ErrorAction Stop; "
+        f"(Get-AuthenticodeSignature -LiteralPath '{quoted_path}').Status.ToString()"
+    )
+    environment = os.environ.copy()
+    environment["PSModulePath"] = str(
+        Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        / "System32" / "WindowsPowerShell" / "v1.0" / "Modules"
     )
     result = subprocess.run(
-        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command, str(path)],
+        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
         check=True,
         capture_output=True,
         text=True,
+        env=environment,
     )
     return result.stdout.strip()
 
