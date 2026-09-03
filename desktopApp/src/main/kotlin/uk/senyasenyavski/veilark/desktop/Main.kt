@@ -144,6 +144,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import com.example.veilark.profile.ImportDeepLink
 import com.example.veilark.profile.ProfileSelection
 import uk.senyasenyavski.veilark.helper.VeilarkPaths
 import uk.senyasenyavski.veilark.helper.ActiveTunnelConflict
@@ -154,6 +155,7 @@ import uk.senyasenyavski.veilark.helper.ProfileLoadResult
 import uk.senyasenyavski.veilark.helper.ProfileLifecycle
 import uk.senyasenyavski.veilark.helper.ProfileRemovalResult
 import uk.senyasenyavski.veilark.helper.SingleInstanceGate
+import uk.senyasenyavski.veilark.helper.UrlProtocolRegistration
 import uk.senyasenyavski.veilark.helper.NodeLatency
 import uk.senyasenyavski.veilark.helper.NodeLatencyProbe
 import uk.senyasenyavski.veilark.helper.StoredProfiles
@@ -203,14 +205,18 @@ fun main(args: Array<String>) {
       SafeLog.writeThrowable("Необработанная ошибка в потоке ${thread.name}", error)
     }
   }
+  // `veilark://import?url=...` arrives as a single argument from the shell protocol
+  // handler. The inner URL is a bearer credential and is never written to the log.
+  val importLink = ImportDeepLink.fromArguments(args.asList())
   val instanceGate = SingleInstanceGate(
     waitForPrimaryMillis = if ("--connect" in args) 8_000 else 0,
   )
   if (!instanceGate.isPrimary) {
-    instanceGate.notifyPrimary()
+    instanceGate.notifyPrimary(importLink)
     instanceGate.close()
     exitProcess(0)
   }
+  UrlProtocolRegistration().ensureRegistered()
   try {
     application {
   val session = remember {
@@ -220,7 +226,8 @@ fun main(args: Array<String>) {
   val actions = remember { DesktopActions() }
   val sessionState by session.state.collectAsState()
   val trayState = rememberTrayState()
-  var windowVisible by remember { mutableStateOf("--minimized" !in args) }
+  var windowVisible by remember { mutableStateOf("--minimized" !in args || importLink != null) }
+  var externalImportRequest by remember { mutableStateOf(importLink) }
   var language by remember { mutableStateOf(UiLanguageStore.load()) }
   val connected = sessionState.phase is VpnPhase.Connected ||
     sessionState.phase is VpnPhase.Degraded
@@ -230,7 +237,10 @@ fun main(args: Array<String>) {
   val busy = connecting || stopping
 
   DisposableEffect(instanceGate) {
-    instanceGate.setActivationHandler { windowVisible = true }
+    instanceGate.setActivationHandler { forwardedImportLink ->
+      windowVisible = true
+      forwardedImportLink?.let { externalImportRequest = it }
+    }
     onDispose { instanceGate.setActivationHandler {} }
   }
 
@@ -342,6 +352,8 @@ fun main(args: Array<String>) {
           elevationManager = elevationManager,
           desktopActions = actions,
           connectOnLaunch = "--connect" in args,
+          externalImportUrl = externalImportRequest,
+          onExternalImportConsumed = { externalImportRequest = null },
           onLanguage = { selected ->
             language = selected
             runCatching { UiLanguageStore.save(selected) }
@@ -366,6 +378,8 @@ private fun VeilarkApp(
   elevationManager: ElevationManager,
   desktopActions: DesktopActions,
   connectOnLaunch: Boolean,
+  externalImportUrl: String?,
+  onExternalImportConsumed: () -> Unit,
   onLanguage: (UiLanguage) -> Unit,
   onExit: () -> Unit,
 ) {
@@ -415,6 +429,7 @@ private fun VeilarkApp(
     mutableStateOf(storedProfiles.selectedNodeTags)
   }
   var importDialog by remember { mutableStateOf(false) }
+  var importDraft by remember { mutableStateOf("") }
   var pendingDelete by remember { mutableStateOf<SubscriptionRecord?>(null) }
   var importing by remember { mutableStateOf(false) }
   var refreshing by remember { mutableStateOf(false) }
@@ -824,6 +839,20 @@ private fun VeilarkApp(
     }
   }
 
+  // A validated `veilark://import` deep link opens the same reviewed import dialog
+  // prefilled with its payload. The request is cleared immediately so that a
+  // recomposition cannot reopen the dialog with a stale value.
+  LaunchedEffect(externalImportUrl) {
+    val value = externalImportUrl ?: return@LaunchedEffect
+    onExternalImportConsumed()
+    if (configurationLockedNow() || importing || refreshing) {
+      snackbar.showSnackbar(language.text("Сначала отключите VPN", "Disconnect VPN first"))
+    } else {
+      importDraft = value
+      importDialog = true
+    }
+  }
+
   SideEffect {
     desktopActions.connect = ::connect
     desktopActions.disconnect = ::disconnect
@@ -907,7 +936,10 @@ private fun VeilarkApp(
               connect()
             },
             onDisconnect = ::disconnect,
-            onImport = { importDialog = true },
+            onImport = {
+              importDraft = ""
+              importDialog = true
+            },
             subscriptions = subscriptions,
             activeSubscriptionId = selectedSubscriptionIds[selectedEngine],
             onSelectEndpoint = { subscriptionId, nodeTag ->
@@ -1062,7 +1094,13 @@ private fun VeilarkApp(
   if (importDialog) {
     ImportDialog(
       importing = importing,
-      onDismiss = { if (!importing) importDialog = false },
+      initialValue = importDraft,
+      onDismiss = {
+        if (!importing) {
+          importDialog = false
+          importDraft = ""
+        }
+      },
       onImport = { value ->
         importing = true
         scope.launch {
@@ -4327,9 +4365,10 @@ private fun ImportDialog(
   importing: Boolean,
   onDismiss: () -> Unit,
   onImport: (String) -> Unit,
+  initialValue: String = "",
 ) {
   val language = LocalUiLanguage.current
-  var value by remember { mutableStateOf("") }
+  var value by remember(initialValue) { mutableStateOf(initialValue) }
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text(language.text("Добавить профиль", "Add profile")) },
