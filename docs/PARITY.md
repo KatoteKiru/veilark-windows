@@ -6,7 +6,7 @@ Status values: **yes**, **partial**, **planned**, **Android-only**.
 |---|---:|---|
 | Native desktop UI | yes | Compose Desktop, 600×440 shell, hamburger navigation and gear settings |
 | sing-box 1.13.19 | yes | Official Windows amd64 binary, pinned SHA-256 |
-| TrustTunnel 1.1.5-rc.6 | partial | Official pinned Windows x86_64 client/setup wizard; config and package gates pass, elevated 0.3.8 traffic QA is user-run |
+| TrustTunnel 1.1.5 | partial | Official stable pinned Windows x86_64 client/setup wizard; source/package gates pass, elevated traffic QA remains user-run |
 | Connect / disconnect facade | partial | Both runtimes and watchdog verified; isolated sing-box full-TUN route QA waits for competing Happ VPN to be closed |
 | UAC elevation | yes | Connect relaunches packaged Veilark with `runas` and resumes automatically |
 | HTTPS subscription import | yes | HTTPS-only, 4 MiB bound, rejects HTML; negotiates sing-box responses with Remnawave and modern x-ui |

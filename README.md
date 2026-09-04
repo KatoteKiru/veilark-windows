@@ -23,7 +23,7 @@ Windows 0.3.11 release candidate is implemented:
   `curl.exe` / Schannel, with process exit reported as `CORE_EXITED`;
 - automatic UAC relaunch on Connect with encrypted state handoff, profile-load
   synchronization, and exactly one auto-connect attempt after elevation;
-- official sing-box 1.13.19, TrustTunnel 1.1.5-rc.6, and WinTUN 0.14.1 bootstrap
+- official sing-box 1.13.19, TrustTunnel 1.1.5, and WinTUN 0.14.1 bootstrap
   with pinned SHA-256;
 - `sing-box check` before every sing-box launch and the official TrustTunnel
   setup wizard for `tt://` and endpoint TOML profiles;
