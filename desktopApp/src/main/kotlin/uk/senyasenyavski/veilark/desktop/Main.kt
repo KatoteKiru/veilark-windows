@@ -1,17 +1,8 @@
-/*
- * THESIS: Veilark is a compact Google Material 3 VPN; it refuses a hamburger and a wide empty rail.
- * OWN-WORLD: Android Veilark tokens, Noto Sans, 16 dp cards, drawn flags, the same logo in a tonal circle.
- * STORY: choose engine and endpoint, connect or stop, then inspect only the evidence needed to trust the tunnel.
- * FIRST VIEWPORT: compact app bar, a tonal connection card, then the server picker.
- * FORM: Google Material 3 operate canon, pinned by the product owner.
- * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
- */
 package uk.senyasenyavski.veilark.desktop
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -70,8 +61,7 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material.icons.rounded.SupportAgent
@@ -336,6 +326,10 @@ fun main(args: Array<String>) {
   ) {
     val windowDensity = LocalDensity.current
     DisposableEffect(windowDensity) {
+      window.iconImages = listOf(16, 20, 24, 32, 40, 48, 64, 128, 256).mapNotNull { size ->
+        Thread.currentThread().contextClassLoader.getResource("icons/veilark-$size.png")
+          ?.let(javax.imageio.ImageIO::read)
+      }
       window.minimumSize = with(windowDensity) {
         java.awt.Dimension(
           MinimumWindowWidth.roundToPx(),
@@ -912,16 +906,8 @@ private fun VeilarkApp(
         AnimatedContent(
           targetState = destination,
           transitionSpec = {
-            val forward = targetState.ordinal >= initialState.ordinal
-            val enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
-              slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) {
-                if (forward) it / 12 else -it / 12
-              }
-            val exit = fadeOut(tween(140)) +
-              slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) {
-                if (forward) -it / 14 else it / 14
-              }
-            enter.togetherWith(exit)
+            fadeIn(tween(160, easing = FastOutSlowInEasing))
+              .togetherWith(fadeOut(tween(100)))
           },
         ) { currentDestination ->
           when (currentDestination) {
@@ -1189,7 +1175,7 @@ private fun ProfileStoreUnavailable(onExit: () -> Unit) {
     ) {
       Column(Modifier.padding(24.dp)) {
         Icon(
-          Icons.Rounded.Shield,
+          VeilarkMark,
           contentDescription = null,
           tint = MaterialTheme.colorScheme.error,
           modifier = Modifier.size(28.dp),
@@ -1280,7 +1266,7 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun CompactConnectionWorkspace(
+internal fun CompactConnectionWorkspace(
   phase: VpnPhase,
   traffic: TrafficSnapshot?,
   profile: Profile?,
@@ -1318,18 +1304,8 @@ private fun CompactConnectionWorkspace(
     is VpnPhase.Error -> language.text("Подключение не установлено", "Connection failed")
     else -> statusMessage
   }
-  val cardColor by animateColorAsState(
-    targetValue = when {
-      healthy -> MaterialTheme.colorScheme.primaryContainer
-      degraded -> MaterialTheme.colorScheme.tertiaryContainer
-      failed -> MaterialTheme.colorScheme.errorContainer
-      else -> MaterialTheme.colorScheme.surfaceContainer
-    },
-    animationSpec = VeilarkColorMotion,
-  )
-
   val actionLabel = when {
-    profile == null -> language.text("Добавить профиль", "Add profile")
+    profile == null -> language.text("Добавить подписку", "Add subscription")
     phase is VpnPhase.Stopping -> language.text("Остановка", "Stopping")
     phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Отменить", "Cancel")
     connected -> language.text("Отключить", "Disconnect")
@@ -1352,10 +1328,8 @@ private fun CompactConnectionWorkspace(
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Surface(
-      modifier = Modifier.fillMaxWidth().animateContentSize(
-        animationSpec = tween(280, easing = FastOutSlowInEasing),
-      ),
-      color = cardColor,
+      modifier = Modifier.fillMaxWidth(),
+      color = MaterialTheme.colorScheme.surfaceContainerLow,
       shape = MaterialTheme.shapes.extraLarge,
     ) {
       Column(
@@ -1419,7 +1393,7 @@ private fun CompactConnectionWorkspace(
       )
     }
 
-    Row(
+    if (profile != null) Row(
       modifier = Modifier.padding(top = 2.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.Center,
@@ -1470,7 +1444,7 @@ private fun ConnectionStatus(
   modifier: Modifier = Modifier,
 ) {
   Column(
-    modifier = modifier.animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing)),
+    modifier = modifier,
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     AnimatedContent(
@@ -1523,19 +1497,19 @@ private fun ConnectionMark(
 ) {
   val fill by animateColorAsState(
     targetValue = when {
-      healthy -> MaterialTheme.colorScheme.primary
-      degraded -> MaterialTheme.colorScheme.tertiary
-      failed -> MaterialTheme.colorScheme.error
+      healthy -> MaterialTheme.colorScheme.onSurface
+      degraded -> MaterialTheme.colorScheme.surfaceContainerHighest
+      failed -> MaterialTheme.colorScheme.surfaceContainerHighest
       else -> MaterialTheme.colorScheme.surfaceContainerLowest
     },
     animationSpec = VeilarkColorMotion,
   )
   val glyph by animateColorAsState(
     targetValue = when {
-      healthy -> MaterialTheme.colorScheme.onPrimary
-      degraded -> MaterialTheme.colorScheme.onTertiary
-      failed -> MaterialTheme.colorScheme.onError
-      else -> MaterialTheme.colorScheme.primary
+      healthy -> MaterialTheme.colorScheme.surface
+      degraded -> MaterialTheme.colorScheme.onSurface
+      failed -> MaterialTheme.colorScheme.onSurface
+      else -> MaterialTheme.colorScheme.onSurface
     },
     animationSpec = VeilarkColorMotion,
   )
@@ -1567,10 +1541,9 @@ private fun ConnectionMark(
       shape = CircleShape,
     ) {
       Box(contentAlignment = Alignment.Center) {
-        ShieldMark(
-          checked = connected && !busy,
+        BrandGlyph(
           color = glyph,
-          modifier = Modifier.size(48.dp),
+          modifier = Modifier.size(64.dp),
         )
       }
     }
@@ -2354,8 +2327,7 @@ private fun ConnectionCard(
                 CircularProgressIndicator(Modifier.size(38.dp), strokeWidth = 3.dp)
               }
             } else {
-              ShieldMark(
-                checked = connected,
+              BrandGlyph(
                 color = LocalContentColor.current,
                 modifier = Modifier.size(38.dp),
               )
@@ -2723,7 +2695,7 @@ private fun ProfileCard(
           ) {
             Box(contentAlignment = Alignment.Center) {
               Icon(
-                Icons.Rounded.Shield,
+                VeilarkMark,
                 null,
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
               )
@@ -2919,7 +2891,7 @@ private fun EngineChoice(
   )
   Surface(
     modifier = modifier
-      .height(40.dp)
+      .heightIn(min = 48.dp)
       .selectable(
         selected = selected,
         enabled = enabled,
@@ -2935,7 +2907,7 @@ private fun EngineChoice(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(
-        if (engine == VpnEngine.SingBox) Icons.Rounded.Security else Icons.Rounded.Shield,
+        if (engine == VpnEngine.SingBox) Icons.Rounded.Hub else VeilarkMark,
         null,
         Modifier.size(19.dp),
       )
@@ -3138,7 +3110,7 @@ private fun ProfilesScreen(
                 ) {
                   Box(contentAlignment = Alignment.Center) {
                     Icon(
-                      if (active) Icons.Rounded.Check else Icons.Rounded.Shield,
+                      if (active) Icons.Rounded.Check else VeilarkMark,
                       null,
                     )
                   }
@@ -3250,7 +3222,7 @@ private fun SubscriptionDropdown(
         vertical = if (compact) 7.dp else 9.dp,
       ),
     ) {
-      Icon(Icons.Rounded.Shield, null, Modifier.size(18.dp))
+      Icon(VeilarkMark, null, Modifier.size(18.dp))
       Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
         Text(active?.name ?: language.text("Нет подписок", "No subscriptions"), fontWeight = FontWeight.Medium)
         Text(
@@ -3298,7 +3270,7 @@ private fun SubscriptionDropdown(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Icon(
-                if (selected) Icons.Rounded.Check else Icons.Rounded.Shield,
+                if (selected) Icons.Rounded.Check else VeilarkMark,
                 null,
                 modifier = Modifier.size(18.dp),
               )
@@ -4168,7 +4140,7 @@ private fun UpdatesScreen(
           },
           leadingContent = {
             Icon(
-              Icons.Rounded.Shield,
+              VeilarkMark,
               null,
               tint = if (state !is DesktopUpdateState.Failed) {
                 MaterialTheme.colorScheme.primary

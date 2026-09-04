@@ -13,6 +13,12 @@ on:
       - "*.gradle.kts"
       - "gradle/**"
   pull_request:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Build versioned Windows OTA package
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -29,9 +35,35 @@ jobs:
         shell: powershell
         run: python -m py_compile .\scripts\publish_ota.py
       - shell: powershell
-        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --stacktrace
+        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --max-workers=2 --stacktrace
       - name: Verify installed application resources
         shell: powershell
         run: |
           .\gradlew.bat :desktopApp:createDistributable --stacktrace
           .\scripts\verify-packaged-resources.ps1
+      - name: Package verified OTA payload
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        shell: powershell
+        run: |
+          .\gradlew.bat :desktopApp:packageExe :desktopApp:packageMsi --max-workers=2 --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          $payload = "desktopApp\build\compose\binaries\main\exe\Veilark-$version.exe"
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output "build\ota\Veilark-$version.exe"
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output "build\verify\Veilark-verify.exe" -VerificationOnly
+          & .\build\verify\Veilark-verify.exe --bootstrap-verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded payload verification failed' }
+          Get-FileHash -Algorithm SHA256 "build\ota\Veilark-$version.exe"
+      - name: Upload Windows release candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: veilark-windows-ota
+          retention-days: 7
+          path: |
+            build/ota/Veilark-*.exe
+            desktopApp/build/compose/binaries/main/msi/Veilark-*.msi
+            desktopApp/build/reports/ui/*.png
+            desktopApp/build/test-results/test/*.xml
+            helper/build/test-results/test/*.xml
+            shared/build/test-results/jvmTest/*.xml

@@ -391,20 +391,20 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 314
-    const val CURRENT_VERSION_NAME = "0.3.14"
+    const val CURRENT_VERSION_CODE = 315
+    const val CURRENT_VERSION_NAME = "0.3.15"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.14
-      • sing-box обновлён до стабильной версии 1.13.21.
-      • TrustTunnel обновлён с предварительной версии до стабильной 1.1.5.
-      • Маршруты, GEO и форматы подписок не менялись.
+      Обновлено в 0.3.15
+      • Чёткая монохромная иконка для рабочего стола, панели задач и установщика.
+      • Общий логотип Veilark адаптируется к светлой и тёмной теме интерфейса.
+      • Спокойные переходы, нейтральный экран подключения и понятнее навигация.
       • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.14
-      • sing-box is updated to stable 1.13.21.
-      • TrustTunnel is updated from the release candidate to stable 1.1.5.
-      • Routing, GEO assets and subscription formats are unchanged.
+      Updated in 0.3.15
+      • Crisp monochrome desktop, taskbar and installer icons at Windows DPI sizes.
+      • The shared Veilark mark follows the light and dark interface theme.
+      • Calmer transitions, a neutral connection view and clearer navigation.
       • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =

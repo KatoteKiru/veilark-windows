@@ -75,6 +75,7 @@ try {
     $target,
     '/platform:x64',
     '/optimize+',
+    "/win32icon:$(Join-Path $projectRoot 'desktopApp\src\main\resources\veilark.ico')",
     "/win32manifest:$manifest",
     "/resource:$innerPath,Veilark.InstallerPayload",
     "/resource:$hashResource,Veilark.PayloadSha256",
