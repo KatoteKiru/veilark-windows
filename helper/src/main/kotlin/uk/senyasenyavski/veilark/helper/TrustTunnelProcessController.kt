@@ -169,21 +169,7 @@ class TrustTunnelProcessController(
     overridePath: Path?,
     environmentName: String,
     fileName: String,
-  ): Path {
-    val candidates = buildList {
-      overridePath?.let(::add)
-      System.getenv(environmentName)?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
-      System.getProperty("compose.application.resources.dir")
-        ?.takeIf(String::isNotBlank)
-        ?.let { add(Path.of(it, fileName)) }
-      add(
-        Path.of("packaging", "resources", "windows", fileName)
-          .toAbsolutePath(),
-      )
-    }
-    return candidates.firstOrNull(Files::isRegularFile)
-      ?: error("Не найден $fileName. Запустите scripts/bootstrap-runtime.ps1")
-  }
+  ): Path = RuntimeResourceLocator.requireFile(fileName, overridePath, environmentName)
 
   private fun version(client: Path): String = runCatching {
     val result = ProcessBuilder(client.toString(), "--version")

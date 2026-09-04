@@ -67,12 +67,14 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.StopCircle
+import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Update
@@ -199,6 +201,11 @@ private class DesktopActions {
   var hasProfile: Boolean = false
 }
 
+private val InitialWindowWidth = 720.dp
+private val InitialWindowHeight = 560.dp
+private val MinimumWindowWidth = 620.dp
+private val MinimumWindowHeight = 480.dp
+
 fun main(args: Array<String>) {
   Thread.setDefaultUncaughtExceptionHandler { thread, error ->
     runCatching {
@@ -291,7 +298,7 @@ fun main(args: Array<String>) {
 
   Tray(
     state = trayState,
-    icon = painterResource("veilark-logo.png"),
+    icon = painterResource("veilark-app-icon.png"),
     tooltip = when {
       connected -> language.text("Veilark · Защищено", "Veilark · Protected")
       busy -> language.text("Veilark · Подключение", "Veilark · Connecting")
@@ -324,11 +331,17 @@ fun main(args: Array<String>) {
     onCloseRequest = { windowVisible = false },
     visible = windowVisible,
     title = "Veilark",
-    icon = painterResource("veilark-logo.png"),
-    state = rememberWindowState(width = 820.dp, height = 580.dp),
+    icon = painterResource("veilark-app-icon.png"),
+    state = rememberWindowState(width = InitialWindowWidth, height = InitialWindowHeight),
   ) {
-    DisposableEffect(Unit) {
-      window.minimumSize = java.awt.Dimension(680, 520)
+    val windowDensity = LocalDensity.current
+    DisposableEffect(windowDensity) {
+      window.minimumSize = with(windowDensity) {
+        java.awt.Dimension(
+          MinimumWindowWidth.roundToPx(),
+          MinimumWindowHeight.roundToPx(),
+        )
+      }
       window.transferHandler = object : TransferHandler() {
         override fun canImport(support: TransferSupport): Boolean =
           support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
@@ -983,6 +996,18 @@ private fun VeilarkApp(
                     language.text(
                       "Не удалось открыть Telegram. Откройте @senyavpn_bot вручную.",
                       "Could not open Telegram. Open @senyavpn_bot manually.",
+                    ),
+                  )
+                }
+              }
+            },
+            onOpenWebApp = {
+              if (!VeilarkWebAppLink.openConfigured()) {
+                scope.launch {
+                  snackbar.showSnackbar(
+                    language.text(
+                      "Не удалось открыть веб-кабинет.",
+                      "Could not open the web account.",
                     ),
                   )
                 }
@@ -2959,6 +2984,7 @@ private fun ProfilesScreen(
   onDelete: (SubscriptionRecord) -> Unit,
   importing: Boolean,
   onOpenSubscriptionAccount: () -> Unit,
+  onOpenWebApp: () -> Unit,
   onPaste: () -> Unit,
   onFile: () -> Unit,
   onUrl: () -> Unit,
@@ -2981,10 +3007,23 @@ private fun ProfilesScreen(
     )
     Row(
       modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.End,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      OutlinedButton(onClick = onOpenSubscriptionAccount) {
-        Text(language.text("Подписка и поддержка", "Subscription & support"))
+      OutlinedButton(
+        onClick = onOpenSubscriptionAccount,
+        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+        shape = RoundedCornerShape(12.dp),
+      ) {
+        Icon(Icons.Rounded.SupportAgent, null, Modifier.size(18.dp))
+        Text(language.text("Telegram-бот", "Telegram bot"), Modifier.padding(start = 8.dp))
+      }
+      FilledTonalButton(
+        onClick = onOpenWebApp,
+        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+        shape = RoundedCornerShape(12.dp),
+      ) {
+        Icon(Icons.Rounded.OpenInBrowser, null, Modifier.size(18.dp))
+        Text(language.text("Веб-кабинет", "Web account"), Modifier.padding(start = 8.dp))
       }
     }
     Row(

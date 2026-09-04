@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -55,8 +56,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -275,32 +274,20 @@ internal val OverflowDestinations = listOf(
   Destination.Logs,
 )
 
-private val LogoOnTonal = ColorFilter.colorMatrix(
-  ColorMatrix(
-    floatArrayOf(
-      1f, 0f, 0f, 0f, 0f,
-      0f, 1f, 0f, 0f, 0f,
-      0f, 0f, 1f, 0f, 0f,
-      0.22f, 0.45f, 0.33f, 0f, 0f,
-    ),
-  ),
-)
-
 @Composable
 internal fun BrandMark(modifier: Modifier = Modifier) {
   Surface(
     modifier = modifier.size(36.dp),
     shape = CircleShape,
-    color = MaterialTheme.colorScheme.primaryContainer,
+    color = Color(0xFF1D242C),
     tonalElevation = 0.dp,
     shadowElevation = 0.dp,
   ) {
     Image(
       painter = painterResource("veilark-logo.png"),
       contentDescription = "Veilark",
-      modifier = Modifier.padding(6.dp).clip(CircleShape),
+      modifier = Modifier.fillMaxSize().padding(4.dp).clip(CircleShape),
       contentScale = ContentScale.Fit,
-      colorFilter = LogoOnTonal,
     )
   }
 }

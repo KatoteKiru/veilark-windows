@@ -14,9 +14,12 @@ class GeoRoutingPreflightTest {
   fun `refresh publishes one validated generation and local load uses no network`() = runBlocking {
     val directory = Files.createTempDirectory("veilark-geo-cache")
     var downloads = 0
-    val downloader = GeoRuleSetDownloader { url, destination ->
+    val downloader = GeoRuleSetDownloader { urls, destination ->
       downloads += 1
-      Files.writeString(destination, url.substringAfterLast('/'))
+      assertEquals(2, urls.size)
+      assertTrue(urls.first().startsWith("https://nl2.senyasenyavski.uk:2096/"))
+      assertTrue(urls.last().startsWith("https://raw.githubusercontent.com/"))
+      Files.writeString(destination, urls.last().substringAfterLast('/'))
     }
     try {
       val cache = GeoRuleSetCache(directory, downloader, FakeDecompiler, false)
@@ -48,16 +51,16 @@ class GeoRoutingPreflightTest {
     try {
       val initial = GeoRuleSetCache(
         directory,
-        GeoRuleSetDownloader { url, destination ->
-          Files.writeString(destination, url.substringAfterLast('/'))
+        GeoRuleSetDownloader { urls, destination ->
+          Files.writeString(destination, urls.last().substringAfterLast('/'))
         },
         FakeDecompiler,
         false,
       ).refresh()
       val failing = GeoRuleSetCache(
         directory,
-        GeoRuleSetDownloader { url, destination ->
-          if (url.contains("geosite")) error("simulated partial update")
+        GeoRuleSetDownloader { urls, destination ->
+          if (urls.last().contains("geosite")) error("simulated partial update")
           Files.writeString(destination, "new geoip")
         },
         FakeDecompiler,
@@ -130,7 +133,7 @@ class GeoRoutingPreflightTest {
     )
 
     assertEquals("C:\\Windows\\System32\\curl.exe", command.first())
-    assertTrue(command.windowed(2).any { it == listOf("--noproxy", "*") })
+    assertTrue(command.none { it == "--noproxy" })
     assertTrue(command.windowed(2).any { it == listOf("--max-time", "60") })
     assertTrue(command.windowed(2).any { it == listOf("--output", "C:\\geo\\geoip-ru.srs") })
     assertTrue(command.none { it == "-k" || it == "--insecure" })

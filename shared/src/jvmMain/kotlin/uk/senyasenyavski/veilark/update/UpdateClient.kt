@@ -391,20 +391,22 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 312
-    const val CURRENT_VERSION_NAME = "0.3.12"
+    const val CURRENT_VERSION_CODE = 313
+    const val CURRENT_VERSION_NAME = "0.3.13"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.12
-      • Удалены встроенные профили доступа и старые автоматические подписки.
-      • Подписка и поддержка открываются только через официальный бот Veilark.
-      • Подменённые Telegram-ссылки и дополнительные параметры отклоняются.
+      Исправлено в 0.3.13
+      • Ядра sing-box и TrustTunnel находятся во всех штатных layout установленного приложения.
+      • Россия напрямую запускается из встроенного проверенного GEO без обязательной загрузки.
+      • Обновление GEO использует управляемое зеркало Veilark и резервный upstream.
+      • Окно компактнее, логотип и иконка унифицированы с Android; добавлен веб-кабинет.
       • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.12
-      • Embedded access profiles and legacy automatic subscriptions were removed.
-      • Subscription and support open only through the official Veilark bot.
-      • Lookalike Telegram links and extra parameters are rejected.
+      Fixed in 0.3.13
+      • sing-box and TrustTunnel are resolved across all supported installed application layouts.
+      • Russia direct starts from the bundled verified GEO snapshot without a required download.
+      • GEO refresh uses the managed Veilark mirror with the upstream source as a fallback.
+      • The window is more compact, branding matches Android, and the web account is available.
       • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =

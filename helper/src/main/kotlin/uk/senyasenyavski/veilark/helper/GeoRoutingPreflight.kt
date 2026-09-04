@@ -58,28 +58,15 @@ class GeoRoutingPreflight(
     const val MISSING_ERROR =
       "Геоданные маршрутизации не готовы. Обновите их и повторите подключение."
     fun resolveSingBox(override: Path?): Path {
-      val candidates = buildList {
-        override?.let(::add)
-        System.getenv("VEILARK_SING_BOX")?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
-        System.getProperty("compose.application.resources.dir")
-          ?.takeIf(String::isNotBlank)
-          ?.let { add(Path.of(it, "sing-box.exe")) }
-        add(Path.of("packaging", "resources", "windows", "sing-box.exe").toAbsolutePath())
-      }
-      return candidates.firstOrNull(Files::isRegularFile)
-        ?: throw GeoRoutingUnavailableException(MISSING_ERROR)
+      return runCatching {
+        RuntimeResourceLocator.requireFile("sing-box.exe", override, "VEILARK_SING_BOX")
+      }.getOrElse { throw GeoRoutingUnavailableException(MISSING_ERROR) }
     }
 
     fun resolveBundledDirectory(override: Path?): Path {
-      val candidates = buildList {
-        override?.let(::add)
-        System.getProperty("compose.application.resources.dir")
-          ?.takeIf(String::isNotBlank)
-          ?.let { add(Path.of(it, "geo")) }
-        add(Path.of("packaging", "resources", "windows", "geo").toAbsolutePath())
-      }
-      return candidates.firstOrNull(Files::isDirectory)
-        ?: throw GeoRoutingUnavailableException(MISSING_ERROR)
+      return runCatching {
+        RuntimeResourceLocator.requireDirectory("geo", override)
+      }.getOrElse { throw GeoRoutingUnavailableException(MISSING_ERROR) }
     }
   }
 }
@@ -88,7 +75,7 @@ internal val RoutingMode.requiresGeoData: Boolean
   get() = this == RoutingMode.RussiaDirect || this == RoutingMode.RussiaVpn
 
 internal fun interface GeoRuleSetDownloader {
-  suspend fun download(url: String, destination: Path)
+  suspend fun download(urls: List<String>, destination: Path)
 }
 
 internal fun interface SingBoxRuleSetDecompiler {
@@ -114,9 +101,9 @@ internal class GeoRuleSetCache(
       try {
         val geoIp = staging.resolve(GEOIP.fileName)
         val geoSite = staging.resolve(GEOSITE.fileName)
-        downloader.download(GEOIP.url, geoIp)
+        downloader.download(GEOIP.urls, geoIp)
         validateBinary(geoIp)
-        downloader.download(GEOSITE.url, geoSite)
+        downloader.download(GEOSITE.urls, geoSite)
         validateBinary(geoSite)
         val exclusions = validateAndExtract(geoIp, geoSite, staging)
         val digests = RuleSetDigests(sha256(geoIp), sha256(geoSite))
@@ -276,7 +263,7 @@ internal class GeoRuleSetCache(
 
   private data class Asset(
     val fileName: String,
-    val url: String,
+    val urls: List<String>,
     val bundledSha256: String,
   )
 
@@ -289,13 +276,19 @@ internal class GeoRuleSetCache(
   private companion object {
     val GEOIP = Asset(
       "geoip-ru.srs",
-      "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
+      listOf(
+        "https://nl2.senyasenyavski.uk:2096/veilark/geo/current/geoip-ru.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
+      ),
       "1A8115AF741918FF24B37B87D3C6DA21ECCABC58F1EEC059E461DCA8BAC16FF7",
     )
     val GEOSITE = Asset(
       "geosite-category-ru.srs",
-      "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/" +
-        "geosite-category-ru.srs",
+      listOf(
+        "https://nl2.senyasenyavski.uk:2096/veilark/geo/current/geosite-category-ru.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/" +
+          "geosite-category-ru.srs",
+      ),
       "C36E157ADF86EDF7B722B51F3ACB93BBB2A7F8083932DAE29B4B5EF2C1CED870",
     )
     val GENERATION = Regex("""[0-9a-f]{32}""")
@@ -308,13 +301,18 @@ internal class GeoRuleSetCache(
 }
 
 internal object WindowsGeoRuleSetDownloader : GeoRuleSetDownloader {
-  override suspend fun download(url: String, destination: Path) {
+  override suspend fun download(urls: List<String>, destination: Path) {
+    require(urls.isNotEmpty())
     val curl = resolveCurl() ?: error("curl unavailable")
-    val result = ProcessBuilder(command(curl, url, destination))
-      .redirectErrorStream(true)
-      .start()
-      .captureCancellable(PROCESS_TIMEOUT_MILLIS, maximumOutputChars = 1_000)
-    check(result.succeeded && Files.isRegularFile(destination)) { "download failed" }
+    val succeeded = urls.any { url ->
+      Files.deleteIfExists(destination)
+      val result = ProcessBuilder(command(curl, url, destination))
+        .redirectErrorStream(true)
+        .start()
+        .captureCancellable(PROCESS_TIMEOUT_MILLIS, maximumOutputChars = 1_000)
+      result.succeeded && Files.isRegularFile(destination)
+    }
+    check(succeeded) { "download failed" }
   }
 
   internal fun command(curl: Path, url: String, destination: Path): List<String> = listOf(
@@ -323,8 +321,6 @@ internal object WindowsGeoRuleSetDownloader : GeoRuleSetDownloader {
     "--fail",
     "--silent",
     "--show-error",
-    "--noproxy",
-    "*",
     "--connect-timeout",
     "8",
     "--max-time",

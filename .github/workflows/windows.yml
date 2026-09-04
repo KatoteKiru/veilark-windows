@@ -30,3 +30,8 @@ jobs:
         run: python -m py_compile .\scripts\publish_ota.py
       - shell: powershell
         run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --stacktrace
+      - name: Verify installed application resources
+        shell: powershell
+        run: |
+          .\gradlew.bat :desktopApp:createDistributable --stacktrace
+          .\scripts\verify-packaged-resources.ps1

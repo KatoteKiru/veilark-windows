@@ -109,23 +109,11 @@ class SingBoxProcessController(
     readyTunnel?.let(TunnelTrafficVerifier::statistics)
 
   private fun resolveExecutable(): Path {
-    val candidates = buildList {
-      executableOverride?.let(::add)
-      System.getenv("VEILARK_SING_BOX")?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
-      System.getProperty("compose.application.resources.dir")
-        ?.takeIf(String::isNotBlank)
-        ?.let { add(Path.of(it, "sing-box.exe")) }
-      add(
-        Path.of("packaging", "resources", "windows", "sing-box.exe")
-          .toAbsolutePath(),
-      )
-      findOnPath("sing-box.exe")?.let(::add)
-    }
-    return candidates.firstOrNull(Files::isRegularFile)
-      ?: error(
-        "Не найден sing-box.exe. Запустите scripts/bootstrap-runtime.ps1 " +
-          "или задайте VEILARK_SING_BOX",
-      )
+    return RuntimeResourceLocator.requireFile(
+      fileName = "sing-box.exe",
+      overridePath = executableOverride,
+      environmentName = "VEILARK_SING_BOX",
+    )
   }
 
   private suspend fun checkConfig(executable: Path) {
@@ -163,10 +151,4 @@ class SingBoxProcessController(
     )
   }
 
-  private fun findOnPath(fileName: String): Path? =
-    System.getenv("PATH")
-      ?.split(System.getProperty("path.separator"))
-      ?.asSequence()
-      ?.map { Path.of(it, fileName) }
-      ?.firstOrNull(Files::isRegularFile)
 }

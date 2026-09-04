@@ -33,11 +33,45 @@ internal object TelegramBotLink {
 
   fun openConfigured(): Boolean {
     val uri = validate(configuredUrl()) ?: return false
-    return runCatching {
-      check(Desktop.isDesktopSupported())
-      val desktop = Desktop.getDesktop()
-      check(desktop.isSupported(Desktop.Action.BROWSE))
-      desktop.browse(uri)
-    }.isSuccess
+    return TrustedBrowser.open(uri)
   }
+}
+
+internal object VeilarkWebAppLink {
+  const val DEFAULT_URL = "https://sub.senyasenyavski.uk/tma/"
+  private const val PROPERTY_NAME = "veilark.webAppUrl"
+  private const val ENVIRONMENT_NAME = "VEILARK_WEB_APP_URL"
+
+  fun configuredUrl(): String =
+    System.getProperty(PROPERTY_NAME)?.takeIf(String::isNotBlank)
+      ?: System.getenv(ENVIRONMENT_NAME)?.takeIf(String::isNotBlank)
+      ?: DEFAULT_URL
+
+  fun validate(raw: String): URI? {
+    val candidate = raw.trim().takeIf(String::isNotEmpty) ?: return null
+    val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
+    return uri.takeIf {
+      it.scheme.equals("https", ignoreCase = true) &&
+        it.host.equals("sub.senyasenyavski.uk", ignoreCase = true) &&
+        it.userInfo == null &&
+        it.port == -1 &&
+        it.rawPath == "/tma/" &&
+        it.rawQuery == null &&
+        it.rawFragment == null
+    }
+  }
+
+  fun openConfigured(): Boolean {
+    val uri = validate(configuredUrl()) ?: return false
+    return TrustedBrowser.open(uri)
+  }
+}
+
+private object TrustedBrowser {
+  fun open(uri: URI): Boolean = runCatching {
+    check(Desktop.isDesktopSupported())
+    val desktop = Desktop.getDesktop()
+    check(desktop.isSupported(Desktop.Action.BROWSE))
+    desktop.browse(uri)
+  }.isSuccess
 }

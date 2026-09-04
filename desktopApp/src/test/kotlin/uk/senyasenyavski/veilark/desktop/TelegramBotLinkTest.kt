@@ -30,4 +30,17 @@ class TelegramBotLinkTest {
     assertNull(TelegramBotLink.validate("https://t.me/senyavpn_bot?start=client_windows#fragment"))
     assertNull(TelegramBotLink.validate("not a url"))
   }
+
+  @Test
+  fun acceptsOnlyTheProductionWebAppEntryPoint() {
+    assertEquals(
+      VeilarkWebAppLink.DEFAULT_URL,
+      VeilarkWebAppLink.validate(VeilarkWebAppLink.DEFAULT_URL)?.toString(),
+    )
+    assertNull(VeilarkWebAppLink.validate("http://sub.senyasenyavski.uk/tma/"))
+    assertNull(VeilarkWebAppLink.validate("https://sub.senyasenyavski.uk:2096/tma/"))
+    assertNull(VeilarkWebAppLink.validate("https://sub.senyasenyavski.uk/tma"))
+    assertNull(VeilarkWebAppLink.validate("https://sub.senyasenyavski.uk/tma/?next=evil"))
+    assertNull(VeilarkWebAppLink.validate("https://sub.senyasenyavski.uk.evil.example/tma/"))
+  }
 }
