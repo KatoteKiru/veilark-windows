@@ -31,7 +31,7 @@ object SubscriptionFetcher {
     require(!uri.host.isNullOrBlank()) { "Адрес подписки некорректен" }
     val request = HttpRequest.newBuilder(uri)
       .timeout(Duration.ofSeconds(20))
-      .header("User-Agent", "SFA/1.13.19 Veilark/Windows-0.1")
+      .header("User-Agent", "SFA/1.13.21 Veilark/Windows-0.1")
       .header("X-Client", "Veilark")
       .header(
         "Accept",

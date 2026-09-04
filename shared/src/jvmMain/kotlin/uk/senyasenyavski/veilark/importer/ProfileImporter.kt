@@ -187,7 +187,7 @@ class ProfileImporter(
       .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
   internal companion object {
-    private const val SING_BOX_COMPAT_VERSION = "1.13.19"
+    private const val SING_BOX_COMPAT_VERSION = "1.13.21"
     private const val MAX_BYTES = 4L * 1024 * 1024
 
     internal fun subscriptionUserAgent(): String =
