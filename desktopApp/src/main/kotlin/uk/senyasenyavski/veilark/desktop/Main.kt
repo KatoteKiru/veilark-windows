@@ -1177,7 +1177,7 @@ private fun ProfileStoreUnavailable(onExit: () -> Unit) {
         Icon(
           VeilarkMark,
           contentDescription = null,
-          tint = MaterialTheme.colorScheme.error,
+          tint = MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.size(28.dp),
         )
         Text(
@@ -2697,7 +2697,7 @@ private fun ProfileCard(
               Icon(
                 VeilarkMark,
                 null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                tint = MaterialTheme.colorScheme.onSurface,
               )
             }
           }
@@ -2910,6 +2910,7 @@ private fun EngineChoice(
         if (engine == VpnEngine.SingBox) Icons.Rounded.Hub else VeilarkMark,
         null,
         Modifier.size(19.dp),
+        tint = if (engine == VpnEngine.TrustTunnel) MaterialTheme.colorScheme.onSurface else LocalContentColor.current,
       )
       Column(Modifier.padding(start = 9.dp)) {
         Text(
@@ -3112,6 +3113,7 @@ internal fun ProfilesScreen(
                     Icon(
                       if (active) Icons.Rounded.Check else VeilarkMark,
                       null,
+                      tint = if (active) LocalContentColor.current else MaterialTheme.colorScheme.onSurface,
                     )
                   }
                 }
@@ -3222,7 +3224,7 @@ private fun SubscriptionDropdown(
         vertical = if (compact) 7.dp else 9.dp,
       ),
     ) {
-      Icon(VeilarkMark, null, Modifier.size(18.dp))
+      Icon(VeilarkMark, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
       Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
         Text(active?.name ?: language.text("Нет подписок", "No subscriptions"), fontWeight = FontWeight.Medium)
         Text(
@@ -3273,6 +3275,7 @@ private fun SubscriptionDropdown(
                 if (selected) Icons.Rounded.Check else VeilarkMark,
                 null,
                 modifier = Modifier.size(18.dp),
+                tint = if (selected) LocalContentColor.current else MaterialTheme.colorScheme.onSurface,
               )
               Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(subscription.name, fontWeight = FontWeight.Medium)
@@ -4140,7 +4143,7 @@ private fun UpdatesScreen(
           },
           leadingContent = {
             Icon(
-              VeilarkMark,
+              Icons.Rounded.Update,
               null,
               tint = if (state !is DesktopUpdateState.Failed) {
                 MaterialTheme.colorScheme.primary
