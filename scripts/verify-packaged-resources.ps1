@@ -43,7 +43,7 @@ if (-not (Test-Path -LiteralPath $launcherConfig -PathType Leaf)) {
 }
 $launcher = Get-Content -LiteralPath $launcherConfig -Raw
 $resourceOption = 'java-options=-Dcompose.application.resources.dir=$APPDIR\resources'
-if (-not $launcher.Contains($resourceOption, [StringComparison]::Ordinal)) {
+if ($launcher.IndexOf($resourceOption, [StringComparison]::Ordinal) -lt 0) {
   throw 'Packaged launcher does not point at its immutable runtime resources'
 }
 
