@@ -8,6 +8,8 @@ non-bouncy, and changing status no longer animates the whole card's dimensions.
 
 Subscription and routing destinations use consistent names. Engine selectors
 have a 48 dp minimum height, allowing labels to grow without squeezing controls.
+The initial window is 520×700 dp and can shrink to 460 dp wide; the former 620 dp
+minimum left unnecessary empty space around the compact connection workspace.
 
 No VPN runtime, routing, subscription, storage or updater verification behavior
 changed. Package name, MSI UpgradeCode and OTA trust keys are preserved.

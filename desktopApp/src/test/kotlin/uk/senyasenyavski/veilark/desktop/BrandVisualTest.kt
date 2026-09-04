@@ -41,7 +41,7 @@ class BrandVisualTest {
     for (dark in listOf(false, true)) {
       for (scale in listOf(1f, 1.25f, 1.5f)) {
         val scene = ImageComposeScene(
-          width = (480 * scale).toInt(), height = (720 * scale).toInt(), density = Density(scale),
+          width = (460 * scale).toInt(), height = (720 * scale).toInt(), density = Density(scale),
         ) {
           CompositionLocalProvider(LocalUiLanguage provides UiLanguage.English) {
             VeilarkTheme(darkTheme = dark) {

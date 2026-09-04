@@ -191,9 +191,9 @@ private class DesktopActions {
   var hasProfile: Boolean = false
 }
 
-private val InitialWindowWidth = 720.dp
-private val InitialWindowHeight = 560.dp
-private val MinimumWindowWidth = 620.dp
+private val InitialWindowWidth = 520.dp
+private val InitialWindowHeight = 700.dp
+private val MinimumWindowWidth = 460.dp
 private val MinimumWindowHeight = 480.dp
 
 fun main(args: Array<String>) {
