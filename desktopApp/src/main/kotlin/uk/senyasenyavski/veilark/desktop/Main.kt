@@ -2940,7 +2940,7 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun ProfilesScreen(
+internal fun ProfilesScreen(
   subscriptions: List<SubscriptionRecord>,
   selectedEngine: VpnEngine,
   selectedSubscriptionIds: Map<VpnEngine, String>,
@@ -3543,7 +3543,7 @@ private fun ImportItem(
 }
 
 @Composable
-private fun RoutingScreen(
+internal fun RoutingScreen(
   settings: RoutingSettings,
   hasAnyProfile: Boolean,
   hasSingBoxProfile: Boolean,

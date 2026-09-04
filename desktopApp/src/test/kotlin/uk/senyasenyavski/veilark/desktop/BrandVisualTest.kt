@@ -20,6 +20,8 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 import uk.senyasenyavski.veilark.model.VpnPhase
 import uk.senyasenyavski.veilark.model.VpnEngine
+import uk.senyasenyavski.veilark.model.RoutingMode
+import uk.senyasenyavski.veilark.model.RoutingSettings
 
 class BrandVisualTest {
   @Test
@@ -40,6 +42,7 @@ class BrandVisualTest {
     val output = File("build/reports/ui").apply { mkdirs() }
     for (dark in listOf(false, true)) {
       for (scale in listOf(1f, 1.25f, 1.5f)) {
+       for (destination in listOf(Destination.Home, Destination.Profiles, Destination.Routing)) {
         val scene = ImageComposeScene(
           width = (460 * scale).toInt(), height = (720 * scale).toInt(), density = Density(scale),
         ) {
@@ -48,7 +51,19 @@ class BrandVisualTest {
               Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column {
                   AppTopBar(VpnPhase.Idle, {})
-                  Column(Modifier.weight(1f).padding(24.dp)) {
+                  Column(Modifier.weight(1f)) {
+                    if (destination == Destination.Profiles) {
+                      ProfilesScreen(
+                        subscriptions = emptyList(), selectedEngine = VpnEngine.TrustTunnel,
+                        selectedSubscriptionIds = emptyMap(), selectedNodeTag = null, nodeLatencies = emptyMap(),
+                        probing = false, refreshing = false, configurationEnabled = true,
+                        onSelectSubscription = { _, _ -> }, onSelectNode = {}, onRefresh = {}, onProbe = {},
+                        onDelete = {}, importing = false, onOpenSubscriptionAccount = {}, onOpenWebApp = {},
+                        onPaste = {}, onFile = {}, onUrl = {},
+                      )
+                    } else if (destination == Destination.Routing) {
+                      RoutingScreen(RoutingSettings(mode = RoutingMode.Manual), true, true, true, false, {}, {})
+                    } else Column(Modifier.padding(24.dp)) {
                     CompactConnectionWorkspace(
                       phase = VpnPhase.Idle, traffic = null, profile = null,
                       selectedEngine = VpnEngine.TrustTunnel, selectedNodeTag = null,
@@ -57,8 +72,9 @@ class BrandVisualTest {
                       onEngineSelect = {}, onSelectEndpoint = { _, _ -> }, onAction = {}, onImport = {},
                       onRefresh = {}, onProbe = {}, onOpenLogs = {},
                     )
+                    }
                   }
-                  AppBottomBar(Destination.Home, {})
+                  AppBottomBar(destination, {})
                 }
               }
             }
@@ -68,11 +84,12 @@ class BrandVisualTest {
           scene.render(0).close()
           val image = scene.render(1_000_000_000)
           val bytes = assertNotNull(image.encodeToData()).bytes
-          File(output, "workspace-${if (dark) "dark" else "light"}-$scale.png").writeBytes(bytes)
+          File(output, "${destination.name.lowercase()}-${if (dark) "dark" else "light"}-$scale.png").writeBytes(bytes)
           image.close()
           assertTrue(bytes.size > 1000)
           assertFalse(scene.hasInvalidations(), "An idle workspace must not keep scheduling frames")
         } finally { scene.close() }
+       }
       }
     }
   }

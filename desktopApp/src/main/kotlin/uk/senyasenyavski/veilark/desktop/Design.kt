@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -422,6 +423,14 @@ internal fun PageHeader(
   subtitle: String,
   action: (@Composable () -> Unit)? = null,
 ) {
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    if (maxWidth < 520.dp && action != null) {
+      Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PageHeader(title, subtitle)
+        action()
+      }
+      return@BoxWithConstraints
+    }
   Row(
     Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.SpaceBetween,
@@ -445,6 +454,7 @@ internal fun PageHeader(
       )
     }
     action?.invoke()
+  }
   }
 }
 
