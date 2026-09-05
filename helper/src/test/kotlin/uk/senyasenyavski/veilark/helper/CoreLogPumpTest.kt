@@ -96,11 +96,11 @@ class CoreLogPumpTest {
   )
 
   private fun emptyProcess() = object : Process() {
-      override fun getOutputStream() = ByteArrayOutputStream()
-      override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
-      override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
-      override fun waitFor() = 0
-      override fun exitValue() = 0
-      override fun destroy() = Unit
+    override fun getOutputStream() = ByteArrayOutputStream()
+    override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+    override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+    override fun waitFor() = 0
+    override fun exitValue() = 0
+    override fun destroy() = Unit
   }
 }
