@@ -1,7 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,7 +35,7 @@ class SingBoxProcessController(
     // sing-box cannot reuse a connection name still held by an abandoned core or
     // by an adapter that a previous, force-terminated run left behind.
     CoreProcessJanitor.terminateOrphans(executable)
-    WinTunJanitor.removeGhostAdapters()
+    OwnedWinTunCleanup.recoverStoppedAdapters()
 
     val started = ProcessBuilder(
       executable.toString(),
@@ -83,6 +82,8 @@ class SingBoxProcessController(
     withContext(Dispatchers.IO) {
       val current = synchronized(this@SingBoxProcessController) { process }
         ?: return@withContext
+      val ownedTunnel = readyTunnel
+      val ownedDevice = ownedTunnel?.let { OwnedWinTunCleanup.capture(it) }
       SafeLog.write("Остановка sing-box")
       current.destroy()
       if (!current.waitFor(5, TimeUnit.SECONDS)) {
@@ -97,8 +98,11 @@ class SingBoxProcessController(
         }
       }
       Files.deleteIfExists(VeilarkPaths.activeConfig)
-      delay(700)
-      WinTunJanitor.removeGhostAdapters()
+      if (ownedTunnel != null && ownedDevice != null) {
+        if (!OwnedWinTunCleanup.remove(ownedTunnel, ownedDevice)) {
+          SafeLog.write("Не удалось удалить собственный остановленный TUN-адаптер")
+        }
+      }
     }
   }
 

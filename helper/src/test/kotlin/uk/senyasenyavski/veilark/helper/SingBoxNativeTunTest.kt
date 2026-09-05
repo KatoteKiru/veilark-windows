@@ -2,6 +2,7 @@ package uk.senyasenyavski.veilark.helper
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.nio.file.Files
 import java.nio.file.Path
@@ -40,7 +41,9 @@ class SingBoxNativeTunTest {
       nodes = emptyList(),
       sourceLabel = "synthetic CI fixture",
     )
+    createLegacyOwnedGhost(executable, profile.config)
     val controller = SingBoxProcessController(executableOverride = executable)
+    repeat(2) { cycle ->
     val startedAt = System.nanoTime()
     try {
       val health = withTimeout(35_000) { controller.start(profile) }
@@ -62,7 +65,37 @@ class SingBoxNativeTunTest {
         Files.readAllLines(VeilarkPaths.logFile).takeLast(15).forEach { appendLine("Native cleanup journal: ${SafeLog.redact(it)}") }
       }
     } else ""
-    assertTrue(remaining.isEmpty(), "Owned adapter cleanup failed\n$cleanupEvidence")
+    assertTrue(remaining.isEmpty(), "Owned adapter cleanup failed on cycle ${cycle + 1}\n$cleanupEvidence")
+    }
+  }
+
+  private suspend fun createLegacyOwnedGhost(executable: Path, config: String) {
+    val fixture = Files.createTempFile("veilark-ci-legacy-ghost-", ".json")
+    var process: Process? = null
+    try {
+      Files.writeString(fixture, config)
+      val core = ProcessBuilder(executable.toString(), "run", "-c", fixture.toString())
+        .directory(executable.parent.toFile()).redirectErrorStream(true)
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+      process = core
+      withTimeout(15_000) {
+        while (WindowsNetwork.matching { it.alias == "Veilark" && it.operational }.isEmpty()) {
+          check(core.isAlive) { "Synthetic legacy core exited before adapter creation" }
+          delay(100)
+        }
+      }
+      assertEquals(0, defaultRoutesOnTestAdapter(), "Legacy fixture must not install a default route")
+    } finally {
+      process?.let { core ->
+        core.destroyForcibly()
+        assertTrue(core.waitFor(5, TimeUnit.SECONDS), "Synthetic legacy core must stop")
+      }
+      Files.deleteIfExists(fixture)
+    }
+    withTimeout(5_000) {
+      while (WindowsNetwork.matching { it.alias == "Veilark" && !it.operational }.isEmpty()) delay(100)
+    }
+    assertTrue(WindowsNetwork.matching { it.alias == "Veilark" && !it.operational }.isNotEmpty(), "Legacy fixture must produce an actual stopped owned ghost")
   }
 
   private fun cleanupDiagnostics(): String {
