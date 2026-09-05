@@ -1,6 +1,7 @@
 package uk.senyasenyavski.veilark.importer
 
 import com.example.veilark.profile.SubscriptionParser
+import com.example.veilark.profile.SubscriptionFetcher
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
@@ -8,22 +9,14 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.update.UpdateClient
 import java.net.URI
 import java.net.URLDecoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
-import java.time.Duration
 
 class ProfileImporter(
   private val parser: SubscriptionParser = SubscriptionParser(),
+  private val fetchSubscription: (String) -> ByteArray = { SubscriptionFetcher.fetchBlocking(it) },
 ) {
-  private val client = HttpClient.newBuilder()
-    .connectTimeout(Duration.ofSeconds(12))
-    .followRedirects(HttpClient.Redirect.NORMAL)
-    .build()
-
   fun fromText(text: String, sourceLabel: String = "Вставка"): ImportResult =
     compile(text.toByteArray(Charsets.UTF_8), sourceLabel)
 
@@ -38,30 +31,8 @@ class ProfileImporter(
       "Подписка должна использовать HTTPS"
     }
     require(!uri.host.isNullOrBlank()) { "В ссылке подписки нет адреса сервера" }
-    val request = HttpRequest.newBuilder(uri)
-      .timeout(Duration.ofSeconds(20))
-      // Remnawave and modern x-ui installations dispatch the subscription
-      // format by User-Agent. Identifying the actual core prevents the generic
-      // base64/browser fallback from exposing only a partial server group.
-      .header(
-        "User-Agent",
-        subscriptionUserAgent(),
-      )
-      .header("X-Client", "Veilark-Windows/${UpdateClient.CURRENT_VERSION_NAME}")
-      .header("Accept", "application/json, text/yaml, application/yaml, text/plain, */*")
-      .header("Accept-Encoding", "identity")
-      .GET()
-      .build()
-    val response = client.send(request, HttpResponse.BodyHandlers.ofByteArray())
-    require(response.statusCode() in 200..299) {
-      "Сервер подписки ответил HTTP ${response.statusCode()}"
-    }
-    require(response.body().size <= MAX_BYTES) { "Подписка больше 4 МБ" }
-    val contentType = response.headers().firstValue("content-type").orElse("")
-    require(!contentType.contains("text/html", ignoreCase = true)) {
-      "Вместо подписки сервер вернул HTML-страницу"
-    }
-    compile(response.body(), uri.host, uri.toString())
+    val body = fetchSubscription(uri.toString())
+    compile(body, uri.host, uri.toString())
   }.getOrElse { ImportResult.Failure(it.safeMessage()) }
 
   private fun compile(

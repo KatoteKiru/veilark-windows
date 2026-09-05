@@ -391,19 +391,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 316
-    const val CURRENT_VERSION_NAME = "0.3.16"
+    const val CURRENT_VERSION_CODE = 317
+    const val CURRENT_VERSION_NAME = "0.3.17"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.16
-      • Исправлено ожидание запуска SingBox, которое могло завершаться ошибкой через 30 секунд.
-      • Ошибка записи журнала больше не мешает определению готовности ядра.
-      • Обычные сообщения о соединениях не засоряют журнал. Подписки и маршруты не изменяются.
+      Обновлено в 0.3.17
+      • При импорте подписки Veilark компьютер появляется в списке устройств кабинета.
+      • Повторное обновление использует тот же идентификатор установки.
+      • Сведения об устройстве не передаются сторонним сервисам и через перенаправления.
+      • Исправление запуска SingBox из 0.3.16 сохранено. VPN-ядра и маршруты не изменены.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.16
-      • Fixed SingBox startup detection that could fail after 30 seconds.
-      • Journal write failures no longer prevent core readiness detection.
-      • Routine connection messages stay out of the journal. Subscriptions and routing are unchanged.
+      Updated in 0.3.17
+      • Importing a Veilark subscription registers this computer in your account's device list.
+      • Subscription refreshes reuse the same installation identifier.
+      • Device details are not sent to third-party services or through redirects.
+      • The 0.3.16 SingBox startup fix is retained. VPN engines and routing are unchanged.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
