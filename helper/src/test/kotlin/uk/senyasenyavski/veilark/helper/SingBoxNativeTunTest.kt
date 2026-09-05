@@ -111,7 +111,7 @@ class SingBoxNativeTunTest {
       "[pscustomobject]@{Status=\$device.Status; InstanceId=\$device.InstanceId; Driver=\$driver; NetCfgInstanceId=\$config} } | ConvertTo-Json -Compress; " +
       "Get-Command Remove-PnpDevice -ErrorAction SilentlyContinue | Select-Object Name, Source | ConvertTo-Json -Compress"
     return runCatching {
-      ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
+      ProcessBuilder(listOf("powershell.exe") + OwnedWinTunCleanup.commandArguments(script))
         .redirectErrorStream(true).start().capture(10_000, maximumOutputChars = 4_000).output
     }.getOrElse { "Diagnostic read failed: ${it.javaClass.simpleName}" }
   }

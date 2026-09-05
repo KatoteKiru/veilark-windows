@@ -3,6 +3,10 @@ package uk.senyasenyavski.veilark.helper
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import java.util.Base64
+import java.nio.file.Path
+import org.junit.jupiter.api.Assumptions.assumeTrue
 
 class OwnedWinTunCleanupTest {
   private val tunnel = ReadyTunnel(19, 14918723521478656, "Veilark", "sing-tun Tunnel")
@@ -26,5 +30,25 @@ class OwnedWinTunCleanupTest {
     assertFalse(OwnedWinTunCleanup.INSTANCE_ID.matches("SWD\\WINTUN\\'; Remove-Item *; '"))
     assertTrue(OwnedWinTunCleanup.GUID.matches("{DDD8E7A7-D78F-E80D-1F18-1120D0F2573E}"))
     assertFalse(OwnedWinTunCleanup.GUID.matches("{DDD8E7A7-D78F-E80D-1F18-1120D0F2573E}'"))
+  }
+
+  @Test fun `encoded PowerShell preserves registry quoting and Unicode exactly`() {
+    val script = OwnedWinTunCleanup.ghostLookupScript("{DDD8E7A7-D78F-E80D-1F18-1120D0F2573E}") + "\n# Проверка кавычек"
+    val decoded = String(Base64.getDecoder().decode(OwnedWinTunCleanup.encodedCommand(script)), Charsets.UTF_16LE)
+    assertEquals(script, decoded)
+  }
+
+  @Test fun `actual Windows argument transport parses cleanup without executing it`() {
+    assumeTrue(System.getProperty("os.name").startsWith("Windows"))
+    val script = OwnedWinTunCleanup.ghostLookupScript("{DDD8E7A7-D78F-E80D-1F18-1120D0F2573E}")
+    val payload = OwnedWinTunCleanup.encodedCommand(script)
+    // Parse only: this never executes the registry lookup, PnP query or removal.
+    val parseOnly = "\$source = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$payload')); " +
+      "[scriptblock]::Create(\$source) | Out-Null; Write-Output 'PARSED'"
+    val executable = Path.of(System.getenv("SystemRoot") ?: "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    val result = ProcessBuilder(listOf(executable.toString()) + OwnedWinTunCleanup.commandArguments(parseOnly))
+      .redirectErrorStream(true).start().capture(5_000)
+    assertTrue(result.succeeded, "Parse-only PowerShell helper failed")
+    assertEquals("PARSED", result.output.trim())
   }
 }
