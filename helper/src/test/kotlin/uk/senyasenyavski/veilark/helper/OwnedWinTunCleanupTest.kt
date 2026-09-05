@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import java.util.Base64
 import java.nio.file.Path
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import kotlinx.coroutines.runBlocking
 
 class OwnedWinTunCleanupTest {
   private val tunnel = ReadyTunnel(19, 14918723521478656, "Veilark", "sing-tun Tunnel")
@@ -50,5 +51,21 @@ class OwnedWinTunCleanupTest {
       .redirectErrorStream(true).start().capture(5_000)
     assertTrue(result.succeeded, "Parse-only PowerShell helper failed")
     assertEquals("PARSED", result.output.trim())
+  }
+
+  @Test fun `cleanup waits for owned adapter state propagation without relaxing ownership`() = runBlocking {
+    var observations = 0
+    var pauses = 0
+    assertTrue(OwnedWinTunCleanup.awaitStoppedAdapter(tunnel,
+      lookup = { adapter.copy(operational = observations++ < 2) }, pause = { pauses++ }))
+    assertEquals(3, observations)
+    assertEquals(2, pauses)
+    observations = 0
+    assertFalse(OwnedWinTunCleanup.awaitStoppedAdapter(tunnel,
+      lookup = { observations++; adapter.copy(operational = true) }, pause = {}))
+    assertEquals(21, observations)
+    assertFalse(OwnedWinTunCleanup.awaitStoppedAdapter(tunnel,
+      lookup = { adapter.copy(luid = tunnel.luid + 1) }, pause = {}))
+    assertTrue(OwnedWinTunCleanup.awaitStoppedAdapter(tunnel, lookup = { null }, pause = {}))
   }
 }

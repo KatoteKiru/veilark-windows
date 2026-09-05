@@ -52,6 +52,7 @@ internal object OwnedWinTunCleanup {
 
   suspend fun remove(tunnel: ReadyTunnel, instanceId: String): Boolean = withContext(Dispatchers.IO) {
     if (!eligible(tunnel) || !INSTANCE_ID.matches(instanceId)) return@withContext false
+    if (!awaitStoppedAdapter(tunnel)) return@withContext false
     val current = WindowsNetwork.refresh(tunnel.luid) ?: return@withContext true
     if (!sameAdapter(tunnel, current) || current.operational) return@withContext false
     // The exact instance ID was obtained before stopping the owned process.
@@ -69,6 +70,21 @@ internal object OwnedWinTunCleanup {
       delay(100)
     }
     false
+  }
+
+  /** Windows can keep a terminated process's adapter operational briefly. */
+  internal suspend fun awaitStoppedAdapter(
+    tunnel: ReadyTunnel,
+    lookup: (Long) -> NetworkAdapter? = WindowsNetwork::refresh,
+    pause: suspend () -> Unit = { delay(100) },
+  ): Boolean {
+    repeat(21) { attempt ->
+      val adapter = lookup(tunnel.luid) ?: return true
+      if (!sameAdapter(tunnel, adapter)) return false
+      if (!adapter.operational) return true
+      if (attempt < 20) pause()
+    }
+    return false
   }
 
   internal fun eligible(tunnel: ReadyTunnel): Boolean =
