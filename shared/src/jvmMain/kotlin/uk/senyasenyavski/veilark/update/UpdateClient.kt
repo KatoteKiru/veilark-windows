@@ -391,21 +391,19 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 315
-    const val CURRENT_VERSION_NAME = "0.3.15"
+    const val CURRENT_VERSION_CODE = 316
+    const val CURRENT_VERSION_NAME = "0.3.16"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.15
-      • Чёткая монохромная иконка для рабочего стола, панели задач и установщика.
-      • Общий логотип Veilark адаптируется к светлой и тёмной теме интерфейса.
-      • Спокойные переходы, нейтральный экран подключения и понятнее навигация.
-      • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
+      Обновлено в 0.3.16
+      • Исправлено ожидание запуска SingBox, которое могло завершаться ошибкой через 30 секунд.
+      • Ошибка записи журнала больше не мешает определению готовности ядра.
+      • Обычные сообщения о соединениях не засоряют журнал. Подписки и маршруты не изменяются.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.15
-      • Crisp monochrome desktop, taskbar and installer icons at Windows DPI sizes.
-      • The shared Veilark mark follows the light and dark interface theme.
-      • Calmer transitions, a neutral connection view and clearer navigation.
-      • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
+      Updated in 0.3.16
+      • Fixed SingBox startup detection that could fail after 30 seconds.
+      • Journal write failures no longer prevent core readiness detection.
+      • Routine connection messages stay out of the journal. Subscriptions and routing are unchanged.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

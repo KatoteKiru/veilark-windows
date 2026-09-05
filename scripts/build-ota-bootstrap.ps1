@@ -102,6 +102,12 @@ try {
   }
 } finally {
   if (Test-Path -LiteralPath $temporary) {
-    Remove-Item -LiteralPath $temporary -Recurse -Force
+    $resolvedTemporary = [IO.Path]::GetFullPath($temporary)
+    $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+    if ((Split-Path -Parent $resolvedTemporary).TrimEnd('\') -ne $expectedParent -or
+        (Split-Path -Leaf $resolvedTemporary) -notmatch '^veilark-ota-bootstrap-[a-f0-9]{32}$') {
+      throw 'Refusing cleanup outside the owned bootstrap temporary directory'
+    }
+    Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force
   }
 }

@@ -18,6 +18,8 @@ internal class CoreLogPump(
   private val engineName: String,
   private val readyMarkers: List<String>,
   private val fatalMarkers: List<String>,
+  private val diagnosticOnly: Boolean = false,
+  private val logger: (String) -> Unit = SafeLog::write,
 ) {
   @Volatile
   private var readySeen = false
@@ -42,24 +44,45 @@ internal class CoreLogPump(
     }
   }
 
-  private fun consume(rawLine: String) {
+  internal fun consume(rawLine: String) {
     val line = ANSI_ESCAPE.replace(rawLine, "").trim()
     if (line.isEmpty()) return
+    val nativeRecord = if (diagnosticOnly) SING_BOX_RECORD.find(line) else null
+    val severity = nativeRecord?.groupValues?.get(1)
+    val message = nativeRecord?.groupValues?.get(2)
+    // Per-connection output can contain attacker-controlled host names/tags.
+    // Those strings must never impersonate a startup or fatal event.
+    val isReady = if (diagnosticOnly) {
+      severity == "INFO" && message != null && SING_BOX_STARTED.matches(message)
+    } else {
+      readyMarkers.any { line.contains(it, ignoreCase = true) }
+    }
+    val isFatal = if (diagnosticOnly) {
+      severity == "FATAL"
+    } else {
+      fatalMarkers.any { line.contains(it, ignoreCase = true) }
+    }
+    // State detection must not depend on disk space or journal permissions.
+    if (isReady) readySeen = true
+    if (fatalLine == null && isFatal) fatalLine = SafeLog.redact(line).take(300)
+    // The sing-box process uses INFO for its startup marker, but ordinary
+    // per-connection INFO output must not fill disk, UI logs or the tail.
+    if (diagnosticOnly && !isReady && severity !in DIAGNOSTIC_SEVERITIES) return
+    val safeLine = SafeLog.redact(line)
     synchronized(recent) {
-      recent.addLast(line)
+      recent.addLast(safeLine)
       while (recent.size > MAX_RECENT_LINES) recent.removeFirst()
     }
-    SafeLog.write(line)
-    if (!readySeen && readyMarkers.any { line.contains(it, ignoreCase = true) }) {
-      readySeen = true
-    }
-    if (fatalLine == null && fatalMarkers.any { line.contains(it, ignoreCase = true) }) {
-      fatalLine = line.take(300)
-    }
+    // Keep draining the pipe even if diagnostics cannot be written. Otherwise
+    // a full pipe can stall a healthy core after an unrelated logging failure.
+    runCatching { logger(safeLine) }
   }
 
   private companion object {
     val ANSI_ESCAPE = Regex("""\u001B\[[0-9;]*[A-Za-z]""")
+    val SING_BOX_RECORD = Regex("""(?:^|\s)(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)(?:\[[^\]]*])?\s+(.*)$""")
+    val SING_BOX_STARTED = Regex("""sing-box started \([^\r\n]*\)""")
+    val DIAGNOSTIC_SEVERITIES = setOf("WARN", "ERROR", "FATAL")
     const val MAX_RECENT_LINES = 40
   }
 }

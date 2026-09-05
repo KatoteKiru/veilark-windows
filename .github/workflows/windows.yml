@@ -36,6 +36,13 @@ jobs:
         run: python -m py_compile .\scripts\publish_ota.py
       - shell: powershell
         run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --max-workers=2 --stacktrace
+      - name: Verify native startup contract on isolated Windows runner
+        shell: powershell
+        run: |
+          $env:SING_BOX_CHECKER = (Resolve-Path 'packaging\resources\windows\sing-box.exe').Path
+          $env:VEILARK_TEST_NATIVE_TUN = '1'
+          .\gradlew.bat :helper:test --tests '*SingBoxNativeTunTest' --tests '*SingBoxRuntimeConfigurationTest' --tests '*CoreLogPumpTest' --rerun-tasks --max-workers=2 --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Native startup contract failed' }
       - name: Verify installed application resources
         shell: powershell
         run: |

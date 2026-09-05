@@ -29,7 +29,9 @@ class SingBoxProcessController(
       check(process?.isAlive != true) { "VPN уже запущен" }
     }
     val executable = resolveExecutable()
-    writeConfigAtomically(profile.config)
+    // Readiness depends on the INFO startup marker. Imported/stored profiles
+    // normally use warn logging and must not suppress or redirect that marker.
+    writeConfigAtomically(SingBoxRuntimeConfiguration.forStartup(profile.config))
     checkConfig(executable)
     // sing-box cannot reuse a connection name still held by an abandoned core or
     // by an adapter that a previous, force-terminated run left behind.
@@ -52,6 +54,7 @@ class SingBoxProcessController(
       engineName = "sing-box",
       readyMarkers = listOf("sing-box started"),
       fatalMarkers = listOf("FATAL", "level=fatal"),
+      diagnosticOnly = true,
     ).also(CoreLogPump::start)
     SafeLog.write("Запуск sing-box ${version(executable)}")
 
