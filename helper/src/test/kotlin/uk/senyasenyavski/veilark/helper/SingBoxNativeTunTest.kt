@@ -52,6 +52,9 @@ class SingBoxNativeTunTest {
       val startupMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
       assertTrue(startupMillis < 30_000, "Native TUN startup took ${startupMillis}ms; must finish before the 30s deadline")
       assertEquals(0, defaultRoutesOnTestAdapter(), "Synthetic TUN must not take over Internet routing")
+    } catch (error: Exception) {
+      val native = WindowsNetwork.matching { it.alias == "Veilark" }.joinToString { "index=${it.index}, luid=${it.luid}, guid=${it.interfaceGuid}, operational=${it.operational}" }
+      throw AssertionError("Native start/stop cycle ${cycle + 1} failed: ${error.message}\nNative identity: $native\n${cleanupDiagnostics()}", error)
     } finally {
       withTimeout(15_000) { controller.stop() }
     }
@@ -102,7 +105,10 @@ class SingBoxNativeTunTest {
     val script = "Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | " +
       "Where-Object { \$_.Name -eq 'Veilark' } | Select-Object Name, InterfaceDescription, InterfaceIndex, InterfaceGuid, PnPDeviceID, Status | ConvertTo-Json -Compress; " +
       "Get-PnpDevice -Class Net -ErrorAction SilentlyContinue | Where-Object { \$_.InstanceId -like 'SWD\\WINTUN\\*' } | " +
-      "Select-Object Status, FriendlyName, InstanceId | ConvertTo-Json -Compress; " +
+      "ForEach-Object { \$device = \$_; \$driver = (Get-PnpDeviceProperty -InstanceId \$device.InstanceId -KeyName DEVPKEY_Device_Driver -ErrorAction SilentlyContinue).Data; " +
+      "\$config = \$null; if (\$driver -match '^\\{4d36e972-e325-11ce-bfc1-08002be10318\\}\\\\[0-9]{4}\$') { " +
+      "\$config = (Get-ItemProperty -LiteralPath (\"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\\" + \$driver) -Name NetCfgInstanceId -ErrorAction SilentlyContinue).NetCfgInstanceId }; " +
+      "[pscustomobject]@{Status=\$device.Status; InstanceId=\$device.InstanceId; Driver=\$driver; NetCfgInstanceId=\$config} } | ConvertTo-Json -Compress; " +
       "Get-Command Remove-PnpDevice -ErrorAction SilentlyContinue | Select-Object Name, Source | ConvertTo-Json -Compress"
     return runCatching {
       ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)

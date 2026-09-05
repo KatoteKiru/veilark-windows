@@ -41,7 +41,7 @@ jobs:
         run: |
           $env:SING_BOX_CHECKER = (Resolve-Path 'packaging\resources\windows\sing-box.exe').Path
           $env:VEILARK_TEST_NATIVE_TUN = '1'
-          .\gradlew.bat :helper:test --tests '*SingBoxNativeTunTest' --tests '*SingBoxRuntimeConfigurationTest' --tests '*CoreLogPumpTest' --rerun-tasks --max-workers=2 --stacktrace
+          .\gradlew.bat :helper:test --tests '*SingBoxNativeTunTest' --tests '*SingBoxRuntimeConfigurationTest' --tests '*CoreLogPumpTest' --max-workers=2 --stacktrace
           $nativeExit = $LASTEXITCODE
           $resultPath = 'helper\build\test-results\test\TEST-uk.senyasenyavski.veilark.helper.SingBoxNativeTunTest.xml'
           if (-not (Test-Path -LiteralPath $resultPath)) { throw "Native TUN report missing; Gradle exit=$nativeExit" }
