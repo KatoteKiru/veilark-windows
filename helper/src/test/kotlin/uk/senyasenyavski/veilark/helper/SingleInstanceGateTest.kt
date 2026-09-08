@@ -152,11 +152,10 @@ class SingleInstanceGateTest {
           // A later plain activation must not erase the queued import payload.
           assertFalse(secondary.notifyPrimary(timeoutMillis = 100))
         }
-        // Give the loopback listener time to process both connections.
-        Thread.sleep(300)
-
         primary.setActivationHandler { importLink ->
-          received.set(importLink)
+          // The listener may deliver the queued import and the later plain activation
+          // separately. Observe the first delivery, not a value overwritten by the EDT.
+          received.compareAndSet("unset", importLink)
           delivered.countDown()
         }
         assertTrue(delivered.await(3, TimeUnit.SECONDS))
