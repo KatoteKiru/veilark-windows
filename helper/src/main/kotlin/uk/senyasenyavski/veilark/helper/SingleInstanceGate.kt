@@ -10,9 +10,13 @@ import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
 import kotlin.concurrent.thread
 
@@ -47,7 +51,7 @@ class SingleInstanceGate(
   val isPrimary: Boolean get() = lock != null
 
   init {
-    if (isPrimary) startServer()
+    if (isPrimary) try { startServer() } catch (error: Throwable) { close(); throw error }
   }
 
   /**
@@ -60,35 +64,42 @@ class SingleInstanceGate(
       activationHandler.set(handler)
       pendingActivation.getAndSet(null)
     }
-    if (pending != null) dispatchActivation(handler, pending.importLink)
+    if (pending != null) dispatchActivation(handler, pending.importLink, pending.result)
   }
 
   /**
    * Asks the running primary instance to activate itself, optionally handing over a
    * validated import payload so that the deep link opens the import flow there.
    */
-  fun notifyPrimary(importLink: String? = null): Boolean {
+  fun notifyPrimary(importLink: String? = null, timeoutMillis: Long = 3_000): Boolean {
     if (isPrimary) return true
+    require(timeoutMillis > 0)
+    val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
     val forwarded = importLink?.let(ImportDeepLink::validatePayload)
     repeat(NOTIFY_ATTEMPTS) {
+      val remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+      if (remaining <= 0) return false
       val endpoint = readEndpoint()
       if (endpoint != null) {
         val sent = runCatching {
           Socket().use { socket ->
             socket.connect(
               InetSocketAddress(InetAddress.getLoopbackAddress(), endpoint.first),
-              CONNECT_TIMEOUT_MILLIS,
+              minOf(CONNECT_TIMEOUT_MILLIS, remaining.toInt()),
             )
-            socket.getOutputStream().bufferedWriter().use { writer ->
+            socket.soTimeout = minOf(CONNECT_TIMEOUT_MILLIS, remaining.toInt())
+            socket.getOutputStream().bufferedWriter().let { writer ->
               writer.write(endpoint.second)
               writer.newLine()
               if (forwarded != null) {
                 writer.write(forwarded)
                 writer.newLine()
               }
+              writer.flush()
             }
+            socket.shutdownOutput()
+            socket.getInputStream().bufferedReader().readBoundedLine(128) == ACK
           }
-          true
         }.getOrDefault(false)
         if (sent) return true
       }
@@ -97,9 +108,19 @@ class SingleInstanceGate(
     return false
   }
 
+  /** Never steal a live owner's lock, even when its activation endpoint is unresponsive. */
+  fun tryBecomePrimary(): Boolean {
+    check(!closed.get())
+    if (isPrimary) return true
+    lock = acquire(0) ?: return false
+    try { startServer() } catch (error: Throwable) { close(); throw error }
+    return true
+  }
+
   override fun close() {
     if (!closed.compareAndSet(false, true)) return
     runCatching { server?.close() }
+    if (isPrimary) runCatching { Files.deleteIfExists(endpointPath) }
     runCatching { lock?.release() }
     runCatching { channel.close() }
   }
@@ -128,45 +149,67 @@ class SingleInstanceGate(
     token = activationToken
     val endpoint = "${localServer.localPort}\n$activationToken\n"
       .toByteArray(Charsets.UTF_8)
-    java.nio.file.Files.write(endpointPath, endpoint)
+    val temporary = endpointPath.resolveSibling("${endpointPath.fileName}.tmp")
+    Files.write(temporary, endpoint)
+    try {
+      Files.move(temporary, endpointPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+    } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+      // The OS lock still belongs to us; incomplete endpoint reads are retried
+      // and cannot authenticate without a complete matching token + UI ACK.
+      Files.move(temporary, endpointPath, StandardCopyOption.REPLACE_EXISTING)
+    } finally { Files.deleteIfExists(temporary) }
 
     thread(name = "veilark-single-instance", isDaemon = true) {
       while (!closed.get()) {
         val accepted = runCatching { localServer.accept() }.getOrNull() ?: break
-        accepted.use { socket ->
+        runCatching { accepted.use { socket ->
           socket.soTimeout = CONNECT_TIMEOUT_MILLIS
           val reader = socket.getInputStream().bufferedReader()
-          val received = runCatching { reader.readLine() }.getOrNull()
+          val received = reader.readBoundedLine(128)
           if (received == activationToken) {
             // The payload line is optional; a plain activation closes the stream here.
-            val importLink = runCatching { reader.readLine() }.getOrNull()
+            val importLink = reader.readBoundedLine(16_384)
               ?.let(ImportDeepLink::validatePayload)
-            enqueueActivation(importLink)
+            val delivered = runCatching {
+              enqueueActivation(importLink).get(CONNECT_TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS)
+            }.getOrDefault(false)
+            if (delivered) {
+              socket.getOutputStream().write("$ACK\n".toByteArray(Charsets.UTF_8))
+              socket.getOutputStream().flush()
+            }
           }
-        }
+        } }
       }
     }
   }
 
-  private fun enqueueActivation(importLink: String?) {
+  private fun enqueueActivation(importLink: String?): CompletableFuture<Boolean> {
+    val result = CompletableFuture<Boolean>()
     val handler = synchronized(activationStateLock) {
       activationHandler.get()?.also {
         pendingActivation.set(null)
       } ?: run {
         // Collapse repeated activations but never drop a forwarded import payload.
         val previous = pendingActivation.get()
-        pendingActivation.set(PendingActivation(importLink ?: previous?.importLink))
+        previous?.result?.complete(false)
+        pendingActivation.set(PendingActivation(importLink ?: previous?.importLink, result))
         null
       }
     }
-    handler?.let { dispatchActivation(it, importLink) }
+    handler?.let { dispatchActivation(it, importLink, result) }
+    return result
   }
 
-  private fun dispatchActivation(handler: (String?) -> Unit, importLink: String?) {
-    if (!closed.get()) SwingUtilities.invokeLater { handler(importLink) }
+  private fun dispatchActivation(handler: (String?) -> Unit, importLink: String?, result: CompletableFuture<Boolean>) {
+    if (closed.get()) { result.complete(false); return }
+    SwingUtilities.invokeLater {
+      if (closed.get()) { result.complete(false); return@invokeLater }
+      result.complete(runCatching { handler(importLink); true }.getOrDefault(false))
+    }
   }
 
   private fun readEndpoint(): Pair<Int, String>? = runCatching {
+    check(Files.size(endpointPath) in 1..256)
     val content = java.nio.file.Files.readString(endpointPath, Charsets.UTF_8)
       .lineSequence()
       .toList()
@@ -176,9 +219,21 @@ class SingleInstanceGate(
     else port!! to activationToken
   }.getOrNull()
 
-  private class PendingActivation(val importLink: String?)
+  private class PendingActivation(val importLink: String?, val result: CompletableFuture<Boolean>)
+
+  private fun java.io.BufferedReader.readBoundedLine(limit: Int): String? {
+    val value = StringBuilder()
+    while (true) {
+      val character = read()
+      if (character == -1) return value.takeIf { it.isNotEmpty() }?.toString()
+      if (character == '\n'.code) return value.toString().removeSuffix("\r")
+      require(value.length < limit) { "Activation record too long" }
+      value.append(character.toChar())
+    }
+  }
 
   private companion object {
+    const val ACK = "VEILARK-ACTIVATION-ACCEPTED"
     const val CONNECT_TIMEOUT_MILLIS = 1_000
     const val NOTIFY_ATTEMPTS = 8
     const val NOTIFY_RETRY_MILLIS = 125L

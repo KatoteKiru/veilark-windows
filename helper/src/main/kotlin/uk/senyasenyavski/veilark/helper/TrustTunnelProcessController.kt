@@ -1,7 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -48,7 +47,9 @@ class TrustTunnelProcessController(
       TrustTunnelRouting.validateNativeConfigContract(Files.readString(trustConfig, Charsets.UTF_8))
       TrustTunnelRouting.apply(trustConfig, routingPlan)
       CoreProcessJanitor.terminateOrphans(client)
-      WinTunJanitor.removeGhostAdapters()
+      // Adapter lifetime belongs to the native core. A generic TrustTunnel
+      // alias cannot prove ownership of a stopped adapter from another client.
+      // Never run the legacy global WinTUN cleanup on this path.
 
       SafeLog.write("Запуск ${version(client)}")
       val started = ProcessBuilder(
@@ -116,8 +117,6 @@ class TrustTunnelProcessController(
       }
       Files.deleteIfExists(trustConfig)
       Files.deleteIfExists(endpointConfig)
-      delay(700)
-      WinTunJanitor.removeGhostAdapters()
     }
   }
 

@@ -40,7 +40,15 @@ sealed interface VpnPhase {
   data class Connected(val sinceEpochMillis: Long) : VpnPhase
   data class Degraded(val message: String) : VpnPhase
   data object Stopping : VpnPhase
-  data class Error(val message: String, val code: String) : VpnPhase
+  data class Error(val message: String, val code: String, val stopRequired: Boolean = false) : VpnPhase
+}
+
+val VpnPhase.requiresStopRetry: Boolean get() = this is VpnPhase.Error && stopRequired
+
+val VpnPhase.locksConfiguration: Boolean get() = when (this) {
+  VpnPhase.Preparing, VpnPhase.Connecting, is VpnPhase.Connected,
+  is VpnPhase.Degraded, VpnPhase.Stopping -> true
+  else -> requiresStopRetry
 }
 
 data class Node(

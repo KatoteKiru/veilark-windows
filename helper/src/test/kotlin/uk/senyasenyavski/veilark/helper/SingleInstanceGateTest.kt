@@ -13,6 +13,67 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SingleInstanceGateTest {
+  @Test fun `unresponsive UI cannot acknowledge activation or lose its live lock`() {
+    val directory = Files.createTempDirectory("veilark-instance-blocked-ui")
+    val path = directory.resolve("instance.lock")
+    val blocked = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    try {
+      SingleInstanceGate(path).use { primary ->
+        primary.setActivationHandler { }
+        SwingUtilities.invokeLater { blocked.countDown(); release.await(5, TimeUnit.SECONDS) }
+        assertTrue(blocked.await(2, TimeUnit.SECONDS))
+        SingleInstanceGate(path).use { secondary ->
+          assertFalse(secondary.notifyPrimary(timeoutMillis = 100))
+          assertFalse(secondary.tryBecomePrimary())
+          release.countDown()
+          assertTrue(secondary.notifyPrimary())
+        }
+      }
+    } finally {
+      release.countDown()
+      Files.deleteIfExists(path.resolveSibling("instance.lock.endpoint"))
+      Files.deleteIfExists(path)
+      Files.deleteIfExists(directory)
+    }
+  }
+
+  @Test fun `secondary may recover only after former primary releases OS lock`() {
+    val directory = Files.createTempDirectory("veilark-instance-recover")
+    val path = directory.resolve("instance.lock")
+    try {
+      val primary = SingleInstanceGate(path)
+      primary.use {
+        SingleInstanceGate(path).use { secondary ->
+          assertFalse(secondary.tryBecomePrimary())
+          primary.close()
+          assertTrue(secondary.tryBecomePrimary())
+          assertTrue(secondary.isPrimary)
+        }
+      }
+    } finally {
+      Files.deleteIfExists(path.resolveSibling("instance.lock.endpoint"))
+      Files.deleteIfExists(path)
+      Files.deleteIfExists(directory)
+    }
+  }
+  @Test
+  fun `successful socket write without authenticated acknowledgement is not activation`() {
+    val directory = Files.createTempDirectory("veilark-instance-ack")
+    val path = directory.resolve("instance.lock")
+    try {
+      SingleInstanceGate(path).use {
+        val endpoint = path.resolveSibling("instance.lock.endpoint")
+        val port = Files.readAllLines(endpoint).first()
+        Files.writeString(endpoint, "$port\nwrong-token\n")
+        SingleInstanceGate(path).use { secondary -> assertFalse(secondary.notifyPrimary()) }
+      }
+    } finally {
+      Files.deleteIfExists(path.resolveSibling("instance.lock.endpoint"))
+      Files.deleteIfExists(path)
+      Files.deleteIfExists(directory)
+    }
+  }
   @BeforeTest
   fun warmUpEventDispatchThread() {
     // notifyPrimary confirms socket delivery; activation itself is queued on the EDT.
@@ -87,9 +148,9 @@ class SingleInstanceGateTest {
       val received = AtomicReference<String?>("unset")
       SingleInstanceGate(lockPath).use { primary ->
         SingleInstanceGate(lockPath).use { secondary ->
-          assertTrue(secondary.notifyPrimary(link))
+          assertFalse(secondary.notifyPrimary(link, timeoutMillis = 100))
           // A later plain activation must not erase the queued import payload.
-          assertTrue(secondary.notifyPrimary())
+          assertFalse(secondary.notifyPrimary(timeoutMillis = 100))
         }
         // Give the loopback listener time to process both connections.
         Thread.sleep(300)
@@ -132,7 +193,7 @@ class SingleInstanceGateTest {
 
         SingleInstanceGate(lockPath).use { secondary ->
           assertFalse(secondary.isPrimary)
-          assertTrue(secondary.notifyPrimary())
+          assertFalse(secondary.notifyPrimary(timeoutMillis = 100))
         }
 
         primary.setActivationHandler { activated.countDown() }

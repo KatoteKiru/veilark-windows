@@ -23,6 +23,7 @@ import uk.senyasenyavski.veilark.model.SessionState
 import uk.senyasenyavski.veilark.model.TrafficSnapshot
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
+import uk.senyasenyavski.veilark.model.requiresStopRetry
 import uk.senyasenyavski.veilark.session.VpnSession
 
 class WindowsVpnSession(
@@ -43,7 +44,9 @@ class WindowsVpnSession(
   private val mutableState = MutableStateFlow(SessionState())
 
   private var activeController: EngineController? = null
+  private var activeGeoLease: AutoCloseable? = null
   private var connectJob: Job? = null
+  private var pendingTeardownJob: Job? = null
   private var monitorJob: Job? = null
 
   init {
@@ -62,8 +65,10 @@ class WindowsVpnSession(
       // controller while that teardown is still in progress.
       if (
         connectJob?.isActive == true ||
+        pendingTeardownJob != null ||
         activeController != null ||
-        mutableState.value.phase is VpnPhase.Stopping
+        mutableState.value.phase is VpnPhase.Stopping ||
+        mutableState.value.phase.requiresStopRetry
       ) return
       val controller = controllers[profile.engine] ?: run {
         publish(
@@ -97,7 +102,8 @@ class WindowsVpnSession(
 
   override suspend fun disconnect() = disconnectMutex.withLock {
     val (pending, controller) = mutex.withLock {
-      val pending = connectJob.also { connectJob = null }
+      val pending = connectJob ?: pendingTeardownJob
+      connectJob = null
       val controller = activeController
       monitorJob?.cancel()
       monitorJob = null
@@ -117,7 +123,8 @@ class WindowsVpnSession(
         true
       } == true
     }
-    val stopped = controller?.let { stopOwnedController(it) } ?: Result.success(Unit)
+    val stopped = controller?.let { stopOwnedController(it, retainForPendingStartup = !pendingFinished) }
+      ?: Result.success(Unit)
     val terminated = stopped.mapCatching {
       check(pendingFinished) {
         "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
@@ -125,6 +132,7 @@ class WindowsVpnSession(
       check(controller?.isAlive() != true) { "VPN-ядро всё ещё работает" }
     }
     mutex.withLock {
+      pendingTeardownJob = if (pendingFinished) null else pending
       if (terminated.isSuccess) {
         publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
       } else {
@@ -134,6 +142,7 @@ class WindowsVpnSession(
             phase = VpnPhase.Error(
               message = "Не удалось остановить VPN-ядро",
               code = "STOP_FAILED",
+              stopRequired = true,
             ),
           ),
         )
@@ -164,6 +173,7 @@ class WindowsVpnSession(
       mutex.withLock {
         if (mutableState.value.phase is VpnPhase.Stopping) return
         activeController = controller
+        activeGeoLease = GeoGenerationLeases.acquire(profile.geoRoutingAssets)
         publish(mutableState.value.copy(phase = VpnPhase.Connecting))
       }
       val health = withTimeout(CONNECT_TIMEOUT_MILLIS) { controller.start(profile) }
@@ -207,7 +217,8 @@ class WindowsVpnSession(
       if (mutableState.value.phase is VpnPhase.Stopping) return@withLock
       publish(
         mutableState.value.copy(
-          phase = VpnPhase.Error(message, code),
+          phase = VpnPhase.Error(message, code,
+            stopRequired = activeController != null || pendingTeardownJob != null),
           traffic = null,
         ),
       )
@@ -219,7 +230,10 @@ class WindowsVpnSession(
    * timeout and the Stop button can race, but exactly one of them may call the
    * native controller's blocking [EngineController.stop].
    */
-  private suspend fun stopOwnedController(controller: EngineController): Result<Unit> {
+  private suspend fun stopOwnedController(
+    controller: EngineController,
+    retainForPendingStartup: Boolean = false,
+  ): Result<Unit> {
     val claimed = mutex.withLock {
       if (activeController !== controller) {
         false
@@ -236,9 +250,13 @@ class WindowsVpnSession(
         check(!controller.isAlive()) { "VPN-ядро не завершилось" }
       }
     }
+    if (!controller.isAlive() && !retainForPendingStartup) mutex.withLock {
+      activeGeoLease?.close()
+      activeGeoLease = null
+    }
     // Retain a live failed process as the active controller so a subsequent
     // Stop can retry instead of reporting a false Idle state.
-    if (stopped.isFailure && controller.isAlive()) {
+    if (retainForPendingStartup || (stopped.isFailure && controller.isAlive())) {
       mutex.withLock {
         if (activeController == null) activeController = controller
       }
@@ -292,6 +310,8 @@ class WindowsVpnSession(
     val phase = mutableState.value.phase
     if (phase !is VpnPhase.Connected && phase !is VpnPhase.Degraded) return@withLock
     activeController = null
+    activeGeoLease?.close()
+    activeGeoLease = null
     logger("${controller.engine.displayName()} неожиданно завершился")
     publish(
       mutableState.value.copy(

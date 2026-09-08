@@ -10,6 +10,38 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class GeoRoutingPreflightTest {
+  @Test fun `refresh preserves an in-use generation and unknown directory contents`() = runBlocking {
+    val directory = Files.createTempDirectory("veilark-geo-in-use")
+    try {
+      val cache = GeoRuleSetCache(directory, GeoRuleSetDownloader { urls, path ->
+        Files.writeString(path, urls.last().substringAfterLast('/'))
+      }, FakeDecompiler, false)
+      val first = cache.refresh()
+      val unknown = directory.resolve("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+      Files.createDirectory(unknown)
+      Files.writeString(unknown.resolve("user-data.txt"), "preserve")
+      GeoGenerationLeases.acquire(first).use {
+        repeat(4) { cache.refresh() }
+        assertTrue(Files.exists(Path.of(first.geoIpRuPath)))
+        assertTrue(Files.exists(unknown.resolve("user-data.txt")))
+      }
+      cache.refresh()
+      assertTrue(!Files.exists(Path.of(first.geoIpRuPath)))
+    } finally { deleteTree(directory) }
+  }
+  @Test fun `successful refresh retains active and one rollback generation only`() = runBlocking {
+    val directory = Files.createTempDirectory("veilark-geo-retention")
+    try {
+      val cache = GeoRuleSetCache(directory, GeoRuleSetDownloader { urls, path ->
+        Files.writeString(path, urls.last().substringAfterLast('/'))
+      }, FakeDecompiler, false)
+      val results = (1..4).map { cache.refresh() }
+      assertTrue(!Files.exists(Path.of(results.first().geoIpRuPath)))
+      assertTrue(Files.exists(Path.of(results[2].geoIpRuPath)))
+      assertTrue(Files.exists(Path.of(results.last().geoIpRuPath)))
+      assertEquals(results.last(), cache.loadValid())
+    } finally { deleteTree(directory) }
+  }
   @Test
   fun `refresh publishes one validated generation and local load uses no network`() = runBlocking {
     val directory = Files.createTempDirectory("veilark-geo-cache")

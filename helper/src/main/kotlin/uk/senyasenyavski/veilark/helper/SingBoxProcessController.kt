@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 
 class SingBoxProcessController(
   private val executableOverride: Path? = null,
+  private val runtimeDirectory: Path = VeilarkPaths.runtimeDirectory,
 ) : EngineController {
   override val engine: VpnEngine = VpnEngine.SingBox
   private var process: Process? = null
@@ -30,36 +31,37 @@ class SingBoxProcessController(
     val executable = resolveExecutable()
     // Readiness depends on the INFO startup marker. Imported/stored profiles
     // normally use warn logging and must not suppress or redirect that marker.
-    writeConfigAtomically(SingBoxRuntimeConfiguration.forStartup(profile.config))
-    checkConfig(executable)
-    // sing-box cannot reuse a connection name still held by an abandoned core or
-    // by an adapter that a previous, force-terminated run left behind.
-    CoreProcessJanitor.terminateOrphans(executable)
-    OwnedWinTunCleanup.recoverStoppedAdapters()
+    try {
+      writeConfigAtomically(SingBoxRuntimeConfiguration.forStartup(profile.config))
+      checkConfig(executable)
+      // sing-box cannot reuse a connection name still held by an abandoned core or
+      // by an adapter that a previous, force-terminated run left behind.
+      CoreProcessJanitor.terminateOrphans(executable)
+      OwnedWinTunCleanup.recoverStoppedAdapters()
 
-    val started = ProcessBuilder(
-      executable.toString(),
-      "run",
-      "-c",
-      VeilarkPaths.activeConfig.toString(),
-    )
-      .directory(executable.parent.toFile())
-      .redirectErrorStream(true)
-      .start()
-    synchronized(this@SingBoxProcessController) { process = started }
+      val started = ProcessBuilder(
+        executable.toString(),
+        "run",
+        "-c",
+        activeConfig.toString(),
+      )
+        .directory(executable.parent.toFile())
+        .redirectErrorStream(true)
+        .start()
+      synchronized(this@SingBoxProcessController) { process = started }
 
-    val logPump = CoreLogPump(
-      process = started,
-      engineName = "sing-box",
-      readyMarkers = listOf("sing-box started"),
-      fatalMarkers = listOf("FATAL", "level=fatal"),
-      diagnosticOnly = true,
-    ).also(CoreLogPump::start)
-    SafeLog.write("Запуск sing-box ${version(executable)}")
+      val logPump = CoreLogPump(
+        process = started,
+        engineName = "sing-box",
+        readyMarkers = listOf("sing-box started"),
+        fatalMarkers = listOf("FATAL", "level=fatal"),
+        diagnosticOnly = true,
+      ).also(CoreLogPump::start)
+      SafeLog.write("Запуск sing-box ${version(executable)}")
 
-    val tunnel = TunnelReadiness.await(
-      process = started,
-      logPump = logPump,
+      val tunnel = TunnelReadiness.await(
+        process = started,
+        logPump = logPump,
         matcher = TunnelMatcher(
           label = ProfileConfiguration.WINDOWS_TUN_INTERFACE,
           matches = {
@@ -68,14 +70,18 @@ class SingBoxProcessController(
         ),
         requireReadyMarker = true,
       )
-    readyTunnel = tunnel
-    SafeLog.write("Туннель sing-box поднят: ${tunnel.alias} (интерфейс ${tunnel.index})")
-    // The configuration holds credentials and sing-box only reads it at
-    // startup, so it is removed as soon as the tunnel exists.
-    Files.deleteIfExists(VeilarkPaths.activeConfig)
-    // Keep startup independent from external health endpoints. The session
-    // monitor probes browser-equivalent connectivity after Connected is shown.
-    EngineHealth.Healthy
+      readyTunnel = tunnel
+      SafeLog.write("Туннель sing-box поднят: ${tunnel.alias} (интерфейс ${tunnel.index})")
+      // The configuration holds credentials and sing-box only reads it at
+      // startup, so it is removed as soon as the tunnel exists.
+      Files.deleteIfExists(activeConfig)
+      // Keep startup independent from external health endpoints. The session
+      // monitor probes browser-equivalent connectivity after Connected is shown.
+      EngineHealth.Healthy
+    } finally {
+      Files.deleteIfExists(activeConfig)
+      Files.deleteIfExists(runtimeDirectory.resolve("active.json.tmp"))
+    }
   }
 
   override suspend fun stop() = stopMutex.withLock {
@@ -97,7 +103,7 @@ class SingBoxProcessController(
           readyTunnel = null
         }
       }
-      Files.deleteIfExists(VeilarkPaths.activeConfig)
+      Files.deleteIfExists(activeConfig)
       if (ownedTunnel != null && ownedDevice != null) {
         if (!OwnedWinTunCleanup.remove(ownedTunnel, ownedDevice)) {
           SafeLog.write("Не удалось удалить собственный остановленный TUN-адаптер")
@@ -128,7 +134,7 @@ class SingBoxProcessController(
       executable.toString(),
       "check",
       "-c",
-      VeilarkPaths.activeConfig.toString(),
+      activeConfig.toString(),
     ).redirectErrorStream(true).start()
       .captureCancellable(20_000)
     check(result.succeeded) {
@@ -148,14 +154,16 @@ class SingBoxProcessController(
   }.getOrDefault("unknown")
 
   private fun writeConfigAtomically(config: String) {
-    val temporary = VeilarkPaths.runtimeDirectory.resolve("active.json.tmp")
+    val temporary = runtimeDirectory.resolve("active.json.tmp")
     Files.writeString(temporary, config, Charsets.UTF_8)
     Files.move(
       temporary,
-      VeilarkPaths.activeConfig,
+      activeConfig,
       StandardCopyOption.REPLACE_EXISTING,
       StandardCopyOption.ATOMIC_MOVE,
     )
   }
+
+  private val activeConfig: Path get() = runtimeDirectory.resolve("active.json")
 
 }

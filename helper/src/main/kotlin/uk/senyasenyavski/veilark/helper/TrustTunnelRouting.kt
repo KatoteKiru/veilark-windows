@@ -42,21 +42,56 @@ internal object TrustTunnelRouting {
       // Manual routing has VPN as its default, just like the sing-box config.
       // Explicit VPN entries therefore only provide priority over an otherwise
       // direct entry; non-overlapping direct entries are TrustTunnel exclusions.
-      val vpnOverrides = (vpn.domains + vpn.networks).toSet()
+      val retainedDomains = direct.domains.filterNot { candidate ->
+        vpn.domains.any { candidate == it || candidate.endsWith(".$it") }
+      }
+      require(retainedDomains.none { candidate -> vpn.domains.any { it.endsWith(".$candidate") } }) {
+        "TrustTunnel: VPN-поддомен пересекается с прямым правилом. Уточните прямые правила или используйте sing-box. / Overlapping domain rules require sing-box."
+      }
+      val vpnNetworks = vpn.networks.map(::network)
+      val retainedNetworks = direct.networks.filterNot { candidate ->
+        val directNetwork = network(candidate)
+        vpnNetworks.any { it.contains(directNetwork) }
+      }
+      require(retainedNetworks.none { candidate ->
+        val directNetwork = network(candidate)
+        vpnNetworks.any { directNetwork.contains(it) }
+      }) {
+        "TrustTunnel: VPN-сеть находится внутри прямой сети. Разделите диапазоны или используйте sing-box. / Overlapping network rules require sing-box."
+      }
       TrustTunnelRoutingPlan(
         vpnMode = "general",
         exclusions = (
-          direct.networks + direct.domains
-            .filterNot(vpnOverrides::contains)
-            .flatMap(::domainWithSubdomains)
+          retainedNetworks + retainedDomains.flatMap(::domainWithSubdomains)
         ).distinct(),
         // Let known exclusion candidates use TrustTunnel's SNI inspection,
         // but do not send every foreign HTTPS connection through the fake
         // upstream. The latter delays and can stall the default VPN branch.
         exclusionsTcpEarlyAckEnabled = false,
-        exclusionsPreresolveEnabled = direct.domains.any { it !in vpnOverrides },
+        exclusionsPreresolveEnabled = retainedDomains.isNotEmpty(),
       )
     }
+  }
+
+  private data class Network(val bytes: ByteArray, val prefix: Int) {
+    fun contains(other: Network): Boolean {
+      if (bytes.size != other.bytes.size || prefix > other.prefix) return false
+      repeat(prefix) { bit ->
+        val mask = 1 shl (7 - bit % 8)
+        if ((bytes[bit / 8].toInt() and mask) != (other.bytes[bit / 8].toInt() and mask)) return false
+      }
+      return true
+    }
+  }
+
+  private fun network(value: String): Network {
+    val literal = value.substringBefore('/')
+    // Routing parser has already validated numeric input; never resolve a hostname here.
+    require(literal.matches(Regex("[0-9a-fA-F:.]+")))
+    val bytes = java.net.InetAddress.getByName(literal).address
+    val prefix = value.substringAfter('/').toInt()
+    require(prefix in 0..bytes.size * 8)
+    return Network(bytes, prefix)
   }
 
   fun apply(path: Path, plan: TrustTunnelRoutingPlan) {

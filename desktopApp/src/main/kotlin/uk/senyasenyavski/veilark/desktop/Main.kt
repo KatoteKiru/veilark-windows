@@ -133,6 +133,7 @@ import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -157,6 +158,7 @@ import uk.senyasenyavski.veilark.helper.SubscriptionOrigin
 import uk.senyasenyavski.veilark.helper.SubscriptionRecord
 import uk.senyasenyavski.veilark.helper.SafeLog
 import uk.senyasenyavski.veilark.helper.WindowsVpnSession
+import uk.senyasenyavski.veilark.helper.ConnectionPreparation
 import uk.senyasenyavski.veilark.diagnostics.HealthChecker
 import uk.senyasenyavski.veilark.diagnostics.HealthResult
 import uk.senyasenyavski.veilark.importer.ProfileImporter
@@ -167,6 +169,8 @@ import uk.senyasenyavski.veilark.model.RoutingSettings
 import uk.senyasenyavski.veilark.model.TrafficSnapshot
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
+import uk.senyasenyavski.veilark.model.requiresStopRetry
+import uk.senyasenyavski.veilark.model.locksConfiguration
 import uk.senyasenyavski.veilark.profile.ProfileConfiguration
 import uk.senyasenyavski.veilark.profile.NodeCountry
 import uk.senyasenyavski.veilark.profile.NodePresentation
@@ -185,6 +189,7 @@ import javax.swing.TransferHandler
 import kotlin.system.exitProcess
 
 private class DesktopActions {
+  var preparing by mutableStateOf(false)
   var connect: () -> Unit = {}
   var disconnect: () -> Unit = {}
   var importFile: (NioPath) -> Unit = {}
@@ -197,6 +202,19 @@ private val MinimumWindowWidth = 460.dp
 private val MinimumWindowHeight = 480.dp
 
 fun main(args: Array<String>) {
+  try {
+    runVeilark(args)
+  } catch (error: Throwable) {
+    runCatching { SafeLog.writeThrowable("Ошибка запуска Veilark", error) }
+    javax.swing.JOptionPane.showMessageDialog(null,
+      "Veilark could not start. See the technical journal in %LOCALAPPDATA%\\Veilark\\logs.\n" +
+        "Не удалось запустить Veilark. Подробности записаны в технический журнал.",
+      "Veilark", javax.swing.JOptionPane.ERROR_MESSAGE)
+    exitProcess(1)
+  }
+}
+
+private fun runVeilark(args: Array<String>) {
   Thread.setDefaultUncaughtExceptionHandler { thread, error ->
     runCatching {
       SafeLog.writeThrowable("Необработанная ошибка в потоке ${thread.name}", error)
@@ -209,9 +227,17 @@ fun main(args: Array<String>) {
     waitForPrimaryMillis = if ("--connect" in args) 8_000 else 0,
   )
   if (!instanceGate.isPrimary) {
-    instanceGate.notifyPrimary(importLink)
-    instanceGate.close()
-    exitProcess(0)
+    val activated = instanceGate.notifyPrimary(importLink)
+    if (activated || !instanceGate.tryBecomePrimary()) {
+      instanceGate.close()
+      if (!activated) {
+        javax.swing.JOptionPane.showMessageDialog(null,
+          "Veilark is already running, but its window did not respond. Open Veilark from the system tray.\n" +
+            "Veilark уже работает, но окно не ответило. Откройте его через значок в трее. VPN не остановлен.",
+          "Veilark", javax.swing.JOptionPane.WARNING_MESSAGE)
+      }
+      exitProcess(if (activated) 0 else 1)
+    }
   }
   UrlProtocolRegistration().ensureRegistered()
   try {
@@ -224,18 +250,21 @@ fun main(args: Array<String>) {
   val sessionState by session.state.collectAsState()
   val trayState = rememberTrayState()
   var windowVisible by remember { mutableStateOf("--minimized" !in args || importLink != null) }
+  var activationRevision by remember { mutableStateOf(0L) }
   var externalImportRequest by remember { mutableStateOf(importLink) }
   var language by remember { mutableStateOf(UiLanguageStore.load()) }
   val connected = sessionState.phase is VpnPhase.Connected ||
     sessionState.phase is VpnPhase.Degraded
-  val connecting = sessionState.phase is VpnPhase.Preparing ||
+  val connecting = actions.preparing || sessionState.phase is VpnPhase.Preparing ||
     sessionState.phase is VpnPhase.Connecting
   val stopping = sessionState.phase is VpnPhase.Stopping
+  val stopRequired = sessionState.phase.requiresStopRetry
   val busy = connecting || stopping
 
   DisposableEffect(instanceGate) {
     instanceGate.setActivationHandler { forwardedImportLink ->
       windowVisible = true
+      activationRevision += 1
       forwardedImportLink?.let { externalImportRequest = it }
     }
     onDispose { instanceGate.setActivationHandler {} }
@@ -290,6 +319,7 @@ fun main(args: Array<String>) {
     state = trayState,
     icon = painterResource("veilark-app-icon.png"),
     tooltip = when {
+      stopRequired -> language.text("Veilark · Требуется остановка", "Veilark · Stop required")
       connected -> language.text("Veilark · Защищено", "Veilark · Protected")
       busy -> language.text("Veilark · Подключение", "Veilark · Connecting")
       else -> language.text("Veilark · Отключено", "Veilark · Disconnected")
@@ -299,12 +329,13 @@ fun main(args: Array<String>) {
       Item(
         when {
           stopping -> language.text("Отключение…", "Disconnecting…")
+          stopRequired -> language.text("Повторить остановку", "Retry stop")
           connecting -> language.text("Остановить подключение", "Stop connecting")
           connected -> language.text("Отключить", "Disconnect")
           else -> language.text("Подключить", "Connect")
         },
-        enabled = !stopping && (connected || connecting || actions.hasProfile),
-        onClick = if (connected || connecting) actions.disconnect else actions.connect,
+        enabled = !stopping && (connected || connecting || stopRequired || actions.hasProfile),
+        onClick = if (connected || connecting || stopRequired) actions.disconnect else actions.connect,
       )
       Item(language.text("Открыть Veilark", "Open Veilark"), onClick = { windowVisible = true })
       Separator()
@@ -324,6 +355,13 @@ fun main(args: Array<String>) {
     icon = painterResource("veilark-app-icon.png"),
     state = rememberWindowState(width = InitialWindowWidth, height = InitialWindowHeight),
   ) {
+    LaunchedEffect(windowVisible, activationRevision) {
+      if (windowVisible) {
+        window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
+        window.toFront()
+        window.requestFocus()
+      }
+    }
     val windowDensity = LocalDensity.current
     DisposableEffect(windowDensity) {
       window.iconImages = listOf(16, 20, 24, 32, 40, 48, 64, 128, 256).mapNotNull { size ->
@@ -392,6 +430,9 @@ private fun VeilarkApp(
 ) {
   val language = LocalUiLanguage.current
   val scope = rememberCoroutineScope()
+  val preparation = remember(scope) { ConnectionPreparation(scope) }
+  val preparing by preparation.busy.collectAsState()
+  desktopActions.preparing = preparing
   val importer = remember { ProfileImporter() }
   val profileStore = remember { ProfileStore() }
   val geoPreflight = remember { lazy(LazyThreadSafetyMode.NONE) { GeoRoutingPreflight() } }
@@ -415,6 +456,9 @@ private fun VeilarkApp(
   }
   val elevated = remember { elevationManager.isElevated() }
   val state by session.state.collectAsState()
+  val visiblePhase = if (preparing && (state.phase is VpnPhase.Idle || state.phase is VpnPhase.Error)) {
+    VpnPhase.Preparing
+  } else state.phase
   val snackbar = remember { SnackbarHostState() }
   var destination by remember { mutableStateOf(Destination.Home) }
   var profiles by remember {
@@ -449,11 +493,7 @@ private fun VeilarkApp(
   }
   val connected = state.phase is VpnPhase.Connected ||
     state.phase is VpnPhase.Degraded
-  val configurationLocked = state.phase is VpnPhase.Preparing ||
-    state.phase is VpnPhase.Connecting ||
-    state.phase is VpnPhase.Connected ||
-    state.phase is VpnPhase.Degraded ||
-    state.phase is VpnPhase.Stopping
+  val configurationLocked = preparing || state.phase.locksConfiguration
   val profile = profiles[selectedEngine]
   val activeSubscription = selectedSubscriptionIds[selectedEngine]?.let { id ->
     subscriptions.firstOrNull { it.id == id }
@@ -468,7 +508,8 @@ private fun VeilarkApp(
   }
 
   fun refreshGeoData() {
-    if (geoRefreshing || configurationLocked) return
+    val phase = session.state.value.phase
+    if (geoRefreshing || preparation.busy.value || phase.locksConfiguration) return
     geoRefreshing = true
     scope.launch {
       try {
@@ -513,42 +554,38 @@ private fun VeilarkApp(
     catalogRevision += 1
   }
 
-  fun configurationLockedNow(): Boolean = when (session.state.value.phase) {
-    is VpnPhase.Preparing,
-    is VpnPhase.Connecting,
-    is VpnPhase.Connected,
-    is VpnPhase.Degraded,
-    is VpnPhase.Stopping,
-    -> true
-    else -> false
-  }
+  fun configurationLockedNow(): Boolean = preparation.busy.value || session.state.value.phase.locksConfiguration
 
   suspend fun configuredProfile(): Result<Profile> {
     val selected = profile
       ?: return Result.failure(IllegalStateException(
         language.text("Сначала добавьте профиль", "Add a profile first"),
       ))
-    return runCatching {
+    val routingSnapshot = routingSettings
+    val nodeSnapshot = selectedNodeTags[selected.engine] ?: ProfileSelection.AUTOMATIC_TAG
+    return try { Result.success(run {
       val geoAssets = if (
-        routingSettings.mode == RoutingMode.RussiaDirect ||
-        routingSettings.mode == RoutingMode.RussiaVpn
+        routingSnapshot.mode == RoutingMode.RussiaDirect ||
+        routingSnapshot.mode == RoutingMode.RussiaVpn
       ) {
         withContext(Dispatchers.IO) {
-          geoPreflight.value.requirePrepared(routingSettings)
+          geoPreflight.value.requirePrepared(routingSnapshot)
         }
       } else {
         null
       }
       ProfileConfiguration.apply(
         selected,
-        routingSettings,
-        selectedNodeTags[selected.engine] ?: ProfileSelection.AUTOMATIC_TAG,
+        routingSnapshot,
+        nodeSnapshot,
         geoRoutingAssets = geoAssets,
       )
-    }
+    }) } catch (cancelled: CancellationException) { throw cancelled }
+    catch (error: Exception) { Result.failure(error) }
   }
 
   fun connect() {
+    if (configurationLockedNow()) return
     if (importing || refreshing || geoRefreshing) {
       scope.launch {
         snackbar.showSnackbar(language.text("Дождитесь завершения обновления данных", "Wait for the data update to finish"))
@@ -579,17 +616,19 @@ private fun VeilarkApp(
       }
       return
     }
-    scope.launch {
-      configuredProfile()
-        .onSuccess { configured -> session.connect(configured) }
-        .onFailure { error ->
+    preparation.start(action = {
+      val configured = configuredProfile().getOrThrow()
+      kotlinx.coroutines.currentCoroutineContext().ensureActive()
+      session.connect(configured)
+    }, onFailure = { error ->
           snackbar.showSnackbar(error.message ?: language.text("Не удалось применить настройки", "Could not apply settings"))
-        }
-    }
+    })
   }
 
   fun disconnect() {
+    preparation.cancel()
     scope.launch {
+      preparation.cancelAndJoin()
       runCatching { session.disconnect() }
         .onFailure { error ->
           snackbar.showSnackbar(
@@ -630,11 +669,13 @@ private fun VeilarkApp(
       !geoRefreshing
     ) {
       autoConnectAttempted = true
-      configuredProfile()
-        .onSuccess { session.connect(it) }
-        .onFailure { error ->
+      preparation.start(action = {
+        val configured = configuredProfile().getOrThrow()
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        session.connect(configured)
+      }, onFailure = { error ->
           snackbar.showSnackbar(error.message ?: language.text("Не удалось применить настройки", "Could not apply settings"))
-        }
+      })
     }
   }
 
@@ -883,7 +924,7 @@ private fun VeilarkApp(
     containerColor = MaterialTheme.colorScheme.background,
     topBar = {
       AppTopBar(
-        phase = state.phase,
+        phase = visiblePhase,
         onLanguage = onLanguage,
       )
     },
@@ -912,7 +953,7 @@ private fun VeilarkApp(
         ) { currentDestination ->
           when (currentDestination) {
           Destination.Home -> HomeScreen(
-            phase = state.phase,
+            phase = visiblePhase,
             traffic = state.traffic,
             elevated = elevated,
             profile = profile,
@@ -1238,7 +1279,7 @@ private fun HomeScreen(
       ElevationNotice(Modifier.padding(bottom = 10.dp))
     }
     val connectionAction = when {
-      connected || connecting -> onDisconnect
+      connected || connecting || phase.requiresStopRetry -> onDisconnect
       stopping -> ({})
       else -> onConnect
     }
@@ -1293,7 +1334,7 @@ internal fun CompactConnectionWorkspace(
   val busy = phase is VpnPhase.Preparing ||
     phase is VpnPhase.Connecting ||
     phase is VpnPhase.Stopping
-  val configurationLocked = connected || busy
+  val configurationLocked = phase.locksConfiguration
   val failed = phase is VpnPhase.Error
   val statusMessage = concisePhaseMessage(phase, profile, traffic, language)
   val statusSummary = when (phase) {
@@ -1301,10 +1342,13 @@ internal fun CompactConnectionWorkspace(
       "VPN-ядро запущено · требуется проверка",
       "VPN core is running · verification required",
     )
-    is VpnPhase.Error -> language.text("Подключение не установлено", "Connection failed")
+    is VpnPhase.Error -> if (phase.stopRequired) language.text(
+      "Ядро ещё не остановлено · повторите остановку", "Core has not stopped · retry stopping",
+    ) else language.text("Подключение не установлено", "Connection failed")
     else -> statusMessage
   }
   val actionLabel = when {
+    phase.requiresStopRetry -> language.text("Повторить остановку", "Retry stop")
     profile == null -> language.text("Добавить подписку", "Add subscription")
     phase is VpnPhase.Stopping -> language.text("Остановка", "Stopping")
     phase is VpnPhase.Preparing || phase is VpnPhase.Connecting -> language.text("Отменить", "Cancel")
@@ -1320,7 +1364,8 @@ internal fun CompactConnectionWorkspace(
     is VpnPhase.Connected -> language.text("Соединение защищено", "Connection protected")
     is VpnPhase.Degraded -> language.text("Соединение нестабильно", "Connection unstable")
     VpnPhase.Stopping -> language.text("Остановка", "Stopping")
-    is VpnPhase.Error -> language.text("Не удалось подключиться", "Could not connect")
+    is VpnPhase.Error -> if (phase.stopRequired) language.text("Не удалось остановить", "Could not stop")
+      else language.text("Не удалось подключиться", "Could not connect")
   }
 
   Column(
@@ -1357,7 +1402,7 @@ internal fun CompactConnectionWorkspace(
           connected = connected,
           busy = busy,
           enabled = phase !is VpnPhase.Stopping,
-          onClick = if (profile == null) onImport else onAction,
+          onClick = if (profile == null && !phase.requiresStopRetry) onImport else onAction,
           modifier = Modifier.padding(top = 18.dp).fillMaxWidth().height(52.dp),
         )
       }
@@ -2345,7 +2390,7 @@ private fun ConnectionCard(
           is VpnPhase.Connected -> "Соединение защищено"
           is VpnPhase.Degraded -> "Соединение нестабильно"
           VpnPhase.Stopping -> "Отключение…"
-          is VpnPhase.Error -> "Не удалось подключиться"
+          is VpnPhase.Error -> if (phase.stopRequired) "Не удалось остановить" else "Не удалось подключиться"
         },
         style = MaterialTheme.typography.headlineSmall,
         textAlign = TextAlign.Start,
@@ -2400,6 +2445,7 @@ private fun ConnectionCard(
         }
         Text(
           when {
+            phase.requiresStopRetry -> "Повторить остановку"
             profile == null -> "Добавить профиль"
             busy -> "Остановить подключение"
             connected -> "Отключить"

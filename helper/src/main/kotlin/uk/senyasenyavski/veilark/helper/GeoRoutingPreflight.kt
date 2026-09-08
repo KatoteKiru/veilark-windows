@@ -94,6 +94,7 @@ internal class GeoRuleSetCache(
   suspend fun refresh(): GeoRoutingAssets = mutex.withLock {
     withContext(Dispatchers.IO) {
       Files.createDirectories(directory)
+      val previousGeneration = runCatching { readManifest().generation }.getOrNull()
       val generation = UUID.randomUUID().toString().replace("-", "")
       val staging = directory.resolve(".staging-$generation")
       val completed = directory.resolve(generation)
@@ -110,6 +111,7 @@ internal class GeoRuleSetCache(
 
         Files.move(staging, completed, StandardCopyOption.ATOMIC_MOVE)
         publishManifest(generation, digests)
+        pruneGenerations(setOfNotNull(generation, previousGeneration))
         assets(completed, exclusions)
       } finally {
         deleteStaging(staging)
@@ -123,7 +125,9 @@ internal class GeoRuleSetCache(
 
   suspend fun loadValidOrSeed(): GeoRoutingAssets = mutex.withLock {
     withContext(Dispatchers.IO) {
-      runCatching { loadValidUnlocked() }.getOrElse {
+      try { loadValidUnlocked() } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
         installBundledSnapshot()
       }
     }
@@ -259,6 +263,26 @@ internal class GeoRuleSetCache(
     if (!Files.isDirectory(path)) return
     Files.list(path).use { files -> files.forEach(Files::deleteIfExists) }
     Files.deleteIfExists(path)
+  }
+
+  private fun pruneGenerations(retained: Set<String>) {
+    // Only our completed UUID directories, with exactly the known asset files.
+    // Keep active + previous for rollback; never traverse links or unknown data.
+    runCatching {
+      Files.list(directory).use { paths -> paths.forEach { candidate ->
+        if (candidate.fileName.toString() in retained ||
+          GeoGenerationLeases.isPinned(candidate) ||
+          !GENERATION.matches(candidate.fileName.toString()) ||
+          !Files.isDirectory(candidate, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return@forEach
+        val files = Files.list(candidate).use { it.toList() }
+        if (files.any { it.fileName.toString() !in setOf(GEOIP.fileName, GEOSITE.fileName) ||
+            !Files.isRegularFile(it, java.nio.file.LinkOption.NOFOLLOW_LINKS) }) return@forEach
+        GeoGenerationLeases.ifUnpinned(candidate) {
+          files.forEach(Files::deleteIfExists)
+          Files.deleteIfExists(candidate)
+        }
+      } }
+    }.onFailure { runCatching { SafeLog.write("Очистка старых геоданных отложена") } }
   }
 
   private data class Asset(
