@@ -391,21 +391,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 317
-    const val CURRENT_VERSION_NAME = "0.3.17"
+    const val CURRENT_VERSION_CODE = 318
+    const val CURRENT_VERSION_NAME = "0.3.18"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.17
-      • При импорте подписки Veilark компьютер появляется в списке устройств кабинета.
-      • Повторное обновление использует тот же идентификатор установки.
-      • Сведения об устройстве не передаются сторонним сервисам и через перенаправления.
-      • Исправление запуска SingBox из 0.3.16 сохранено. VPN-ядра и маршруты не изменены.
+      Обновлено в 0.3.18
+      • Исправлено открытие скрытого или свёрнутого окна.
+      • Подключение и подготовку геоданных можно отменить; при ошибке остановки доступна повторная попытка.
+      • Исправлен приоритет ручных маршрутов Trust; неподдерживаемые пересечения явно отклоняются.
+      • Убрана очистка чужих VPN-адаптеров. Используемые геоданные защищены от удаления.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.17
-      • Importing a Veilark subscription registers this computer in your account's device list.
-      • Subscription refreshes reuse the same installation identifier.
-      • Device details are not sent to third-party services or through redirects.
-      • The 0.3.16 SingBox startup fix is retained. VPN engines and routing are unchanged.
+      Updated in 0.3.18
+      • Hidden and minimized windows reopen reliably.
+      • Connection preparation is cancellable; failed teardown keeps a Retry stop action.
+      • Fixed Trust manual-route priority; unsupported overlaps are rejected explicitly.
+      • Foreign VPN adapters are left untouched. Active geo files are protected from cleanup.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
