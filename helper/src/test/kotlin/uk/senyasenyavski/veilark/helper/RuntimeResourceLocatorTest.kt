@@ -84,4 +84,21 @@ class RuntimeResourceLocatorTest {
 
     assertEquals(override, candidates.first())
   }
+
+  @Test
+  fun `packaged app ignores environment override and working directory`() {
+    val root = Path.of("C:\\Program Files\\Veilark")
+    val candidates = RuntimeResourceLocator.fileCandidates(
+      fileName = "sing-box.exe",
+      overridePath = Path.of("C:\\Temp\\sing-box.exe"),
+      environmentValue = "C:\\Downloads\\sing-box.exe",
+      composeResourcesDirectory = "C:\\Downloads",
+      javaHome = "C:\\Downloads\\runtime",
+      codeSource = Path.of("C:\\Downloads\\app.jar"),
+      workingDirectory = Path.of("C:\\Downloads"),
+      packagedRoot = root,
+    )
+    assertEquals(root.resolve("app\\resources\\sing-box.exe"), candidates.first())
+    assertTrue(candidates.all { it.startsWith(root) })
+  }
 }

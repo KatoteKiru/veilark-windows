@@ -24,12 +24,13 @@ internal object RuntimeResourceLocator {
     environmentValue = environmentName
       ?.let(System::getenv)
       ?.takeIf(String::isNotBlank),
-  ).firstOrNull(Files::isRegularFile)
+    packagedRoot = installedApplicationRoot(),
+  ).firstOrNull { Files.isRegularFile(it) && trustedInstalledPath(it, installedApplicationRoot()) }
     ?: error("Не найден $fileName. Переустановите Veilark из официального пакета.")
 
   fun requireDirectory(directoryName: String, overridePath: Path? = null): Path =
-    directoryCandidates(directoryName, overridePath)
-      .firstOrNull(Files::isDirectory)
+    directoryCandidates(directoryName, overridePath, packagedRoot = installedApplicationRoot())
+      .firstOrNull { Files.isDirectory(it) && trustedInstalledPath(it, installedApplicationRoot()) }
       ?: error("Не найдены встроенные данные $directoryName. Переустановите Veilark.")
 
   internal fun fileCandidates(
@@ -41,15 +42,20 @@ internal object RuntimeResourceLocator {
     javaHome: String? = System.getProperty("java.home"),
     codeSource: Path? = codeSourcePath(),
     workingDirectory: Path = Path.of("").toAbsolutePath(),
+    packagedRoot: Path? = null,
   ): List<Path> = buildList {
-    overridePath?.let(::add)
-    environmentValue?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
-    resourceRoots(
-      composeResourcesDirectory,
-      javaHome,
-      codeSource,
-      workingDirectory,
-    ).forEach { add(it.resolve(fileName)) }
+    if (packagedRoot != null) {
+      packagedResourceRoots(packagedRoot).forEach { add(it.resolve(fileName)) }
+    } else {
+      overridePath?.let(::add)
+      environmentValue?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
+      resourceRoots(
+        composeResourcesDirectory,
+        javaHome,
+        codeSource,
+        workingDirectory,
+      ).forEach { add(it.resolve(fileName)) }
+    }
   }.map(Path::toAbsolutePath).map(Path::normalize).distinct()
 
   internal fun directoryCandidates(
@@ -60,15 +66,38 @@ internal object RuntimeResourceLocator {
     javaHome: String? = System.getProperty("java.home"),
     codeSource: Path? = codeSourcePath(),
     workingDirectory: Path = Path.of("").toAbsolutePath(),
+    packagedRoot: Path? = null,
   ): List<Path> = buildList {
-    overridePath?.let(::add)
-    resourceRoots(
-      composeResourcesDirectory,
-      javaHome,
-      codeSource,
-      workingDirectory,
-    ).forEach { add(it.resolve(directoryName)) }
+    if (packagedRoot != null) {
+      packagedResourceRoots(packagedRoot).forEach { add(it.resolve(directoryName)) }
+    } else {
+      overridePath?.let(::add)
+      resourceRoots(
+        composeResourcesDirectory,
+        javaHome,
+        codeSource,
+        workingDirectory,
+      ).forEach { add(it.resolve(directoryName)) }
+    }
   }.map(Path::toAbsolutePath).map(Path::normalize).distinct()
+
+  private fun packagedResourceRoots(root: Path): List<Path> = listOf(
+    root.resolve("app").resolve("resources"),
+    root.resolve("app").resolve("resources").resolve("windows"),
+    root.resolve("resources"),
+    root.resolve("resources").resolve("windows"),
+  )
+
+  private fun installedApplicationRoot(): Path? = runCatching {
+    if (!System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) return null
+    val executable = ProcessHandle.current().info().command().orElse(null) ?: return null
+    val path = Path.of(executable)
+    if (!path.fileName.toString().equals("Veilark.exe", ignoreCase = true)) return null
+    path.toRealPath().parent
+  }.getOrNull()
+
+  private fun trustedInstalledPath(path: Path, root: Path?): Boolean =
+    root == null || runCatching { path.toRealPath().startsWith(root.toRealPath()) }.getOrDefault(false)
 
   private fun resourceRoots(
     composeResourcesDirectory: String?,
