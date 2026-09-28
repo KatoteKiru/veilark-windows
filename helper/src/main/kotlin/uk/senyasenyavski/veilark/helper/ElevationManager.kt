@@ -89,11 +89,29 @@ class ElevationManager(
      * quoted when it needs no quoting, because `ShellExecute` passes the string
      * through unchanged and a stray backslash escape would corrupt it.
      */
-    fun quoteArgument(value: String): String =
-      if (value.none { it == ' ' || it == '"' }) {
-        value
-      } else {
-        "\"${value.replace("\"", "\\\"")}\""
+    fun quoteArgument(value: String): String {
+      if (value.isNotEmpty() && value.none { it.isWhitespace() || it == '"' }) return value
+      return buildString {
+        append('"')
+        var backslashes = 0
+        value.forEach { char ->
+          when (char) {
+            '\\' -> backslashes++
+            '"' -> {
+              repeat(backslashes * 2 + 1) { append('\\') }
+              append('"')
+              backslashes = 0
+            }
+            else -> {
+              repeat(backslashes) { append('\\') }
+              append(char)
+              backslashes = 0
+            }
+          }
+        }
+        repeat(backslashes * 2) { append('\\') }
+        append('"')
       }
+    }
   }
 }

@@ -135,7 +135,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.example.veilark.profile.ImportDeepLink
 import com.example.veilark.profile.ProfileSelection
@@ -245,6 +244,8 @@ private fun runVeilark(args: Array<String>) {
   val session = remember {
     WindowsVpnSession(preConnectCheck = ActiveTunnelConflict::message)
   }
+  val exitScope = rememberCoroutineScope()
+  var exitInProgress by remember { mutableStateOf(false) }
   val elevationManager = remember { ElevationManager() }
   val actions = remember { DesktopActions() }
   val sessionState by session.state.collectAsState()
@@ -341,9 +342,23 @@ private fun runVeilark(args: Array<String>) {
       Separator()
       Item(
         language.text("Выход", "Exit"),
+        enabled = !exitInProgress,
         onClick = {
-          runBlocking { session.disconnect() }
-          exitApplication()
+          exitInProgress = true
+          exitScope.launch {
+            val stopped = runCatching { withContext(Dispatchers.IO) { session.disconnect() } }
+            if (stopped.isSuccess) {
+              exitApplication()
+            } else {
+              exitInProgress = false
+              trayState.sendNotification(Notification(
+                "Veilark",
+                language.text("Не удалось остановить VPN. Откройте приложение и повторите остановку.",
+                  "Could not stop the VPN. Open Veilark and retry."),
+                Notification.Type.Error,
+              ))
+            }
+          }
         },
       )
     },

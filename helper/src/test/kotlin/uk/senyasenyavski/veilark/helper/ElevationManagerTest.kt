@@ -69,6 +69,18 @@ class ElevationManagerTest {
   }
 
   @Test
+  fun `trailing backslash is doubled before closing quote`() {
+    var arguments: String? = null
+    val manager = ElevationManager(
+      elevatedCheck = { false },
+      commandProvider = { "C:\\Apps\\Veilark\\Veilark.exe" },
+      launcher = { _, value, _ -> arguments = value; true },
+    )
+    assertTrue(manager.relaunch(listOf("C:\\Program Files\\Veilark\\")))
+    assertEquals("\"C:\\Program Files\\Veilark\\\\\"", arguments)
+  }
+
+  @Test
   fun `an already elevated process is not relaunched`() {
     val manager = ElevationManager(
       elevatedCheck = { true },
