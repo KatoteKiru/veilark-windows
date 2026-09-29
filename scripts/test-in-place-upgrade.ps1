@@ -43,6 +43,15 @@ if ((Get-InstalledVersion) -ne '0.3.19') { throw 'Candidate version was not inst
 if (-not (Test-Path -LiteralPath 'C:\Program Files\Veilark\Veilark.exe')) {
   throw 'Upgraded application launcher is missing'
 }
+$resources = Join-Path $env:ProgramFiles 'Veilark\app\resources'
+$coreCandidates = @(
+  (Join-Path $resources 'sing-box.exe'),
+  (Join-Path $resources 'windows\sing-box.exe')
+)
+$core = @($coreCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+if ($core.Count -ne 1) { throw "Expected one installed sing-box core, found $($core.Count)" }
+& $core[0] version | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Installed sing-box core failed to start' }
 if (-not (Test-Path -LiteralPath $sentinel)) { throw 'Local application data was removed' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) {
   throw 'Local application data changed during upgrade'
