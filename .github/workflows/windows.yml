@@ -78,6 +78,11 @@ jobs:
           & .\build\verify\Veilark-verify.exe --bootstrap-verify-only
           if ($LASTEXITCODE -ne 0) { throw 'Embedded payload verification failed' }
           Get-FileHash -Algorithm SHA256 "build\ota\Veilark-$version.exe"
+      - name: Verify in-place upgrade from the published Windows release
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        timeout-minutes: 20
+        shell: powershell
+        run: .\scripts\test-in-place-upgrade.ps1 -CandidateInstaller 'build\ota\Veilark-0.3.19.exe'
       - name: Upload Windows release candidate
         if: github.event_name == 'workflow_dispatch' && inputs.package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
