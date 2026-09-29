@@ -391,21 +391,17 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 318
-    const val CURRENT_VERSION_NAME = "0.3.18"
+    const val CURRENT_VERSION_CODE = 319
+    const val CURRENT_VERSION_NAME = "0.3.19"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.18
-      • Исправлено открытие скрытого или свёрнутого окна.
-      • Подключение и подготовку геоданных можно отменить; при ошибке остановки доступна повторная попытка.
-      • Исправлен приоритет ручных маршрутов Trust; неподдерживаемые пересечения явно отклоняются.
-      • Убрана очистка чужих VPN-адаптеров. Используемые геоданные защищены от удаления.
+      Обновлено в 0.3.19
+      • Исправлен поиск встроенных VPN-ядер в установленном приложении.
+      • Сохранены исправления запуска окна и остановки подключения из 0.3.18.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.18
-      • Hidden and minimized windows reopen reliably.
-      • Connection preparation is cancellable; failed teardown keeps a Retry stop action.
-      • Fixed Trust manual-route priority; unsupported overlaps are rejected explicitly.
-      • Foreign VPN adapters are left untouched. Active geo files are protected from cleanup.
+      Updated in 0.3.19
+      • Fixed bundled VPN-engine lookup in installed applications.
+      • Retains the 0.3.18 window activation and connection teardown fixes.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

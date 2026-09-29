@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -26,6 +27,7 @@ UPLOAD_ATTEMPTS = 8
 MAX_NOTES_LENGTH = 4_000
 KNOWN_HOSTS = WORKSPACE / "secrets" / "vpn-production-known-hosts"
 DEPLOY_KEY = WORKSPACE / "secrets" / "veilark-automation-ed25519-20260831"
+CLIENT_SOURCE = ROOT / "shared" / "src" / "jvmMain" / "kotlin" / "uk" / "senyasenyavski" / "veilark" / "update" / "UpdateClient.kt"
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -87,6 +89,44 @@ def file_sha256(path: Path) -> str:
         while chunk := source.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest().upper()
+
+
+def verify_release_lineage(private_key, candidate_code: int) -> None:
+    """Refuse a rollback, foreign signing key, or unverified live predecessor."""
+    source = CLIENT_SOURCE.read_text(encoding="utf-8")
+    match = re.search(r'private const val PUBLIC_KEY\s*=\s*"([^"]+)"', source)
+    if not match:
+        raise RuntimeError("Client OTA public key was not found")
+    client_key = base64.b64decode(match.group(1), validate=True)
+    signing_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    if client_key != signing_key:
+        raise RuntimeError("OTA signing key does not match the installed client trust root")
+
+    request = Request(f"{UPDATE_ORIGIN}/veilark/windows/manifest.json")
+    with urlopen(request, timeout=30) as response:
+        data = response.read(128 * 1024 + 1)
+    if len(data) > 128 * 1024:
+        raise RuntimeError("Live OTA manifest is too large")
+    live = json.loads(data)
+    version = int(live["versionCode"])
+    if version >= candidate_code:
+        raise RuntimeError(f"Refusing non-increasing OTA version: live={version}, candidate={candidate_code}")
+    expected_url = f"{UPDATE_ORIGIN}/veilark/windows/Veilark-{live['versionName']}.exe"
+    if live["installerUrl"] != expected_url:
+        raise RuntimeError("Live OTA installer URL is outside the release channel")
+    payload = (
+        f"{version}\n{live['versionName']}\n{live['installerUrl']}\n"
+        f"{live['sha256']}\n{live['size']}"
+    ).encode("utf-8")
+    private_key.public_key().verify(base64.b64decode(live["signature"], validate=True), payload)
+    if "notesSignature" in live:
+        notes_payload = payload + b"\n" + live["notes"].encode("utf-8")
+        private_key.public_key().verify(
+            base64.b64decode(live["notesSignature"], validate=True), notes_payload
+        )
 
 
 def remote_sha256(client: paramiko.SSHClient, path: str) -> str:
@@ -182,6 +222,7 @@ def main() -> None:
         (WORKSPACE / "secrets" / "veilark-update-ed25519.pem").read_bytes(),
         password=None,
     )
+    verify_release_lineage(private_key, args.version_code)
     signature = private_key.sign(payload)
     private_key.public_key().verify(signature, payload)
     notes_payload = payload + b"\n" + args.notes.encode("utf-8")
