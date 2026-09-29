@@ -20,4 +20,11 @@ Required before publication:
 - The local signing key matches the embedded client public key; the live 0.3.18 manifest and signed notes verified; candidate 319 is newer. Four publisher-lineage unit tests passed.
 - Wrapper Authenticode status is `NotSigned`. GitHub-hosted CI is blocked before job steps by account billing. The real elevated TUN test, physical in-place upgrade and VPN traffic were not run.
 
+## Public CI follow-up on 2026-09-29
+
+- Repository visibility was changed to public at the owner's request. Workflow token permissions were narrowed to `contents: read` before publication.
+- [Windows CI run 36530717421](https://github.com/KatoteKiru/veilark-windows/actions/runs/36530717421) succeeded on `windows-2022` at source commit `0062355`. The downloaded reports contain 85 tests across 15 suites, with 0 failures, 0 errors and 2 skips. `SingBoxNativeTunTest` executed once without a skip or failure.
+- The CI-built OTA wrapper is 130579968 bytes with SHA-256 `C32BC0810960E2C538CD06175F82A80D37649624F21F0A25CEE7FC895000CC76`. It differs byte-for-byte from the earlier local build; do not substitute one hash for the other. The same CI artifact also contains the MSI and test reports.
+- Windows Authenticode status of the CI wrapper is `NotSigned`. The earlier Microsoft Defender/download warning, physical in-place upgrade and end-user VPN traffic remain unverified. CI's native startup contract does not prove a commercial subscription connects on an affected PC.
+
 The 0.3.19 installer and manifest have **not** been published. Local tests and hashes do not prove that the Windows client now connects on user PCs. Do not move this candidate into the mass OTA channel until the remaining release gates or an explicitly scoped preview acceptance are completed.
