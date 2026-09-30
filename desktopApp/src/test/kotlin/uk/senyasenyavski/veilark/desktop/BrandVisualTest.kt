@@ -24,6 +24,23 @@ import uk.senyasenyavski.veilark.model.RoutingMode
 import uk.senyasenyavski.veilark.model.RoutingSettings
 
 class BrandVisualTest {
+  @OptIn(ExperimentalComposeUiApi::class)
+  @Test
+  fun everyTypographyRoleUsesTheSameBundledFamily() {
+    val scene = ImageComposeScene(width = 100, height = 100) {
+      VeilarkTheme(darkTheme = false) {
+        val type = MaterialTheme.typography
+        val roles = listOf(type.displayLarge, type.displayMedium, type.displaySmall,
+          type.headlineLarge, type.headlineMedium, type.headlineSmall,
+          type.titleLarge, type.titleMedium, type.titleSmall,
+          type.bodyLarge, type.bodyMedium, type.bodySmall,
+          type.labelLarge, type.labelMedium, type.labelSmall)
+        val family = assertNotNull(type.bodyMedium.fontFamily)
+        roles.forEach { assertEquals(family, it.fontFamily) }
+      }
+    }
+    try { scene.render(0).close() } finally { scene.close() }
+  }
   @Test
   fun launcherResourcesCoverWindowsScaling() {
     for (size in listOf(16, 20, 24, 32, 40, 48, 64, 128, 256)) {
@@ -45,14 +62,13 @@ class BrandVisualTest {
        for (destination in listOf(Destination.Home, Destination.Profiles, Destination.Routing)) {
         for (wide in listOf(false, true)) {
         val scene = ImageComposeScene(
-          width = ((if (wide) 520 else 480) * scale).toInt(), height = ((if (wide) 600 else 480) * scale).toInt(), density = Density(scale),
+          width = ((if (wide) 520 else 460) * scale).toInt(), height = ((if (wide) 700 else 480) * scale).toInt(), density = Density(scale),
         ) {
           CompositionLocalProvider(LocalUiLanguage provides if (dark) UiLanguage.Russian else UiLanguage.English) {
             VeilarkTheme(darkTheme = dark) {
               Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column {
                   AppTopBar(VpnPhase.Idle, {})
-                  AppNavigation(destination, {})
                   Column(Modifier.weight(1f)) {
                     if (destination == Destination.Profiles) {
                       ProfilesScreen(
@@ -76,6 +92,7 @@ class BrandVisualTest {
                     )
                     }
                   }
+                  AppBottomBar(destination, {})
                 }
               }
             }

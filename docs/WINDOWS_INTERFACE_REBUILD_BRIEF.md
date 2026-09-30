@@ -112,3 +112,8 @@ not a runtime screenshot; generated city icons/logo are not yet approved assets.
 No library has been integrated and no native Mica, WinUI runtime or performance
 claim follows from B2's image. Current decision: B2 visual approval first, isolated
 Fluent feasibility next; existing VPN, packaging and OTA stay unchanged.
+# Superseded direction — 2026-09-30
+
+The owner rejected the experimental replacement and requested refinement of the
+shipping 0.3.19 interface. Do not implement or publish this replacement brief.
+Current decision/evidence: WINDOWS_GROK_TRIAGE_2026-09-30.md.

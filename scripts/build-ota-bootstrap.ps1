@@ -26,7 +26,8 @@ $sourceVersion = [regex]::Match($updateSource, 'CURRENT_VERSION_NAME\s*=\s*"([^"
 $sourceCode = [regex]::Match($updateSource, 'CURRENT_VERSION_CODE\s*=\s*(\d+)').Groups[1].Value
 $packageVersion = [regex]::Match($gradleSource, 'packageVersion\s*=\s*"([^"]+)"').Groups[1].Value
 $upgradeUuid = [regex]::Match($gradleSource, 'upgradeUuid\s*=\s*"([^"]+)"').Groups[1].Value
-$expectedCode = [int](($versionName.Split('.') | ForEach-Object { [int]$_ }) -join '')
+. (Join-Path $PSScriptRoot 'ota-version.ps1')
+$expectedCode = Get-VeilarkVersionCode $versionName
 if ($sourceVersion -ne $versionName -or $packageVersion -ne $versionName -or [int]$sourceCode -ne $expectedCode) {
   throw "OTA version drift: payload=$versionName client=$sourceVersion/$sourceCode package=$packageVersion"
 }

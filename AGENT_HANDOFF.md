@@ -1,5 +1,18 @@
 # Veilark Windows current handoff
 
+## Latest decision (2026-09-30, supersedes UI directions below)
+
+Owner rejected the replacement Fluent UI and requested polish of the shipping
+0.3.19 interface. Experimental Fluent source/dependency removed; shipping bottom
+navigation, window dimensions, Noto typography and surfaces restored. All 15 text
+roles now have the same bundled family. Previous bounded native-log fixes remain.
+Fixed OTA field concatenation and unintended selection on additional import;
+new regression checks pass. Detailed eight-point security triage and remaining
+release gates: docs/WINDOWS_GROK_TRIAGE_2026-09-30.md.
+No OTA or production change. Old 0.3.11 installer is still publicly accessible;
+do not call historical credentials cleared. Next: non-executing artifact inspection,
+redacted history/CI audit, native kill-switch acceptance and independent review.
+
 Updated 2026-09-30. Source branch `codex/windows-fluent-stability`, based on0d8fe28.
 
 Objective: evidence-based stability fixes and a Windows desktop refinement, keeping

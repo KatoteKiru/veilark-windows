@@ -37,6 +37,9 @@ jobs:
       - name: Validate OTA publisher
         shell: powershell
         run: python -m py_compile .\scripts\publish_ota.py
+      - name: Validate OTA version ordering
+        shell: powershell
+        run: .\scripts\test-ota-version.ps1
       - shell: powershell
         run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --max-workers=2 --stacktrace
       - name: Verify native startup contract on isolated Windows runner
@@ -82,7 +85,9 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.package
         timeout-minutes: 20
         shell: powershell
-        run: .\scripts\test-in-place-upgrade.ps1 -CandidateInstaller 'build\ota\Veilark-0.3.19.exe'
+        run: |
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          .\scripts\test-in-place-upgrade.ps1 -CandidateInstaller "build\ota\Veilark-$version.exe"
       - name: Upload Windows release candidate
         if: github.event_name == 'workflow_dispatch' && inputs.package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

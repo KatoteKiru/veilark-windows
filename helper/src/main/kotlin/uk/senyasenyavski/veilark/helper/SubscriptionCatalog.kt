@@ -71,7 +71,7 @@ object SubscriptionCatalog {
   fun fromImportedProfiles(
     stored: StoredProfiles,
     profiles: List<Profile>,
-  ): StoredProfiles = put(stored, SubscriptionRecord.user(profiles), select = true)
+  ): StoredProfiles = put(stored, SubscriptionRecord.user(profiles), select = false)
 
   fun put(
     stored: StoredProfiles,
