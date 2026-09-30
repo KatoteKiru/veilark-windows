@@ -52,6 +52,8 @@ Sources: [Fluent typography](https://fluent2.microsoft.design/typography),
   caps records at8192 characters and drains/discards the entire oversized record;
   truncated fragments cannot signal ready/fatal. Eleven focused capture/log tests
   passed, as did independent review; native CI must also cover the final commit.
+- Final source6f4f98f is pushed; native Windows CI36715057688 is in progress.
+  Combined local XML results:211 tests,0 failures/errors,4 gated skips.
 - This patch does not establish split-tunnel throughput improvement, actual Wi-Fi
    handover reliability, battery superiority or Defender reputation. These remain
    measured acceptance tasks, not claims derived from green tests.

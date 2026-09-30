@@ -16,7 +16,9 @@ source review reports no blocking regression. Visual fixture correction and tool
 verification passed the final reviewer verdict. Source candidate94c0849 passed
 native Windows CI36714045339. The additional CoreLogPump bounded-framing fix
 reproduced two baseline failures and passed11 targeted tests plus independent
-review; check the newer commit's native CI before promoting that final source.
+review. Final source6f4f98f is pushed; native CI36715057688 is in progress.
+Combined local results:211 tests,0 failures/errors,4 gated skips. Check final CI
+before promoting the candidate; first-run CI is not evidence for this later commit.
 
 Next: complete independent integration verdict and native Windows CI. Before OTA,
 assign a new version and verify packaging, MSI/Ed25519 lineage, rollback and download
