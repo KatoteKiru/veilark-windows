@@ -3,12 +3,73 @@ package uk.senyasenyavski.veilark.helper
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CoreLogPumpTest {
+  @Test
+  fun `line length boundary accepts complete record but discards oversized record entirely`() {
+    val prefix = "INFO sing-box started ("
+    val record = prefix + "x".repeat(8_192 - prefix.length - 1) + ")"
+    val closed = CountDownLatch(1)
+    val written = mutableListOf<String>()
+    val pump = CoreLogPump(
+      process = outputProcess(record + "\r\n" + record + "x\r\n", closed), engineName = "boundary-test",
+      readyMarkers = listOf("sing-box started"), fatalMarkers = listOf("FATAL"),
+      diagnosticOnly = true, logger = written::add,
+    )
+    pump.start()
+    assertTrue(closed.await(2, TimeUnit.SECONDS))
+    assertTrue(pump.ready)
+    assertEquals(1, written.size)
+    assertEquals(SafeLog.redact(record), written.single())
+  }
+
+  @Test
+  fun `oversized unterminated native record cannot spoof readiness or fatal state`() {
+    listOf(true, false).forEach { diagnosticOnly ->
+      val closed = CountDownLatch(1)
+      val written = mutableListOf<String>()
+      val record = "INFO sing-box started (" + "x".repeat(200_000) + ")"
+      val pump = CoreLogPump(
+        process = outputProcess(record, closed), engineName = "oversized-test",
+        readyMarkers = listOf("sing-box started"), fatalMarkers = listOf("FATAL"),
+        diagnosticOnly = diagnosticOnly, logger = written::add,
+      )
+      pump.start()
+      assertTrue(closed.await(2, TimeUnit.SECONDS))
+      assertFalse(pump.ready)
+      assertEquals(null, pump.fatal)
+      assertTrue(pump.tail().isEmpty())
+      assertTrue(written.isEmpty())
+    }
+  }
+
+  @Test
+  fun `oversized lines are drained and complete CRLF CR and EOF records still work`() {
+    val closed = CountDownLatch(1)
+    val written = mutableListOf<String>()
+    val records = "FATAL password=discarded " + "x".repeat(200_000) +
+      "\r\nINFO sing-box started (0.10s)\rWARN password=secret-value\r\nWARN last diagnostic"
+    val pump = CoreLogPump(
+      process = outputProcess(records, closed), engineName = "framing-test",
+      readyMarkers = listOf("sing-box started"), fatalMarkers = listOf("FATAL"),
+      diagnosticOnly = true, logger = written::add,
+    )
+    pump.start()
+    assertTrue(closed.await(2, TimeUnit.SECONDS))
+    assertTrue(pump.ready)
+    assertEquals(null, pump.fatal)
+    assertEquals(3, written.size)
+    assertEquals(3, pump.tail().size)
+    assertFalse(written.any { it.contains("secret-value") || it.contains("discarded") })
+    assertEquals("WARN last diagnostic", written.last())
+  }
+
   @Test
   fun `startup marker survives journal failure and later lines are still consumed`() {
     var attempts = 0
@@ -98,6 +159,18 @@ class CoreLogPumpTest {
   private fun emptyProcess() = object : Process() {
     override fun getOutputStream() = ByteArrayOutputStream()
     override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+    override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+    override fun waitFor() = 0
+    override fun exitValue() = 0
+    override fun destroy() = Unit
+  }
+
+  private fun outputProcess(text: String, closed: CountDownLatch) = object : Process() {
+    private val output = object : ByteArrayInputStream(text.toByteArray()) {
+      override fun close() { super.close(); closed.countDown() }
+    }
+    override fun getOutputStream() = ByteArrayOutputStream()
+    override fun getInputStream() = output
     override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
     override fun waitFor() = 0
     override fun exitValue() = 0

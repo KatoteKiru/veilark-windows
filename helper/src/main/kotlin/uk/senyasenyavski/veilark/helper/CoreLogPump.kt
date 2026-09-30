@@ -37,14 +37,49 @@ internal class CoreLogPump(
   fun start() {
     thread(name = "veilark-core-log-$engineName", isDaemon = true) {
       runCatching {
-        process.inputStream.bufferedReader().useLines { lines ->
-          lines.forEach(::consume)
+        process.inputStream.bufferedReader().use { input ->
+          // Bound framing before any regex/redaction or state detection. Never
+          // treat a truncated prefix/suffix as a complete native event.
+          val line = StringBuilder(MAX_LINE_CHARS)
+          val buffer = CharArray(4_096)
+          var discarded = false
+          var afterCarriageReturn = false
+          fun finishLine() {
+            if (!discarded) consume(line.toString())
+            line.setLength(0)
+            discarded = false
+          }
+          while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            for (index in 0 until count) {
+              val character = buffer[index]
+              if (afterCarriageReturn) {
+                afterCarriageReturn = false
+                if (character == '\n') continue
+              }
+              when (character) {
+                '\r', '\n' -> {
+                  finishLine()
+                  afterCarriageReturn = character == '\r'
+                }
+                else -> if (!discarded) {
+                  if (line.length == MAX_LINE_CHARS) {
+                    discarded = true
+                    line.setLength(0)
+                  } else line.append(character)
+                }
+              }
+            }
+          }
+          finishLine()
         }
       }
     }
   }
 
   internal fun consume(rawLine: String) {
+    if (rawLine.length > MAX_LINE_CHARS) return
     val line = ANSI_ESCAPE.replace(rawLine, "").trim()
     if (line.isEmpty()) return
     val nativeRecord = if (diagnosticOnly) SING_BOX_RECORD.find(line) else null
@@ -84,5 +119,6 @@ internal class CoreLogPump(
     val SING_BOX_STARTED = Regex("""sing-box started \([^\r\n]*\)""")
     val DIAGNOSTIC_SEVERITIES = setOf("WARN", "ERROR", "FATAL")
     const val MAX_RECENT_LINES = 40
+    const val MAX_LINE_CHARS = 8_192
   }
 }

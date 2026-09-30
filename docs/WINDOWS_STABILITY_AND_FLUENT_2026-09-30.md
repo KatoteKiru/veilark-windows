@@ -47,6 +47,11 @@ Sources: [Fluent typography](https://fluent2.microsoft.design/typography),
 - Initial Home visual fixture was not faithful to production layout; corrected
    before presentation. Updated renders retain production max-width and scrolling.
 - Source review found no blocking correctness/security regression in its scope.
+- Source candidate94c0849 passed native Windows CI36714045339.
+- CoreLogPump reproduced two oversized-record failures before its fix. Framing now
+  caps records at8192 characters and drains/discards the entire oversized record;
+  truncated fragments cannot signal ready/fatal. Eleven focused capture/log tests
+  passed, as did independent review; native CI must also cover the final commit.
 - This patch does not establish split-tunnel throughput improvement, actual Wi-Fi
    handover reliability, battery superiority or Defender reputation. These remain
    measured acceptance tasks, not claims derived from green tests.

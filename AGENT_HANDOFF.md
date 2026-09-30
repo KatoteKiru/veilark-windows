@@ -13,8 +13,10 @@ No engine/routing/privilege/OTA implementation changes. Plan and limitations:
 
 Validation: 40 targeted helper tests pass; combined JVM tests pass. Independent
 source review reports no blocking regression. Visual fixture correction and tooltip
-verification pending final reviewer verdict. Native CI status must be checked from
-GitHub, not inferred from local JVM tests.
+verification passed the final reviewer verdict. Source candidate94c0849 passed
+native Windows CI36714045339. The additional CoreLogPump bounded-framing fix
+reproduced two baseline failures and passed11 targeted tests plus independent
+review; check the newer commit's native CI before promoting that final source.
 
 Next: complete independent integration verdict and native Windows CI. Before OTA,
 assign a new version and verify packaging, MSI/Ed25519 lineage, rollback and download
