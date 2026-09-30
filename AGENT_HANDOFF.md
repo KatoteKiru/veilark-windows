@@ -1,5 +1,15 @@
 # Veilark Windows current handoff
 
+## Published 2026-10-01 — supersedes prior status
+
+Windows 0.3.22 / 322 is live on existing OTA, source `05b3c5c` from Claude
+`d9803bc`, release branch `codex/windows-ota-0322`. Package/upgrade CI
+36789555696 passed, including native startup and 0.3.21-to-0.3.22 data preservation.
+Original OTA key and MSI identity retained; Authenticode is still absent.
+Exact hashes, rollback and acceptance limits: `docs/RELEASE_0.3.22.md`.
+Cross-platform continuation: `C:/AI-Agent/reports/ota-20261001/STATUS.md`.
+No owner VPN or server service was restarted. Security backlog stays open.
+
 ## Hardening branch — 2026-09-30 (not published)
 
 Branch `claude/happy-ptolemy-mpow5b` → draft PR into `codex/windows-fluent-stability`.
