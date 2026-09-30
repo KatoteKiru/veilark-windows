@@ -16,9 +16,9 @@ source review reports no blocking regression. Visual fixture correction and tool
 verification passed the final reviewer verdict. Source candidate94c0849 passed
 native Windows CI36714045339. The additional CoreLogPump bounded-framing fix
 reproduced two baseline failures and passed11 targeted tests plus independent
-review. Final source6f4f98f is pushed; native CI36715057688 is in progress.
+review. Source6f4f98f is pushed; native CI36715057688 completed successfully.
 Combined local results:211 tests,0 failures/errors,4 gated skips. Check final CI
-before promoting the candidate; first-run CI is not evidence for this later commit.
+before promoting any newer candidate; this CI does not cover later compact UI edits.
 
 Next: complete independent integration verdict and native Windows CI. Before OTA,
 assign a new version and verify packaging, MSI/Ed25519 lineage, rollback and download
@@ -26,3 +26,9 @@ hashes. Real installed-app VPN, Wi-Fi/sleep/wake, performance and Defender accep
 remain open. Do not stop the owner's live VPN without scoped authorization.
 
 No production or OTA publication belongs to the current unpromoted candidate.
+
+Owner feedback: sidebar rejected. Replaced with three top tabs and a labelled Tools
+menu (Diagnostics/Updates/Logs), starting window520x600/min480x480. Connection
+surface has4dp shadow, selected tab2dp; dark surfaces raised tonally rather than
+dark recessed panels. No new background animation or networking change. Renders
+cover520x600/480x480,100–150%DPI; DESIGN.md updated to reflect this revision.

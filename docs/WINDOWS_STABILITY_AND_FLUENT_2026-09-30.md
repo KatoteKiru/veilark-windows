@@ -52,13 +52,23 @@ Sources: [Fluent typography](https://fluent2.microsoft.design/typography),
   caps records at8192 characters and drains/discards the entire oversized record;
   truncated fragments cannot signal ready/fatal. Eleven focused capture/log tests
   passed, as did independent review; native CI must also cover the final commit.
-- Final source6f4f98f is pushed; native Windows CI36715057688 is in progress.
+- Source6f4f98f is pushed; native Windows CI36715057688 completed successfully.
   Combined local XML results:211 tests,0 failures/errors,4 gated skips.
 - This patch does not establish split-tunnel throughput improvement, actual Wi-Fi
    handover reliability, battery superiority or Defender reputation. These remain
    measured acceptance tasks, not claims derived from green tests.
 
 ## Next release gate
+
+### Owner feedback: compact shell revision
+
+The sidebar was rejected by the owner. The subsequent source revision replaces it
+with three always-visible top tabs and a labelled Tools menu for diagnostics,
+updates and logs. Window starts at520x600dp (minimum480x480dp); no VPN callbacks or
+session ownership changed. Depth is confined to the connection surface(4dp shadow)
+and selected tab(2dp); dark surfaces are raised tonally. No blur/background loop.
+The render fixtures now exercise these dimensions at100/125/150% DPI. Render
+acceptance is not real installed-app, keyboard/menu interaction or VPN acceptance.
 
 Do not overwrite production or publish the candidate as 0.3.19. Before a future OTA:
 assign a new package/manifest version, keep Ed25519/MSI lineage, pass native CI and

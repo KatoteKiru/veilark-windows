@@ -1,7 +1,6 @@
 package uk.senyasenyavski.veilark.desktop
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -46,15 +45,14 @@ class BrandVisualTest {
        for (destination in listOf(Destination.Home, Destination.Profiles, Destination.Routing)) {
         for (wide in listOf(false, true)) {
         val scene = ImageComposeScene(
-          width = ((if (wide) 900 else 540) * scale).toInt(), height = ((if (wide) 680 else 480) * scale).toInt(), density = Density(scale),
+          width = ((if (wide) 520 else 480) * scale).toInt(), height = ((if (wide) 600 else 480) * scale).toInt(), density = Density(scale),
         ) {
           CompositionLocalProvider(LocalUiLanguage provides if (dark) UiLanguage.Russian else UiLanguage.English) {
             VeilarkTheme(darkTheme = dark) {
               Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column {
                   AppTopBar(VpnPhase.Idle, {})
-                  Row(Modifier.weight(1f)) {
-                  AppSidebar(destination, wide, {})
+                  AppNavigation(destination, {})
                   Column(Modifier.weight(1f)) {
                     if (destination == Destination.Profiles) {
                       ProfilesScreen(
@@ -77,7 +75,6 @@ class BrandVisualTest {
                       onRefresh = {}, onProbe = {}, onOpenLogs = {},
                     )
                     }
-                  }
                   }
                 }
               }

@@ -105,6 +105,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -195,9 +196,9 @@ private class DesktopActions {
   var hasProfile: Boolean = false
 }
 
-private val InitialWindowWidth = 900.dp
-private val InitialWindowHeight = 680.dp
-private val MinimumWindowWidth = 540.dp
+private val InitialWindowWidth = 520.dp
+private val InitialWindowHeight = 600.dp
+private val MinimumWindowWidth = 480.dp
 private val MinimumWindowHeight = 480.dp
 
 fun main(args: Array<String>) {
@@ -945,11 +946,8 @@ private fun VeilarkApp(
     },
     snackbarHost = { SnackbarHost(snackbar) },
   ) { padding ->
-    BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
-    val expandedNavigation = maxWidth >= 760.dp
-    Row(Modifier.fillMaxSize()) {
-      AppSidebar(destination, expandedNavigation) { destination = it }
-    Column(Modifier.weight(1f).fillMaxHeight()) {
+    Column(Modifier.fillMaxSize().padding(padding)) {
+      AppNavigation(destination) { destination = it }
       if (destination != Destination.Updates) {
         UpdateBanner(
           state = updateState,
@@ -1154,9 +1152,6 @@ private fun VeilarkApp(
         }
       }
     }
-  }
-
-  }
   }
   if (importDialog) {
     ImportDialog(
@@ -1389,8 +1384,10 @@ internal fun CompactConnectionWorkspace(
   ) {
     Surface(
       modifier = Modifier.fillMaxWidth(),
-      color = MaterialTheme.colorScheme.surfaceContainerLow,
+      color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f)
+        MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLowest,
       shape = MaterialTheme.shapes.extraLarge,
+      shadowElevation = 4.dp,
     ) {
       Column(
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),

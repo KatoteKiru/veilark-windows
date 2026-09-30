@@ -5,15 +5,10 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.TooltipArea
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -40,6 +35,10 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +62,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
@@ -268,41 +268,54 @@ internal enum class Destination(
 
 }
 
-/** Desktop wayfinding: all destinations remain accessible at narrow widths. */
-@OptIn(ExperimentalFoundationApi::class)
+/** Compact wayfinding: the daily tasks stay visible, technical tools stay labelled. */
 @Composable
-internal fun AppSidebar(destination: Destination, expanded: Boolean, onDestination: (Destination) -> Unit) {
+internal fun AppNavigation(destination: Destination, onDestination: (Destination) -> Unit) {
   val language = LocalUiLanguage.current
   val colors = MaterialTheme.colorScheme
-  Column(
-    Modifier.width(if (expanded) 184.dp else 56.dp).fillMaxHeight()
-      .verticalScroll(rememberScrollState()).padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(4.dp),
-  ) {
-    Destination.entries.forEach { item ->
+  val primary = listOf(Destination.Home, Destination.Profiles, Destination.Routing)
+  val tools = listOf(Destination.Diagnostics, Destination.Updates, Destination.Logs)
+  var toolsOpen by remember { mutableStateOf(false) }
+  Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).selectableGroup(),
+    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    primary.forEach { item ->
       val active = destination == item
-      TooltipArea(tooltip = {
-        Surface(shape = RoundedCornerShape(4.dp), shadowElevation = 2.dp) {
-          Text(item.title(language), Modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall)
-        }
-      }) {
       Surface(
-        modifier = Modifier.fillMaxWidth().height(40.dp)
-          .clickable { onDestination(item) }
+        modifier = Modifier.weight(1f).height(36.dp)
+          .selectable(selected = active, role = Role.Tab, onClick = { onDestination(item) })
           .semantics { selected = active; contentDescription = item.title(language) },
-        color = if (active) colors.secondaryContainer else Color.Transparent,
-        shape = RoundedCornerShape(4.dp),
+        color = if (active) {
+          if (colors.background.luminance() < 0.5f) colors.surfaceContainerHigh else colors.surfaceContainerLowest
+        } else Color.Transparent,
+        shadowElevation = if (active) 2.dp else 0.dp,
+        shape = RoundedCornerShape(8.dp),
       ) {
-        Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-          Icon(item.icon, null, Modifier.size(20.dp), tint = if (active) colors.primary else colors.onSurfaceVariant)
-          if (expanded) {
-            Spacer(Modifier.width(10.dp))
-            Text(item.title(language), style = MaterialTheme.typography.labelMedium,
+        Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Center) {
+          Text(item.title(language), style = MaterialTheme.typography.labelMedium,
               fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+              color = if (active) colors.onSurface else colors.onSurfaceVariant,
               maxLines = 1, overflow = TextOverflow.Ellipsis)
-          }
         }
       }
+    }
+    Box {
+      val activeTool = destination in tools
+      TextButton(onClick = { toolsOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+        Icon(if (activeTool) destination.icon else Icons.Rounded.Tune, null, Modifier.size(16.dp))
+        Text(if (activeTool) destination.title(language) else language.text("Инструменты", "Tools"),
+          Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelMedium)
+        Icon(Icons.Rounded.ExpandMore, null, Modifier.padding(start = 2.dp).size(14.dp))
+      }
+      DropdownMenu(expanded = toolsOpen, onDismissRequest = { toolsOpen = false }) {
+        tools.forEach { item ->
+          DropdownMenuItem(
+            text = { Text(item.title(language)) },
+            leadingIcon = { Icon(item.icon, null, Modifier.size(18.dp)) },
+            modifier = Modifier.semantics { selected = destination == item },
+            onClick = { toolsOpen = false; onDestination(item) },
+          )
+        }
       }
     }
   }
