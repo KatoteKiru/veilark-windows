@@ -32,3 +32,8 @@ menu (Diagnostics/Updates/Logs), starting window520x600/min480x480. Connection
 surface has4dp shadow, selected tab2dp; dark surfaces raised tonally rather than
 dark recessed panels. No new background animation or networking change. Renders
 cover520x600/480x480,100–150%DPI; DESIGN.md updated to reflect this revision.
+
+Latest owner decision supersedes that refinement: reject Android/Material visual
+world entirely; replace ALL Windows UI from scratch. Do not promote the prior
+card/tab candidate as an approved design. Direction/implementation gates are in
+docs/WINDOWS_INTERFACE_REBUILD_BRIEF.md; visual concept approval is pending.
