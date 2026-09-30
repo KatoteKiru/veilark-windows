@@ -1,5 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 import kotlinx.coroutines.delay
 
 internal data class ReadyTunnel(
@@ -63,14 +64,18 @@ internal object TunnelReadiness {
       return it.toReadyTunnel()
     }
     if (requireReadyMarker && lastCandidate != null && !logPump.ready) {
-      error(
-        "Ядро не подтвердило подключение туннеля ${matcher.label} за " +
+      throw VpnStartException(
+        code = VpnStatusCode.CORE_NOT_READY,
+        message = "Ядро не подтвердило подключение туннеля ${matcher.label} за " +
           "${timeoutMillis / 1_000} секунд${logPump.reasonSuffix()}",
+        detail = matcher.label,
       )
     }
-    error(
-      "Windows не подняла туннель ${matcher.label} за ${timeoutMillis / 1_000} секунд" +
+    throw VpnStartException(
+      code = VpnStatusCode.TUN_NOT_CREATED,
+      message = "Windows не подняла туннель ${matcher.label} за ${timeoutMillis / 1_000} секунд" +
         logPump.reasonSuffix(),
+      detail = matcher.label,
     )
   }
 

@@ -2,6 +2,7 @@ package uk.senyasenyavski.veilark.helper
 
 import uk.senyasenyavski.veilark.model.Profile
 import uk.senyasenyavski.veilark.model.VpnEngine
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 
 interface EngineController {
   val engine: VpnEngine
@@ -20,5 +21,21 @@ interface EngineController {
 
 sealed interface EngineHealth {
   data object Healthy : EngineHealth
-  data class Unhealthy(val message: String) : EngineHealth
+  /** [message] is technical log text; [code] is a [VpnStatusCode] for the UI. */
+  data class Unhealthy(
+    val message: String,
+    val code: String = VpnStatusCode.DEGRADED,
+    val detail: String = "",
+  ) : EngineHealth
 }
+
+/**
+ * Startup failure with a stable [code] from [VpnStatusCode]. The message stays
+ * technical (journal) text; the UI never parses it.
+ */
+class VpnStartException(
+  val code: String,
+  message: String,
+  val detail: String = "",
+  cause: Throwable? = null,
+) : IllegalStateException(message, cause)

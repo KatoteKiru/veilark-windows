@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import uuid
 from urllib.request import Request, urlopen
@@ -25,7 +26,16 @@ REMOTE_DIR = "/var/www/html/veilark/windows"
 UPDATE_ORIGIN = "https://nl2.senyasenyavski.uk:2096"
 UPLOAD_CHUNK_SIZE = 256 * 1024
 UPLOAD_ATTEMPTS = 8
+# Must equal UpdateClient.MAX_NOTES_LENGTH. The client counts Kotlin/Java
+# String length, i.e. UTF-16 code units, and truncates before verifying the
+# notes signature; the publisher must therefore measure the same unit.
 MAX_NOTES_LENGTH = 4_000
+MAX_VERSION_COMPONENT = 100
+CANONICAL_VERSION_NAME = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)")
+# UpdateClient.SAFE_VERSION_NAME
+CLIENT_SAFE_VERSION_NAME = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]{0,63}")
+PE_FIXED_FILE_INFO_SIGNATURE = 0xFEEF04BD
+PE_RESOURCE_DIRECTORY_INDEX = 2
 KNOWN_HOSTS = WORKSPACE / "secrets" / "vpn-production-known-hosts"
 DEPLOY_KEY = WORKSPACE / "secrets" / "veilark-automation-ed25519-20260831"
 CLIENT_SOURCE = ROOT / "shared" / "src" / "jvmMain" / "kotlin" / "uk" / "senyasenyavski" / "veilark" / "update" / "UpdateClient.kt"
@@ -84,6 +94,155 @@ def authenticode_status(path: Path) -> str:
     return result.stdout.strip()
 
 
+def version_code_for(version_name: str) -> int:
+    """Mirror of scripts/ota-version.ps1 Get-VeilarkVersionCode."""
+    match = CANONICAL_VERSION_NAME.fullmatch(version_name)
+    if not match:
+        raise ValueError("Expected a canonical major.minor.patch version name")
+    major, minor, patch = (int(part) for part in match.groups())
+    if minor >= MAX_VERSION_COMPONENT or patch >= MAX_VERSION_COMPONENT:
+        raise ValueError("Minor and patch must be below 100 for the OTA counter schema")
+    code = major * 10_000 + minor * 100 + patch
+    if code < 1 or code > 2**31 - 1:
+        raise ValueError("OTA counter out of range")
+    return code
+
+
+def validate_release_identity(version_code: int, version_name: str) -> None:
+    expected = version_code_for(version_name)
+    if version_code != expected:
+        raise ValueError(
+            f"--version-code {version_code} does not match {version_name} (expected {expected})"
+        )
+    if not CLIENT_SAFE_VERSION_NAME.fullmatch(version_name):
+        raise ValueError("Version name is not accepted by the Windows client")
+
+
+def utf16_length(text: str) -> int:
+    """Length as Kotlin/Java String.length reports it (UTF-16 code units)."""
+    return len(text.encode("utf-16-le", errors="surrogatepass")) // 2
+
+
+def client_truncated_notes(notes: str) -> str:
+    """Exactly what UpdateClient does: optString("notes").take(MAX_NOTES_LENGTH)."""
+    units = notes.encode("utf-16-le", errors="surrogatepass")[: MAX_NOTES_LENGTH * 2]
+    return units.decode("utf-16-le", errors="surrogatepass")
+
+
+def validate_notes(notes: str) -> None:
+    try:
+        notes.encode("utf-8")
+    except UnicodeEncodeError as error:
+        # Kotlin would replace an unpaired surrogate with '?' before signing
+        # verification, so the signed bytes could never match on clients.
+        raise ValueError("Release notes contain an unpaired surrogate") from error
+    if utf16_length(notes) > MAX_NOTES_LENGTH:
+        raise ValueError(
+            f"Release notes exceed the client limit of {MAX_NOTES_LENGTH} UTF-16 code units "
+            f"({utf16_length(notes)})"
+        )
+
+
+def client_view(manifest: dict) -> dict:
+    """Fields after UpdateClient.parseAndVerify normalisation, before signature checks."""
+    return {
+        "versionCode": int(manifest["versionCode"]),
+        "versionName": manifest["versionName"].strip(),
+        "installerUrl": manifest["installerUrl"].strip(),
+        "sha256": manifest["sha256"].upper(),
+        "size": int(manifest["size"]),
+        "notes": client_truncated_notes(manifest.get("notes", "")),
+    }
+
+
+def assert_client_verifiable(manifest: dict) -> None:
+    """Refuse a manifest whose signed fields a client would alter before verifying."""
+    view = client_view(manifest)
+    for field, value in view.items():
+        if manifest.get(field, "") != value:
+            raise ValueError(f"Windows client would alter manifest field {field!r} before verification")
+
+
+def verify_client_contract(source: str) -> None:
+    """Fail if UpdateClient.kt limits drift away from this publisher."""
+    match = re.search(r"private const val MAX_NOTES_LENGTH\s*=\s*([0-9_]+)", source)
+    if not match or int(match.group(1).replace("_", "")) != MAX_NOTES_LENGTH:
+        raise RuntimeError("Publisher notes limit does not match UpdateClient.MAX_NOTES_LENGTH")
+    if ".take(MAX_NOTES_LENGTH)" not in source:
+        raise RuntimeError("UpdateClient notes normalisation changed; review publish_ota.client_view")
+
+
+def _read_struct(data: bytes, offset: int, fmt: str):
+    size = struct.calcsize(fmt)
+    if offset < 0 or offset + size > len(data):
+        raise ValueError("Truncated PE file")
+    return struct.unpack_from(fmt, data, offset)
+
+
+def pe_file_version(data: bytes) -> str | None:
+    """Return VS_FIXEDFILEINFO file version from the PE resource section, if present.
+
+    Only the Win32 resource directory is searched: the OTA wrapper embeds the
+    jpackage installer as a managed resource, whose own version must not be
+    mistaken for the wrapper's.
+    """
+    if data[:2] != b"MZ":
+        raise ValueError("Installer is not a PE file")
+    (pe_offset,) = _read_struct(data, 0x3C, "<I")
+    if data[pe_offset : pe_offset + 4] != b"PE\0\0":
+        raise ValueError("Installer is not a PE file")
+    coff = pe_offset + 4
+    _, sections, _, _, _, optional_size, _ = _read_struct(data, coff, "<HHIIIHH")
+    optional = coff + 20
+    (magic,) = _read_struct(data, optional, "<H")
+    if magic == 0x10B:
+        directories = optional + 96
+    elif magic == 0x20B:
+        directories = optional + 112
+    else:
+        raise ValueError("Unsupported PE optional header")
+    (directory_count,) = _read_struct(data, directories - 4, "<I")
+    if directory_count <= PE_RESOURCE_DIRECTORY_INDEX:
+        return None
+    resource_rva, resource_size = _read_struct(
+        data, directories + PE_RESOURCE_DIRECTORY_INDEX * 8, "<II"
+    )
+    if resource_rva == 0 or resource_size == 0:
+        return None
+    section_table = optional + optional_size
+    for index in range(sections):
+        header = section_table + index * 40
+        virtual_size, virtual_address, raw_size, raw_pointer = _read_struct(data, header + 8, "<IIII")
+        span = max(virtual_size, raw_size)
+        if virtual_address <= resource_rva < virtual_address + span:
+            start = raw_pointer + (resource_rva - virtual_address)
+            end = min(start + resource_size, raw_pointer + raw_size, len(data))
+            break
+    else:
+        raise ValueError("PE resource directory is outside every section")
+    signature = struct.pack("<I", PE_FIXED_FILE_INFO_SIGNATURE)
+    position = data.find(signature, start, end)
+    if position < 0:
+        return None
+    # VS_FIXEDFILEINFO: dwSignature, dwStrucVersion, dwFileVersionMS, dwFileVersionLS
+    file_ms, file_ls = _read_struct(data, position + 8, "<II")
+    return f"{file_ms >> 16}.{file_ms & 0xFFFF}.{file_ls >> 16}.{file_ls & 0xFFFF}"
+
+
+def validate_installer_version(installer: Path, version_name: str, allow_missing: bool) -> str | None:
+    """The OTA wrapper stamps AssemblyFileVersion "<version>.0" (build-ota-bootstrap.ps1)."""
+    file_version = pe_file_version(installer.read_bytes())
+    if file_version is None:
+        if allow_missing:
+            return None
+        raise RuntimeError("Installer has no Win32 file version; refusing to publish")
+    if file_version not in (version_name, f"{version_name}.0"):
+        raise RuntimeError(
+            f"Installer file version {file_version} does not match --version-name {version_name}"
+        )
+    return file_version
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -95,6 +254,7 @@ def file_sha256(path: Path) -> str:
 def verify_release_lineage(private_key, candidate_code: int) -> None:
     """Refuse a rollback, foreign signing key, or unverified live predecessor."""
     source = CLIENT_SOURCE.read_text(encoding="utf-8")
+    verify_client_contract(source)
     match = re.search(r'private const val PUBLIC_KEY\s*=\s*"([^"]+)"', source)
     if not match:
         raise RuntimeError("Client OTA public key was not found")
@@ -185,6 +345,11 @@ def main() -> None:
     parser.add_argument("--version-name", required=True)
     parser.add_argument("--notes", required=True)
     parser.add_argument(
+        "--allow-installer-without-file-version",
+        action="store_true",
+        help="Publish an installer that carries no Win32 file version resource.",
+    )
+    parser.add_argument(
         "--allow-unsigned-windows-publisher",
         action="store_true",
         help=(
@@ -197,10 +362,9 @@ def main() -> None:
     installer = args.installer.resolve()
     if not installer.is_file():
         raise FileNotFoundError(installer)
-    if args.version_code < 1 or not args.version_name:
-        raise ValueError("Invalid version")
-    if len(args.notes) > MAX_NOTES_LENGTH:
-        raise ValueError("Release notes exceed the client limit")
+    validate_release_identity(args.version_code, args.version_name)
+    validate_notes(args.notes)
+    validate_installer_version(installer, args.version_name, args.allow_installer_without_file_version)
     publisher_status = authenticode_status(installer)
     if publisher_status != "Valid":
         if not args.allow_unsigned_windows_publisher:
@@ -239,6 +403,8 @@ def main() -> None:
         "signature": base64.b64encode(signature).decode("ascii"),
         "notesSignature": base64.b64encode(notes_signature).decode("ascii"),
     }
+
+    assert_client_verifiable(manifest)
 
     OTA_DIR.mkdir(parents=True, exist_ok=True)
     local_installer = OTA_DIR / installer_name

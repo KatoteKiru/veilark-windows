@@ -38,9 +38,49 @@ sealed interface VpnPhase {
   data object Preparing : VpnPhase
   data object Connecting : VpnPhase
   data class Connected(val sinceEpochMillis: Long) : VpnPhase
-  data class Degraded(val message: String) : VpnPhase
+  /**
+   * [message] is a technical (log) description and is not localized. The UI
+   * renders [code] (see [VpnStatusCode]) and uses [detail] only as a
+   * non-translatable parameter such as an adapter or engine name.
+   */
+  data class Degraded(
+    val message: String,
+    val code: String = VpnStatusCode.DEGRADED,
+    val detail: String = "",
+  ) : VpnPhase
   data object Stopping : VpnPhase
-  data class Error(val message: String, val code: String, val stopRequired: Boolean = false) : VpnPhase
+  data class Error(
+    val message: String,
+    val code: String,
+    val stopRequired: Boolean = false,
+    val detail: String = "",
+  ) : VpnPhase
+}
+
+/** Stable, language-independent status codes shown through localized UI strings. */
+object VpnStatusCode {
+  // Errors
+  const val ENGINE_NOT_FOUND = "ENGINE_NOT_FOUND"
+  const val CORE_NOT_FOUND = "CORE_NOT_FOUND"
+  const val CONFIG_INVALID = "CONFIG_INVALID"
+  const val TUN_NAME_TAKEN = "TUN_NAME_TAKEN"
+  const val TUN_NOT_CREATED = "TUN_NOT_CREATED"
+  const val CORE_NOT_READY = "CORE_NOT_READY"
+  const val ELEVATION_REQUIRED = "ELEVATION_REQUIRED"
+  const val COMPETING_TUNNEL = "COMPETING_TUNNEL"
+  const val CONNECT_TIMEOUT = "CONNECT_TIMEOUT"
+  const val CORE_EXITED = "CORE_EXITED"
+  const val STOP_FAILED = "STOP_FAILED"
+  const val CORE_START_FAILED = "CORE_START_FAILED"
+
+  // Degraded health
+  const val DEGRADED = "DEGRADED"
+  const val ADAPTER_LOST = "ADAPTER_LOST"
+  const val TUNNEL_MISSING = "TUNNEL_MISSING"
+  const val INTERNET_UNREACHABLE = "INTERNET_UNREACHABLE"
+  const val TRAFFIC_BYPASSES_TUNNEL = "TRAFFIC_BYPASSES_TUNNEL"
+  const val TUNNEL_NO_RESPONSE = "TUNNEL_NO_RESPONSE"
+  const val HEALTH_CHECK_FAILED = "HEALTH_CHECK_FAILED"
 }
 
 val VpnPhase.requiresStopRetry: Boolean get() = this is VpnPhase.Error && stopRequired

@@ -1,5 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,27 +39,45 @@ internal object TunnelTrafficVerifier {
     val before = WindowsNetwork.refresh(tunnel.luid)
       ?: return@withContext EngineHealth.Unhealthy(
         "туннельный адаптер ${tunnel.alias} исчез из системы",
+        VpnStatusCode.ADAPTER_LOST,
+        tunnel.alias,
       )
     val failure = WindowsCurlInternetProbe.probe()
     val after = WindowsNetwork.refresh(tunnel.luid)
       ?: return@withContext EngineHealth.Unhealthy(
         "туннельный адаптер ${tunnel.alias} исчез из системы",
+        VpnStatusCode.ADAPTER_LOST,
+        tunnel.alias,
       )
     val carriedTraffic = after.bytesOut > before.bytesOut && after.bytesIn > before.bytesIn
 
     when {
       carriedTraffic && failure == null -> EngineHealth.Healthy
       carriedTraffic -> EngineHealth.Unhealthy(
-        "туннель передаёт данные, но интернет не отвечает: $failure. " +
+        "туннель передаёт данные, но интернет не отвечает: ${failure?.message}. " +
           "Попробуйте другой узел.",
+        VpnStatusCode.INTERNET_UNREACHABLE,
+        failure?.code.orEmpty(),
       )
-      failure == null -> EngineHealth.Unhealthy(
-        competingTunnelMessage(tunnel)
-          ?: "интернет работает в обход туннеля — трафик не защищён",
-      )
-      else -> EngineHealth.Unhealthy(
-        competingTunnelMessage(tunnel) ?: "нет ответа через туннель: $failure",
-      )
+      else -> competingTunnel(tunnel)?.let { competitor ->
+        EngineHealth.Unhealthy(
+          "трафик идёт через «$competitor», а не через туннель Veilark. " +
+            "Отключите другой VPN и подключитесь заново.",
+          VpnStatusCode.COMPETING_TUNNEL,
+          competitor,
+        )
+      } ?: if (failure == null) {
+        EngineHealth.Unhealthy(
+          "интернет работает в обход туннеля — трафик не защищён",
+          VpnStatusCode.TRAFFIC_BYPASSES_TUNNEL,
+        )
+      } else {
+        EngineHealth.Unhealthy(
+          "нет ответа через туннель: ${failure.message}",
+          VpnStatusCode.TUNNEL_NO_RESPONSE,
+          failure.code,
+        )
+      }
     }
   }
 
@@ -67,13 +86,10 @@ internal object TunnelTrafficVerifier {
    * tunnel owning the default route is the usual reason our own counters stay
    * flat while the internet is still reachable.
    */
-  private fun competingTunnelMessage(tunnel: ReadyTunnel): String? {
-    val competitor = WindowsNetwork.tunnels()
+  private fun competingTunnel(tunnel: ReadyTunnel): String? =
+    WindowsNetwork.tunnels()
       .firstOrNull { it.operational && it.luid != tunnel.luid }
-      ?: return null
-    return "трафик идёт через «${competitor.alias}», а не через туннель Veilark. " +
-      "Отключите другой VPN и подключитесь заново."
-  }
+      ?.alias
 }
 
 /**
@@ -82,11 +98,26 @@ internal object TunnelTrafficVerifier {
  * through [java.net.HttpURLConnection] therefore produced false PKIX failures
  * on machines where Windows and browsers trusted the connection normally.
  */
+/**
+ * [code] is a stable, language-independent classification (see
+ * [ProbeFailure.Companion]); [message] is technical journal text.
+ */
+internal data class ProbeFailure(val code: String, val message: String) {
+  companion object {
+    const val TIMEOUT = "timeout"
+    const val DNS = "dns"
+    const val UNREACHABLE = "unreachable"
+    const val TLS = "tls"
+    const val HTTP = "http"
+    const val FAILED = "failed"
+  }
+}
+
 internal object WindowsCurlInternetProbe {
-  suspend fun probe(): String? {
+  suspend fun probe(): ProbeFailure? {
     val curl = resolveCurl()
-      ?: return "в Windows не найден curl.exe"
-    var lastFailure = "нет ответа"
+      ?: return ProbeFailure(ProbeFailure.FAILED, "в Windows не найден curl.exe")
+    var lastFailure = ProbeFailure(ProbeFailure.FAILED, "нет ответа")
     for (target in TARGETS) {
       val result = try {
         ProcessBuilder(command(curl, target))
@@ -96,10 +127,10 @@ internal object WindowsCurlInternetProbe {
       } catch (cancellation: CancellationException) {
         throw cancellation
       } catch (_: Throwable) {
-        lastFailure = "не удалось запустить проверку интернета"
+        lastFailure = ProbeFailure(ProbeFailure.FAILED, "не удалось запустить проверку интернета")
         continue
       }
-      val failure = failure(result)
+      val failure = classify(result)
       if (failure == null) return null
       lastFailure = failure
     }
@@ -124,21 +155,23 @@ internal object WindowsCurlInternetProbe {
   )
 
   /** Returns `null` only for a completed HTTP exchange. */
-  internal fun failure(result: CapturedProcess): String? {
+  internal fun failure(result: CapturedProcess): String? = classify(result)?.message
+
+  internal fun classify(result: CapturedProcess): ProbeFailure? {
     val status = HTTP_STATUS_AT_END.find(result.output)
       ?.groupValues
       ?.get(1)
       ?.toIntOrNull()
       ?.takeIf { it in 100..599 }
     if (result.succeeded && status != null && status in 200..499) return null
-    if (result.timedOut) return "тайм-аут проверки"
+    if (result.timedOut) return ProbeFailure(ProbeFailure.TIMEOUT, "тайм-аут проверки")
     return when (result.exitCode) {
-      6 -> "DNS не отвечает"
-      7 -> "сервер проверки недоступен"
-      28 -> "тайм-аут проверки"
-      35, 51, 58, 60, 77 -> "Windows не подтвердила защищённое соединение"
-      else -> status?.let { "сервер проверки ответил кодом $it" }
-        ?: "проверка интернета не выполнена"
+      6 -> ProbeFailure(ProbeFailure.DNS, "DNS не отвечает")
+      7 -> ProbeFailure(ProbeFailure.UNREACHABLE, "сервер проверки недоступен")
+      28 -> ProbeFailure(ProbeFailure.TIMEOUT, "тайм-аут проверки")
+      35, 51, 58, 60, 77 -> ProbeFailure(ProbeFailure.TLS, "Windows не подтвердила защищённое соединение")
+      else -> status?.let { ProbeFailure(ProbeFailure.HTTP, "сервер проверки ответил кодом $it") }
+        ?: ProbeFailure(ProbeFailure.FAILED, "проверка интернета не выполнена")
     }
   }
 

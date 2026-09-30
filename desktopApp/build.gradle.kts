@@ -46,7 +46,9 @@ compose.desktop {
       packageVersion = "0.3.21"
       description = "Veilark VPN for Windows"
       vendor = "Veilark"
-      modules("java.net.http", "java.logging", "java.naming", "java.security.jgss")
+      // jdk.unsupported: ExtendedOpenOption share-mode lock for core configs
+      // (LockedConfigFile); also used by JNA.
+      modules("java.net.http", "java.logging", "java.naming", "java.security.jgss", "jdk.unsupported")
       appResourcesRootDir.set(rootProject.layout.projectDirectory.dir("packaging/resources"))
       windows {
         iconFile.set(project.file("src/main/resources/veilark.ico"))

@@ -47,6 +47,14 @@ if ($launcher.IndexOf($resourceOption, [StringComparison]::Ordinal) -lt 0) {
   throw 'Packaged launcher does not point at its immutable runtime resources'
 }
 
+$runtimeRelease = Join-Path $image 'runtime\release'
+if (Test-Path -LiteralPath $runtimeRelease -PathType Leaf) {
+  $modulesLine = Select-String -LiteralPath $runtimeRelease -Pattern '^MODULES=' | Select-Object -First 1
+  if (-not $modulesLine -or $modulesLine.Line -notmatch '\bjdk\.unsupported\b') {
+    throw 'Packaged Java runtime lacks jdk.unsupported (core config share lock)'
+  }
+}
+
 $singBoxOutput = & (Join-Path $resources 'sing-box.exe') version
 $singBoxExit = $LASTEXITCODE
 $singBoxOutput | Select-Object -First 1

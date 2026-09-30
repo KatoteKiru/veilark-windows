@@ -2,10 +2,10 @@ package uk.senyasenyavski.veilark.helper
 
 /** Fails before core startup when another WinTUN/WireGuard tunnel is active. */
 object ActiveTunnelConflict {
-  fun message(): String? {
+  /** Alias of the competing operational tunnel (non-localized), or `null`. */
+  fun competitorAlias(): String? {
     val competitor = WindowsNetwork.tunnels().firstOrNull(NetworkAdapter::operational)
       ?: return null
-    val name = competitor.alias.ifBlank { "другой VPN" }
-    return "Активен другой VPN «$name». Отключите его и повторите подключение Veilark."
+    return competitor.alias.ifBlank { "VPN" }
   }
 }

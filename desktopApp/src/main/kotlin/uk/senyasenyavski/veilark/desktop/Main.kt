@@ -129,7 +129,18 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
-import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+import uk.senyasenyavski.veilark.helper.WindowsDwm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -192,6 +203,7 @@ private class DesktopActions {
   var connect: () -> Unit = {}
   var disconnect: () -> Unit = {}
   var importFile: (NioPath) -> Unit = {}
+  var navigate: (Destination) -> Unit = {}
   var hasProfile: Boolean = false
 }
 
@@ -242,7 +254,7 @@ private fun runVeilark(args: Array<String>) {
   try {
     application {
   val session = remember {
-    WindowsVpnSession(preConnectCheck = ActiveTunnelConflict::message)
+    WindowsVpnSession(preConnectCheck = ActiveTunnelConflict::competitorAlias)
   }
   val exitScope = rememberCoroutineScope()
   var exitInProgress by remember { mutableStateOf(false) }
@@ -258,12 +270,34 @@ private fun runVeilark(args: Array<String>) {
   var updateOpenRevision by remember { mutableStateOf(0L) }
   var externalImportRequest by remember { mutableStateOf(importLink) }
   var language by remember { mutableStateOf(UiLanguageStore.load()) }
-  LaunchedEffect(updates) {
-    while (true) {
-      delay(UpdateNoticePolicy.INTERVAL_MS)
-      updates.check(background = true)
+  val placementStore = remember { WindowPlacementStore.persistent() }
+  val windowState = remember {
+    val saved = placementStore.load()?.let {
+      WindowPlacementStore.sanitize(
+        it,
+        WindowPlacementStore.screenBounds(),
+        MinimumWindowWidth.value.toInt(),
+        MinimumWindowHeight.value.toInt(),
+      )
+    }
+    androidx.compose.ui.window.WindowState(
+      placement = if (saved?.maximized == true) WindowPlacement.Maximized else WindowPlacement.Floating,
+      position = saved?.let { WindowPosition(it.x.dp, it.y.dp) } ?: WindowPosition.PlatformDefault,
+      width = saved?.width?.dp ?: InitialWindowWidth,
+      height = saved?.height?.dp ?: InitialWindowHeight,
+    )
+  }
+  // Shows, restores and focuses the window even when it is already visible
+  // behind other windows (activationRevision re-runs the focus effect).
+  val openWindow: () -> Unit = remember {
+    {
+      windowVisible = true
+      activationRevision += 1
     }
   }
+  // Application-scoped: also runs while the window is hidden in the tray and
+  // on the profile-store failure screen.
+  LaunchedEffect(updates) { updates.runBackgroundChecks() }
   LaunchedEffect(availableUpdateState) {
     val update = (availableUpdateState as? DesktopUpdateState.Available)?.update
       ?: return@LaunchedEffect
@@ -285,8 +319,7 @@ private fun runVeilark(args: Array<String>) {
 
   DisposableEffect(instanceGate) {
     instanceGate.setActivationHandler { forwardedImportLink ->
-      windowVisible = true
-      activationRevision += 1
+      openWindow()
       forwardedImportLink?.let { externalImportRequest = it }
     }
     onDispose { instanceGate.setActivationHandler {} }
@@ -300,8 +333,8 @@ private fun runVeilark(args: Array<String>) {
       is VpnPhase.Error -> trayState.sendNotification(
         Notification(
           "Veilark",
-          conciseTechnicalMessage(
-            phase.message,
+          phaseProblemText(
+            phase,
             language.text(
               "Не удалось подключиться. Откройте Veilark, чтобы посмотреть подробности.",
               "Could not connect. Open Veilark for details.",
@@ -318,8 +351,8 @@ private fun runVeilark(args: Array<String>) {
       is VpnPhase.Degraded -> trayState.sendNotification(
         Notification(
           "Veilark",
-          conciseTechnicalMessage(
-            phase.message,
+          phaseProblemText(
+            phase,
             language.text(
               "Туннель запущен, но проверка интернета не завершена.",
               "The tunnel is running, but the internet check did not finish.",
@@ -337,6 +370,8 @@ private fun runVeilark(args: Array<String>) {
     }
   }
 
+  // A single primary click behaves like the "Open Veilark" menu item.
+  LaunchedEffect(Unit) { TrayPrimaryClick.install(openWindow) }
   Tray(
     state = trayState,
     icon = painterResource("veilark-app-icon.png"),
@@ -346,8 +381,9 @@ private fun runVeilark(args: Array<String>) {
       busy -> language.text("Veilark · Подключение", "Veilark · Connecting")
       else -> language.text("Veilark · Отключено", "Veilark · Disconnected")
     },
+    // Double-click or a click on a notification balloon.
     onAction = {
-      windowVisible = true
+      openWindow()
       if (availableUpdateState is DesktopUpdateState.Available) updateOpenRevision++
     },
     menu = {
@@ -362,7 +398,7 @@ private fun runVeilark(args: Array<String>) {
         enabled = !stopping && (connected || connecting || stopRequired || actions.hasProfile),
         onClick = if (connected || connecting || stopRequired) actions.disconnect else actions.connect,
       )
-      Item(language.text("Открыть Veilark", "Open Veilark"), onClick = { windowVisible = true })
+      Item(language.text("Открыть Veilark", "Open Veilark"), onClick = openWindow)
       Separator()
       Item(
         language.text("Выход", "Exit"),
@@ -389,11 +425,54 @@ private fun runVeilark(args: Array<String>) {
   )
   Window(
     onCloseRequest = { windowVisible = false },
+    onPreviewKeyEvent = { event ->
+      val shortcut = if (event.type == KeyEventType.KeyDown) {
+        desktopShortcut(event.key, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed)
+      } else null
+      when (shortcut) {
+        null -> false
+        is DesktopShortcut.Navigate -> { actions.navigate(shortcut.destination); true }
+        DesktopShortcut.HideToTray -> { windowVisible = false; true }
+        DesktopShortcut.ToggleConnection -> {
+          if (!stopping) {
+            if (connected || connecting || stopRequired) actions.disconnect()
+            else if (actions.hasProfile) actions.connect()
+          }
+          true
+        }
+      }
+    },
     visible = windowVisible,
     title = "Veilark",
     icon = painterResource("veilark-app-icon.png"),
-    state = rememberWindowState(width = InitialWindowWidth, height = InitialWindowHeight),
+    state = windowState,
   ) {
+    // Windows 11 caption: dark mode follows the theme; Mica and rounded
+    // corners on 22H2+. Best-effort no-op elsewhere. Re-applied when the
+    // window first gets a native peer (start minimized to tray).
+    val darkTheme = isSystemInDarkTheme()
+    LaunchedEffect(darkTheme, windowVisible) {
+      if (windowVisible) WindowsDwm.apply(window, darkTheme)
+    }
+    LaunchedEffect(windowState) {
+      snapshotFlow { Triple(windowState.position, windowState.size, windowState.placement) }
+        .collectLatest { (position, size, placement) ->
+          delay(500)
+          val maximized = placement == WindowPlacement.Maximized
+          val previous = placementStore.load()
+          val bounds = if (placement == WindowPlacement.Floating && position is WindowPosition.Absolute) {
+            SavedWindowBounds(
+              x = position.x.value.toInt(),
+              y = position.y.value.toInt(),
+              width = size.width.value.toInt(),
+              height = size.height.value.toInt(),
+            )
+          } else {
+            previous?.copy(maximized = maximized)
+          }
+          bounds?.let { placementStore.save(it.copy(maximized = maximized)) }
+        }
+    }
     LaunchedEffect(windowVisible, activationRevision) {
       if (windowVisible) {
         window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
@@ -493,7 +572,7 @@ private fun VeilarkApp(
   }
   val storedProfiles = storedProfilesResult.getOrNull()
   if (storedProfiles == null) {
-    ProfileStoreUnavailable(onExit)
+    ProfileStoreUnavailable(updates = updates, session = session, onExit = onExit)
     return
   }
   val elevated = remember { elevationManager.isElevated() }
@@ -546,9 +625,7 @@ private fun VeilarkApp(
 
   LaunchedEffect(Unit) {
     updates.initialize()?.let { outcome ->
-      snackbar.showSnackbar(outcome.message.ifBlank {
-        language.text("Обновление Veilark завершено", "Veilark update completed")
-      })
+      snackbar.showSnackbar(updateOutcomeText(outcome, language))
     }
   }
 
@@ -950,6 +1027,7 @@ private fun VeilarkApp(
     desktopActions.connect = ::connect
     desktopActions.disconnect = ::disconnect
     desktopActions.hasProfile = profile != null
+    desktopActions.navigate = { destination = it }
     desktopActions.importFile = { path ->
       if (configurationLockedNow() || importing || refreshing) {
         scope.launch { snackbar.showSnackbar(language.text("Сначала отключите VPN", "Disconnect VPN first")) }
@@ -1244,8 +1322,17 @@ private fun VeilarkApp(
 }
 
 @Composable
-private fun ProfileStoreUnavailable(onExit: () -> Unit) {
+private fun ProfileStoreUnavailable(
+  updates: DesktopUpdateController,
+  session: WindowsVpnSession,
+  onExit: () -> Unit,
+) {
   val language = LocalUiLanguage.current
+  val scope = rememberCoroutineScope()
+  val updateState by updates.state.collectAsState()
+  // A newer release may fix the store problem, so updates stay reachable here.
+  // Installing never saves profiles: the unreadable store is left untouched.
+  LaunchedEffect(updates) { updates.initialize() }
   Box(
     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     contentAlignment = Alignment.Center,
@@ -1277,12 +1364,47 @@ private fun ProfileStoreUnavailable(onExit: () -> Unit) {
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(
-          onClick = onExit,
+        val pendingUpdate = when (val state = updateState) {
+          is DesktopUpdateState.Available -> state.update
+          is DesktopUpdateState.Downloading -> state.update
+          is DesktopUpdateState.Ready -> state.update
+          is DesktopUpdateState.Installing -> state.update
+          is DesktopUpdateState.Failed -> state.update
+          else -> null
+        }
+        if (pendingUpdate != null) {
+          Text(
+            (updateState as? DesktopUpdateState.Failed)?.let { updateErrorText(it.error, language) }
+              ?: language.text(
+                "Доступна версия ${pendingUpdate.versionName}. Установка не изменит файл подписок.",
+                "Version ${pendingUpdate.versionName} is available. Installing it does not modify the subscription store.",
+              ),
+            modifier = Modifier.padding(top = 16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+          )
+        }
+        Row(
           modifier = Modifier.padding(top = 20.dp),
-          shape = RoundedCornerShape(12.dp),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text(language.text("Закрыть Veilark", "Close Veilark"))
+          if (pendingUpdate != null) {
+            UpdatePrimaryAction(
+              state = updateState,
+              onCheck = { scope.launch { updates.check() } },
+              onDownload = { update -> scope.launch { updates.download(update) } },
+              onCancelDownload = updates::cancelDownload,
+              onInstall = { ready ->
+                scope.launch { updates.install(ready) { session.disconnect() }.onSuccess { onExit() } }
+              },
+            )
+          }
+          OutlinedButton(
+            onClick = onExit,
+            shape = RoundedCornerShape(12.dp),
+          ) {
+            Text(language.text("Закрыть Veilark", "Close Veilark"))
+          }
         }
       }
     }
@@ -1682,8 +1804,8 @@ private fun concisePhaseMessage(
   VpnPhase.Preparing -> language.text("Проверяем конфигурацию и подготавливаем TUN", "Validating configuration and preparing TUN")
   VpnPhase.Connecting -> language.text("Ждём подтверждения VPN-ядра", "Waiting for the VPN core")
   is VpnPhase.Connected -> traffic?.adapter ?: profile?.name.orEmpty()
-  is VpnPhase.Degraded -> conciseTechnicalMessage(
-    message = phase.message,
+  is VpnPhase.Degraded -> phaseProblemText(
+    phase = phase,
     fallback = language.text(
       "Туннель запущен, но проверка интернета не завершена. Попробуйте другой узел.",
       "The tunnel is running, but the internet check did not finish. Try another server.",
@@ -1695,8 +1817,8 @@ private fun concisePhaseMessage(
     language = language,
   )
   VpnPhase.Stopping -> language.text("Завершаем ядро и удаляем TUN-адаптер", "Stopping the core and removing the TUN adapter")
-  is VpnPhase.Error -> conciseTechnicalMessage(
-    message = phase.message,
+  is VpnPhase.Error -> phaseProblemText(
+    phase = phase,
     fallback = language.text(
       "Не удалось подключиться. Повторите попытку или выберите другой узел.",
       "Could not connect. Try again or choose another server.",
@@ -1707,41 +1829,6 @@ private fun concisePhaseMessage(
     ),
     language = language,
   )
-}
-
-private fun conciseTechnicalMessage(
-  message: String,
-  fallback: String,
-  certificateFallback: String = fallback,
-  language: UiLanguage = UiLanguage.Russian,
-): String {
-  val normalized = message.replace(Regex("\\s+"), " ").trim()
-  if (normalized.isBlank()) return fallback
-  val lower = normalized.lowercase(Locale.ROOT)
-  return when {
-    lower.contains("активен другой vpn") || lower.contains("competing tunnel") ->
-      language.text(
-        normalized,
-        "Another VPN tunnel is active. Disconnect it, then try Veilark again.",
-      )
-    lower.contains("pkix") ||
-      lower.contains("certpath") ||
-      lower.contains("certificate") ||
-      lower.contains("sslhandshake") ->
-      certificateFallback
-    lower.contains("timeout") ||
-      lower.contains("timed out") ||
-      lower.contains("не отвечает") ->
-      language.text("Узел не отвечает вовремя. Попробуйте другой сервер.", "The server timed out. Try another server.")
-    lower.contains("connection refused") || lower.contains("соединение отклонено") ->
-      language.text("Узел отклонил соединение. Попробуйте другой сервер.", "The server refused the connection. Try another server.")
-    normalized.length > 180 ||
-      lower.contains("exception") ||
-      lower.contains("javax.") ||
-      lower.contains("java.") ||
-      lower.contains("sun.") -> fallback
-    else -> normalized
-  }
 }
 
 @Composable
@@ -2253,69 +2340,6 @@ private fun CompactTrafficEvidence(
   }
 }
 
-@Composable
-private fun RoutingShortcut(
-  routing: RoutingSettings,
-  engine: VpnEngine,
-  connected: Boolean,
-  onOpen: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val language = LocalUiLanguage.current
-  val tlsSuffix = if (engine == VpnEngine.SingBox && routing.tlsFragment) {
-    language.text(" · TLS-фрагментация", " · TLS fragmentation")
-  } else {
-    ""
-  }
-  Surface(
-    modifier = modifier.fillMaxWidth().clickable(onClick = onOpen),
-    color = MaterialTheme.colorScheme.surfaceContainerLow,
-    shape = RoundedCornerShape(12.dp),
-  ) {
-    Row(
-      Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Icon(
-        Icons.Rounded.Route,
-        null,
-        modifier = Modifier.size(19.dp),
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-      Column(Modifier.weight(1f).padding(start = 11.dp)) {
-        Text(language.text("Маршрутизация", "Routing"), style = MaterialTheme.typography.labelLarge)
-        Text(
-          when (routing.mode) {
-            RoutingMode.All -> if (connected) {
-              language.text("Весь трафик · правила активны", "All traffic · rules active") + tlsSuffix
-            } else {
-              language.text("Весь трафик через VPN", "All traffic through VPN") + tlsSuffix
-            }
-            RoutingMode.RussiaDirect -> language.text(
-              "Россия напрямую · остальное через VPN",
-              "Russia direct · everything else through VPN",
-            ) + tlsSuffix
-            RoutingMode.RussiaVpn -> language.text(
-              "Россия через VPN · остальное напрямую",
-              "Russia through VPN · everything else direct",
-            ) + tlsSuffix
-            RoutingMode.Manual -> language.text("Свои правила", "Custom rules") + tlsSuffix
-          },
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      }
-      Text(
-        language.text("Настроить", "Configure"),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-      )
-    }
-  }
-}
-
 /** Keeps the UAC requirement visible without consuming the compact home screen. */
 @Composable
 private fun ElevationNotice(modifier: Modifier = Modifier) {
@@ -2340,369 +2364,6 @@ private fun ElevationNotice(modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.labelLarge,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-      )
-    }
-  }
-}
-
-@Composable
-private fun ConnectionCard(
-  phase: VpnPhase,
-  traffic: TrafficSnapshot?,
-  profile: Profile?,
-  modifier: Modifier,
-  onAction: () -> Unit,
-  onOpenLogs: () -> Unit,
-) {
-  val healthy = phase is VpnPhase.Connected
-  val degraded = phase is VpnPhase.Degraded
-  val connected = healthy || degraded
-  val busy = phase is VpnPhase.Preparing ||
-    phase is VpnPhase.Connecting ||
-    phase is VpnPhase.Stopping
-  val failed = phase is VpnPhase.Error
-  val statusContainerColor by animateColorAsState(
-    targetValue = when {
-      healthy -> MaterialTheme.colorScheme.primary
-      degraded -> MaterialTheme.colorScheme.tertiaryContainer
-      failed -> MaterialTheme.colorScheme.errorContainer
-      else -> MaterialTheme.colorScheme.surfaceContainerLowest
-    },
-    animationSpec = tween(220),
-  )
-  val statusContentColor by animateColorAsState(
-    targetValue = when {
-      healthy -> MaterialTheme.colorScheme.onPrimary
-      degraded -> MaterialTheme.colorScheme.onTertiaryContainer
-      failed -> MaterialTheme.colorScheme.onErrorContainer
-      else -> MaterialTheme.colorScheme.primary
-    },
-    animationSpec = tween(220),
-  )
-  Surface(
-    modifier = modifier,
-    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    shape = RoundedCornerShape(16.dp),
-  ) {
-    Column(
-      modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-    ) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-      Surface(
-        modifier = Modifier.size(68.dp),
-        color = statusContainerColor,
-        contentColor = statusContentColor,
-        shape = CircleShape,
-      ) {
-        Box(contentAlignment = Alignment.Center) {
-          AnimatedContent(
-            targetState = busy,
-            transitionSpec = {
-              (fadeIn(tween(160)) + scaleIn(tween(160), initialScale = .92f))
-                .togetherWith(fadeOut(tween(120)) + scaleOut(tween(120), targetScale = .92f))
-            },
-          ) { isBusy ->
-            if (isBusy) {
-              Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(Modifier.size(38.dp), strokeWidth = 3.dp)
-              }
-            } else {
-              BrandGlyph(
-                color = LocalContentColor.current,
-                modifier = Modifier.size(38.dp),
-              )
-            }
-          }
-        }
-      }
-      Column(Modifier.weight(1f).padding(start = 18.dp)) {
-      Text(
-        when (phase) {
-          VpnPhase.Idle -> "VPN выключен"
-          VpnPhase.NeedsElevation -> "Нужны права администратора"
-          VpnPhase.Preparing -> "Подготовка подключения"
-          VpnPhase.Connecting -> "Подключение…"
-          is VpnPhase.Connected -> "Соединение защищено"
-          is VpnPhase.Degraded -> "Соединение нестабильно"
-          VpnPhase.Stopping -> "Отключение…"
-          is VpnPhase.Error -> if (phase.stopRequired) "Не удалось остановить" else "Не удалось подключиться"
-        },
-        style = MaterialTheme.typography.headlineSmall,
-        textAlign = TextAlign.Start,
-      )
-      Spacer(Modifier.height(5.dp))
-      Text(
-        when (phase) {
-          is VpnPhase.Error -> phase.message
-          is VpnPhase.Degraded -> phase.message
-          else -> when {
-            profile == null -> "Добавьте подписку или профиль"
-            busy -> "Это может занять несколько секунд"
-            connected -> profile.name
-            else -> "Готово к безопасному подключению"
-          }
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (connected || failed) {
-          LocalContentColor.current.copy(alpha = .86f)
-        } else {
-          MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        textAlign = TextAlign.Start,
-        maxLines = 3,
-        overflow = TextOverflow.Ellipsis,
-      )
-      }
-      }
-      AnimatedVisibility(visible = connected) {
-        SessionMetrics(
-          phase = phase,
-          traffic = traffic,
-          modifier = Modifier.padding(top = 18.dp),
-        )
-      }
-      Spacer(Modifier.weight(1f))
-      Spacer(Modifier.height(16.dp))
-      Button(
-        onClick = onAction,
-        enabled = phase !is VpnPhase.Stopping,
-        modifier = Modifier.fillMaxWidth().height(50.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = if (connected || busy) {
-          ButtonDefaults.filledTonalButtonColors()
-        } else {
-          ButtonDefaults.buttonColors()
-        },
-      ) {
-        if (busy) {
-          Icon(Icons.Rounded.StopCircle, null, Modifier.size(19.dp))
-          Spacer(Modifier.width(8.dp))
-        }
-        Text(
-          when {
-            phase.requiresStopRetry -> "Повторить остановку"
-            profile == null -> "Добавить профиль"
-            busy -> "Остановить подключение"
-            connected -> "Отключить"
-            else -> "Подключить"
-          },
-          style = MaterialTheme.typography.labelLarge,
-        )
-      }
-      if (failed) {
-        Row(
-          modifier = Modifier.padding(top = 10.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Text(
-            "Код: ${phase.code}",
-            style = MaterialTheme.typography.bodySmall,
-          )
-          TextButton(onClick = onOpenLogs) {
-            Text("Открыть журнал", style = MaterialTheme.typography.bodySmall)
-          }
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun QuickConnectionCard(
-  profile: Profile?,
-  selectedEngine: VpnEngine,
-  availableEngines: Set<VpnEngine>,
-  subscriptions: List<SubscriptionRecord>,
-  activeSubscriptionId: String?,
-  selectedNodeTag: String?,
-  nodeLatencies: Map<String, NodeLatency>,
-  busy: Boolean,
-  probing: Boolean,
-  refreshing: Boolean,
-  onImport: () -> Unit,
-  onSelectNode: (String) -> Unit,
-  onRefresh: () -> Unit,
-  onProbe: () -> Unit,
-  onEngineSelect: (VpnEngine) -> Unit,
-  onSelectSubscription: (String) -> Unit,
-) {
-  CardSection(Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(16.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-      ) {
-        Column {
-          Text("Подключение", style = MaterialTheme.typography.titleMedium)
-          Text(
-            "Ядро и сервер",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        }
-        TextButton(onClick = onImport, enabled = !busy) {
-          Icon(Icons.Rounded.Add, null, Modifier.size(17.dp))
-          Text("Подписка", Modifier.padding(start = 6.dp))
-        }
-      }
-      Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        VpnEngine.entries.forEach { engine ->
-          EngineChoice(
-            engine = engine,
-            selected = selectedEngine == engine,
-            configured = engine in availableEngines,
-            enabled = !busy,
-            modifier = Modifier.weight(1f),
-            onSelect = onEngineSelect,
-          )
-        }
-      }
-      if (profile == null) {
-        Surface(
-          modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-          color = MaterialTheme.colorScheme.surfaceContainerHigh,
-          shape = RoundedCornerShape(14.dp),
-        ) {
-          Column(Modifier.padding(16.dp)) {
-            Text("Для этого ядра нет подписки", fontWeight = FontWeight.Medium)
-            Text(
-              "Добавьте ссылку, URI или локальный профиль",
-              modifier = Modifier.padding(top = 3.dp),
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-        }
-      } else {
-        SubscriptionDropdown(
-          subscriptions = subscriptions.filter { it.profile(selectedEngine) != null },
-          activeSubscriptionId = activeSubscriptionId,
-          enabled = !busy,
-          onSelect = onSelectSubscription,
-        )
-        NodeDropdown(
-          profile = profile,
-          selectedNodeTag = selectedNodeTag,
-          latencies = nodeLatencies,
-          enabled = !busy,
-          compact = true,
-          onSelectNode = onSelectNode,
-        )
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          OutlinedButton(
-            onClick = onRefresh,
-            enabled = !busy && !refreshing && profile.sourceUrl != null,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp),
-          ) {
-            if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
-            Text("Обновить", Modifier.padding(start = 6.dp))
-          }
-          OutlinedButton(
-            onClick = onProbe,
-            enabled = !busy && !probing,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp),
-          ) {
-            if (probing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
-            Text("Пинг", Modifier.padding(start = 6.dp))
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
- * Live tunnel evidence: how long the session has been up and how many bytes the
- * TUN adapter has actually moved. Without it a silent tunnel is
- * indistinguishable from a working one.
- */
-@Composable
-private fun SessionMetrics(
-  phase: VpnPhase,
-  traffic: TrafficSnapshot?,
-  modifier: Modifier = Modifier,
-) {
-  val since = (phase as? VpnPhase.Connected)?.sinceEpochMillis
-  var now by remember { mutableStateOf(System.currentTimeMillis()) }
-  LaunchedEffect(since) {
-    while (since != null) {
-      now = System.currentTimeMillis()
-      delay(1_000)
-    }
-  }
-  Column(modifier.fillMaxWidth()) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      MetricTile(
-        label = "Получено",
-        value = traffic?.let { formatBytes(it.bytesIn) } ?: "—",
-        modifier = Modifier.weight(1f),
-      )
-      MetricTile(
-        label = "Отправлено",
-        value = traffic?.let { formatBytes(it.bytesOut) } ?: "—",
-        modifier = Modifier.weight(1f),
-      )
-    }
-    Text(
-      buildString {
-        append(traffic?.adapter ?: "Туннель активен")
-        if (since != null) append(" · ${formatDuration(now - since)}")
-      },
-      modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-      style = MaterialTheme.typography.bodySmall,
-      color = LocalContentColor.current.copy(alpha = .74f),
-      textAlign = TextAlign.Center,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-  }
-}
-
-@Composable
-private fun MetricTile(
-  label: String,
-  value: String,
-  modifier: Modifier = Modifier,
-) {
-  Surface(
-    modifier = modifier,
-    color = LocalContentColor.current.copy(alpha = .10f),
-    contentColor = LocalContentColor.current,
-    shape = RoundedCornerShape(16.dp),
-  ) {
-    Column(
-      Modifier.padding(vertical = 11.dp, horizontal = 14.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      Text(
-        label,
-        style = MaterialTheme.typography.bodySmall,
-        color = LocalContentColor.current.copy(alpha = .74f),
-      )
-      Text(
-        value,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
       )
     }
   }
@@ -2733,220 +2394,6 @@ private fun formatDuration(millis: Long): String {
     String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
   } else {
     String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
-  }
-}
-
-@Composable
-private fun ProfileCard(
-  profile: Profile?,
-  selectedNodeTag: String?,
-  nodeLatencies: Map<String, NodeLatency>,
-  busy: Boolean,
-  probing: Boolean,
-  refreshing: Boolean,
-  onImport: () -> Unit,
-  onSelectNode: (String) -> Unit,
-  onRefresh: () -> Unit,
-  onProbe: () -> Unit,
-) {
-  Column {
-    SectionTitle("Профиль")
-    CardSection(Modifier.fillMaxWidth()) {
-      Column {
-        ListItem(
-        headlineContent = {
-          Text(
-            profile?.name ?: "Профиль не добавлен",
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        },
-        supportingContent = {
-          Text(
-            profile?.let {
-              val node = it.nodes.firstOrNull { node -> node.tag == selectedNodeTag }?.name
-                ?: if (it.engine == VpnEngine.SingBox) "Автовыбор" else it.nodes.firstOrNull()?.name
-                ?: "Нет endpoint"
-              "${it.nodes.size} узлов · ${it.engine.displayName} · $node"
-            } ?: "Импортировать подписку",
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        },
-        leadingContent = {
-          Surface(
-            modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-          ) {
-            Box(contentAlignment = Alignment.Center) {
-              Icon(
-                VeilarkMark,
-                null,
-                tint = MaterialTheme.colorScheme.onSurface,
-              )
-            }
-          }
-        },
-        trailingContent = {
-          FilledTonalButton(
-            onClick = onImport,
-            enabled = !busy,
-            shape = RoundedCornerShape(14.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp),
-          ) {
-            Text(if (profile == null) "Добавить" else "Сменить")
-          }
-        },
-          colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
-        if (profile != null) {
-          HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-          NodeDropdown(
-            profile = profile,
-            selectedNodeTag = selectedNodeTag,
-            latencies = nodeLatencies,
-            enabled = !busy,
-            compact = true,
-            onSelectNode = onSelectNode,
-          )
-          Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-          ) {
-            OutlinedButton(
-              onClick = onRefresh,
-              enabled = !busy && !refreshing && profile.sourceUrl != null,
-              modifier = Modifier.weight(1f),
-              shape = RoundedCornerShape(13.dp),
-            ) {
-              if (refreshing) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-              } else {
-                Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
-              }
-              Text("Обновить", Modifier.padding(start = 7.dp))
-            }
-            OutlinedButton(
-              onClick = onProbe,
-              enabled = !busy && !probing,
-              modifier = Modifier.weight(1f),
-              shape = RoundedCornerShape(13.dp),
-            ) {
-              if (probing) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-              } else {
-                Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
-              }
-              Text("Задержка", Modifier.padding(start = 7.dp))
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun RoutingCard(
-  routing: RoutingSettings,
-  engine: VpnEngine,
-  connected: Boolean,
-  onOpen: () -> Unit,
-) {
-  val manual = routing.mode == RoutingMode.Manual
-  Column {
-    SectionTitle("Маршрутизация")
-    CardSection(Modifier.fillMaxWidth()) {
-      ListItem(
-        modifier = Modifier.clickable(onClick = onOpen),
-        headlineContent = {
-          Text(
-            when (routing.mode) {
-              RoutingMode.All -> "Весь трафик"
-              RoutingMode.RussiaDirect -> "Россия напрямую"
-              RoutingMode.RussiaVpn -> "Россия через VPN"
-              RoutingMode.Manual -> "Свои правила"
-            },
-            fontWeight = FontWeight.Medium,
-          )
-        },
-        supportingContent = {
-          Text(
-            when {
-              manual -> {
-                val direct = routing.directEntries.split(' ', '\n').count(String::isNotBlank)
-                val viaVpn = routing.vpnEntries.split(' ', '\n').count(String::isNotBlank)
-                "Напрямую: $direct · Через VPN: $viaVpn" +
-                  if (routing.tlsFragment) " · TLS-фрагментация" else ""
-              }
-              routing.mode == RoutingMode.RussiaDirect ->
-                "Российские ресурсы напрямую · остальное через туннель"
-              routing.mode == RoutingMode.RussiaVpn ->
-                "Российские ресурсы через туннель · остальное напрямую"
-              routing.tlsFragment -> "Через туннель · TLS-фрагментация"
-              connected -> "Маршрут активен"
-              else -> "Применится при подключении"
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        },
-        leadingContent = {
-          Icon(
-            Icons.Rounded.Route,
-            null,
-            tint = MaterialTheme.colorScheme.primary,
-          )
-        },
-        trailingContent = {
-          Text(
-            "Настроить",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-          )
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-      )
-    }
-  }
-}
-
-@Composable
-private fun EngineCard(
-  selectedEngine: VpnEngine,
-  availableEngines: Set<VpnEngine>,
-  enabled: Boolean,
-  onSelect: (VpnEngine) -> Unit,
-) {
-  Column {
-    SectionTitle("Режим подключения")
-    CardSection(Modifier.fillMaxWidth()) {
-      Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-          modifier = Modifier.selectableGroup(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-          EngineChoice(
-            engine = VpnEngine.SingBox,
-            selected = selectedEngine == VpnEngine.SingBox,
-            configured = VpnEngine.SingBox in availableEngines,
-            enabled = enabled,
-            modifier = Modifier.weight(1f),
-            onSelect = onSelect,
-          )
-          EngineChoice(
-            engine = VpnEngine.TrustTunnel,
-            selected = selectedEngine == VpnEngine.TrustTunnel,
-            configured = VpnEngine.TrustTunnel in availableEngines,
-            enabled = enabled,
-            modifier = Modifier.weight(1f),
-            onSelect = onSelect,
-          )
-        }
-      }
-    }
   }
 }
 
@@ -3015,16 +2462,6 @@ private fun EngineChoice(
       }
     }
   }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-  Text(
-    text,
-    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-    style = MaterialTheme.typography.titleMedium,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-  )
 }
 
 @Composable
@@ -3289,102 +2726,6 @@ internal fun ProfilesScreen(
 }
 
 @Composable
-private fun SubscriptionDropdown(
-  subscriptions: List<SubscriptionRecord>,
-  activeSubscriptionId: String?,
-  enabled: Boolean,
-  compact: Boolean = false,
-  onSelect: (String) -> Unit,
-) {
-  val language = LocalUiLanguage.current
-  var expanded by remember { mutableStateOf(false) }
-  val active = subscriptions.firstOrNull { it.id == activeSubscriptionId }
-    ?: subscriptions.firstOrNull()
-  Box(Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else 12.dp)) {
-    OutlinedButton(
-      onClick = { expanded = true },
-      enabled = enabled && subscriptions.isNotEmpty(),
-      modifier = Modifier.fillMaxWidth(),
-      shape = RoundedCornerShape(12.dp),
-      contentPadding = PaddingValues(
-        horizontal = 14.dp,
-        vertical = if (compact) 7.dp else 9.dp,
-      ),
-    ) {
-      Icon(VeilarkMark, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
-      Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-        Text(active?.name ?: language.text("Нет подписок", "No subscriptions"), fontWeight = FontWeight.Medium)
-        Text(
-          active?.let {
-            if (it.origin == SubscriptionOrigin.BuiltIn) {
-              language.text("Встроенная Veilark Trust", "Built-in Veilark Trust")
-            } else {
-              it.sourceLabel
-            }
-          } ?: language.text("Добавьте подписку", "Add a subscription"),
-          style = MaterialTheme.typography.bodySmall,
-          color = LocalContentColor.current.copy(alpha = .72f),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      }
-      Icon(Icons.Rounded.ArrowDropDown, null)
-    }
-    StablePickerPopup(
-      expanded = expanded,
-      onDismiss = { expanded = false },
-      width = 400.dp,
-    ) {
-      LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
-        contentPadding = PaddingValues(6.dp),
-      ) {
-        items(subscriptions, key = SubscriptionRecord::id) { subscription ->
-          val selected = subscription.id == active?.id
-          Surface(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
-              .clickable {
-                expanded = false
-                onSelect(subscription.id)
-              },
-            color = if (selected) {
-              MaterialTheme.colorScheme.secondaryContainer
-            } else {
-              Color.Transparent
-            },
-            shape = RoundedCornerShape(10.dp),
-          ) {
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                if (selected) Icons.Rounded.Check else VeilarkMark,
-                null,
-                modifier = Modifier.size(18.dp),
-                tint = if (selected) LocalContentColor.current else MaterialTheme.colorScheme.onSurface,
-              )
-              Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text(subscription.name, fontWeight = FontWeight.Medium)
-                Text(
-                  subscription.profiles.joinToString(" · ") {
-                    "${it.engine.displayName}: ${it.nodes.size}"
-                  },
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                )
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@Composable
 private fun NodeDropdown(
   profile: Profile,
   selectedNodeTag: String?,
@@ -3603,34 +2944,6 @@ private val VpnEngine.displayName: String
     VpnEngine.SingBox -> "sing-box"
     VpnEngine.TrustTunnel -> "TrustTunnel"
   }
-
-@Composable
-private fun ImportItem(
-  icon: androidx.compose.ui.graphics.vector.ImageVector,
-  title: String,
-  subtitle: String,
-  importing: Boolean,
-  onClick: () -> Unit,
-) {
-  val language = LocalUiLanguage.current
-  ListItem(
-    headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
-    supportingContent = { Text(subtitle) },
-    leadingContent = {
-      Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-    },
-    trailingContent = {
-      OutlinedButton(
-        onClick = onClick,
-        enabled = !importing,
-        shape = RoundedCornerShape(14.dp),
-      ) {
-        Text(language.text("Выбрать", "Choose"))
-      }
-    },
-    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-  )
-}
 
 @Composable
 internal fun RoutingScreen(
@@ -4224,7 +3537,7 @@ private fun UpdatesScreen(
                 is DesktopUpdateState.Downloading -> language.text("${(state.progress * 100).toInt()}% · подпись и SHA-256 будут проверены", "${(state.progress * 100).toInt()}% · signature and SHA-256 will be verified")
                 is DesktopUpdateState.Ready -> language.text("VPN отключится только после подтверждения перезапуска", "VPN will disconnect only after you confirm restart")
                 is DesktopUpdateState.Installing -> language.text("Veilark завершится и автоматически откроется после установки", "Veilark will close and reopen automatically after installation")
-                is DesktopUpdateState.Failed -> state.message
+                is DesktopUpdateState.Failed -> updateErrorText(state.error, language)
               },
             )
           },
