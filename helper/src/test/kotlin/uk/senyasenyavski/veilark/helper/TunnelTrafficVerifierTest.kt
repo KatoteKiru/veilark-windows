@@ -77,4 +77,17 @@ class TunnelTrafficVerifierTest {
       target.removePrefix("https://").substringBefore('/').any(Char::isLetter)
     })
   }
+
+  @Test
+  fun `probe failures carry stable language-independent codes`() {
+    fun code(exit: Int?, timedOut: Boolean = false) = WindowsCurlInternetProbe.classify(
+      CapturedProcess(exitCode = exit, output = "000", timedOut = timedOut),
+    )?.code
+    assertEquals(ProbeFailure.TIMEOUT, code(null, timedOut = true))
+    assertEquals(ProbeFailure.TIMEOUT, code(28))
+    assertEquals(ProbeFailure.DNS, code(6))
+    assertEquals(ProbeFailure.UNREACHABLE, code(7))
+    assertEquals(ProbeFailure.TLS, code(60))
+    assertEquals(ProbeFailure.FAILED, code(1))
+  }
 }

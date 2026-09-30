@@ -2,7 +2,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 
 [assembly: AssemblyTitle("Veilark OTA Installer")]
@@ -26,18 +28,28 @@ internal static class VeilarkOtaBootstrap
             directory = Path.GetTempPath();
         }
 
-        string payloadPath = Path.Combine(
-            directory,
-            ".Veilark-payload-" + Process.GetCurrentProcess().Id + ".exe");
-
+        bool verifyOnly = args.Length == 1 &&
+            String.Equals(args[0], "--bootstrap-verify-only", StringComparison.Ordinal);
+        string workDirectory = null;
+        FileStream payloadLock = null;
         try
         {
             PayloadMetadata expected = ReadPayloadMetadata();
-            ExtractAndVerifyPayload(payloadPath, expected);
 
-            if (args.Length == 1 &&
-                String.Equals(args[0], "--bootstrap-verify-only", StringComparison.Ordinal))
+            // The wrapper itself lives in the user-writable update directory.
+            // An unelevated process of the same user must not be able to swap
+            // the extracted payload between verification and the elevated
+            // start, so the payload goes to a fresh directory that only
+            // Administrators and SYSTEM can write, and a read-only share lock
+            // is held from the final hash until the installer has exited.
+            workDirectory = CreateWorkDirectory(verifyOnly);
+            string payloadPath = Path.Combine(workDirectory, "Veilark-payload.exe");
+            ExtractAndVerifyPayload(payloadPath, expected);
+            payloadLock = OpenLockedAndVerify(payloadPath, expected);
+
+            if (verifyOnly)
             {
+                AssertWriteLocked(payloadPath);
                 Console.Out.WriteLine(expected.Sha256);
                 return 0;
             }
@@ -52,7 +64,7 @@ internal static class VeilarkOtaBootstrap
             {
                 if (installer == null)
                 {
-                    throw new InvalidOperationException("Не удалось запустить установщик Veilark.");
+                    throw new InvalidOperationException("Veilark installer could not be started.");
                 }
 
                 installer.WaitForExit();
@@ -61,20 +73,132 @@ internal static class VeilarkOtaBootstrap
         }
         catch (Exception error)
         {
+            if (verifyOnly)
+            {
+                Console.Error.WriteLine(error);
+            }
+
             WriteFailureLog(directory, error);
             return 1603;
         }
         finally
         {
-            DeleteWithRetry(payloadPath);
+            if (payloadLock != null)
+            {
+                payloadLock.Dispose();
+            }
+
+            if (workDirectory != null)
+            {
+                DeleteDirectoryWithRetry(workDirectory);
+            }
         }
     }
 
+    private static bool IsElevated()
+    {
+        using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+        {
+            return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+    }
+
+    private static string CreateWorkDirectory(bool verifyOnly)
+    {
+        if (!IsElevated())
+        {
+            if (!verifyOnly)
+            {
+                throw new UnauthorizedAccessException("The Veilark OTA installer must run elevated.");
+            }
+
+            // A non-elevated verification never launches the payload.
+            string userDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "Veilark-ota-verify-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(userDirectory);
+            return userDirectory;
+        }
+
+        return CreateProtectedDirectory();
+    }
+
+    private static string CreateProtectedDirectory()
+    {
+        // %SystemRoot%\Temp lets users create entries but not delete or rename
+        // entries owned by others, unlike %TEMP% or %LOCALAPPDATA%.
+        string root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "Temp");
+        string path = Path.Combine(root, "Veilark-ota-" + Guid.NewGuid().ToString("N"));
+        if (Directory.Exists(path) || File.Exists(path))
+        {
+            throw new IOException("The protected OTA directory already exists.");
+        }
+
+        Directory.CreateDirectory(path, ProtectedSecurity());
+        DirectoryInfo created = new DirectoryInfo(path);
+        if ((created.Attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException("The protected OTA directory is a reparse point.");
+        }
+
+        AssertProtected(created.GetAccessControl(AccessControlSections.Access));
+        return path;
+    }
+
+    private static DirectorySecurity ProtectedSecurity()
+    {
+        InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+        DirectorySecurity security = new DirectorySecurity();
+        security.SetAccessRuleProtection(true, false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            AdministratorsSid, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            SystemSid, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+        // Replaces the owner's implicit WRITE_DAC: if the elevated token makes
+        // the user (not Administrators) the owner, an unelevated process of
+        // that user still cannot rewrite the DACL and gain write access.
+        security.AddAccessRule(new FileSystemAccessRule(
+            OwnerRightsSid, FileSystemRights.ReadAndExecute, inherit, PropagationFlags.None, AccessControlType.Allow));
+        return security;
+    }
+
+    private static void AssertProtected(DirectorySecurity security)
+    {
+        if (!security.AreAccessRulesProtected)
+        {
+            throw new UnauthorizedAccessException("The OTA directory inherits permissions.");
+        }
+
+        const FileSystemRights writeRights =
+            FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.WriteExtendedAttributes |
+            FileSystemRights.WriteAttributes | FileSystemRights.DeleteSubdirectoriesAndFiles |
+            FileSystemRights.Delete | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+        foreach (FileSystemAccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+        {
+            if (rule.AccessControlType != AccessControlType.Allow)
+            {
+                continue;
+            }
+
+            SecurityIdentifier identity = (SecurityIdentifier)rule.IdentityReference;
+            bool trusted = identity.Equals(AdministratorsSid) || identity.Equals(SystemSid);
+            if (!trusted && (rule.FileSystemRights & writeRights) != 0)
+            {
+                throw new UnauthorizedAccessException("The OTA directory grants write access to " + identity.Value + ".");
+            }
+        }
+    }
+
+    private static readonly SecurityIdentifier AdministratorsSid =
+        new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+    private static readonly SecurityIdentifier SystemSid =
+        new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+    private static readonly SecurityIdentifier OwnerRightsSid = new SecurityIdentifier("S-1-3-4");
+
     private static void ExtractAndVerifyPayload(string payloadPath, PayloadMetadata expected)
     {
-        string temporaryPath = payloadPath + ".tmp";
-        DeleteWithRetry(temporaryPath);
-
         long written = 0L;
         string copiedHash;
         Assembly assembly = Assembly.GetExecutingAssembly();
@@ -82,12 +206,12 @@ internal static class VeilarkOtaBootstrap
         {
             if (payload == null)
             {
-                throw new InvalidDataException("В OTA-пакете отсутствует установщик Veilark.");
+                throw new InvalidDataException("The OTA package does not contain the Veilark installer.");
             }
 
             using (SHA256 sha256 = SHA256.Create())
             using (FileStream output = new FileStream(
-                temporaryPath,
+                payloadPath,
                 FileMode.CreateNew,
                 FileAccess.Write,
                 FileShare.None))
@@ -110,17 +234,58 @@ internal static class VeilarkOtaBootstrap
         if (written != expected.Size ||
             !String.Equals(copiedHash, expected.Sha256, StringComparison.Ordinal))
         {
-            DeleteWithRetry(temporaryPath);
-            throw new InvalidDataException("Вложенный установщик Veilark повреждён.");
+            throw new InvalidDataException("The embedded Veilark installer is corrupted.");
         }
+    }
 
-        if (File.Exists(payloadPath))
+    /// Opens the extracted payload with read-only sharing, which denies every
+    /// later writer and deleter (including rename), and hashes the exact bytes
+    /// that CreateProcess will map. The caller keeps the handle until exit.
+    private static FileStream OpenLockedAndVerify(string payloadPath, PayloadMetadata expected)
+    {
+        FileStream locked = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try
         {
-            File.Delete(payloadPath);
+            if (locked.Length != expected.Size)
+            {
+                throw new InvalidDataException("The extracted Veilark installer changed size.");
+            }
+
+            string actual;
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                actual = ToHex(sha256.ComputeHash(locked));
+            }
+
+            if (!String.Equals(actual, expected.Sha256, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("The extracted Veilark installer changed before launch.");
+            }
+
+            locked.Position = 0L;
+            return locked;
+        }
+        catch
+        {
+            locked.Dispose();
+            throw;
+        }
+    }
+
+    private static void AssertWriteLocked(string payloadPath)
+    {
+        try
+        {
+            using (new FileStream(payloadPath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+            {
+            }
+        }
+        catch (IOException)
+        {
+            return;
         }
 
-        File.Move(temporaryPath, payloadPath);
-        File.SetAttributes(payloadPath, FileAttributes.Hidden);
+        throw new InvalidOperationException("The verified payload is not protected against replacement.");
     }
 
     private static PayloadMetadata ReadPayloadMetadata()
@@ -130,12 +295,12 @@ internal static class VeilarkOtaBootstrap
         long size;
         if (!Int64.TryParse(sizeValue, out size) || size <= 0L)
         {
-            throw new InvalidDataException("В OTA-пакете указан неверный размер установщика.");
+            throw new InvalidDataException("The OTA package declares an invalid installer size.");
         }
 
         if (sha256.Length != 64 || !IsUpperHex(sha256))
         {
-            throw new InvalidDataException("В OTA-пакете указана неверная контрольная сумма.");
+            throw new InvalidDataException("The OTA package declares an invalid checksum.");
         }
 
         return new PayloadMetadata(size, sha256);
@@ -148,7 +313,7 @@ internal static class VeilarkOtaBootstrap
         {
             if (stream == null)
             {
-                throw new InvalidDataException("В OTA-пакете отсутствуют метаданные установщика.");
+                throw new InvalidDataException("The OTA package is missing installer metadata.");
             }
 
             using (StreamReader reader = new StreamReader(stream, Encoding.ASCII, false))
@@ -241,6 +406,13 @@ internal static class VeilarkOtaBootstrap
         try
         {
             string logPath = Path.Combine(directory, "bootstrap.log");
+            // Never follow a link planted in the user-writable directory.
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0 ||
+                (File.Exists(logPath) && (File.GetAttributes(logPath) & FileAttributes.ReparsePoint) != 0))
+            {
+                return;
+            }
+
             File.AppendAllText(
                 logPath,
                 DateTime.UtcNow.ToString("O") + " " + error + Environment.NewLine,
@@ -252,28 +424,28 @@ internal static class VeilarkOtaBootstrap
         }
     }
 
-    private static void DeleteWithRetry(string path)
+    private static void DeleteDirectoryWithRetry(string path)
     {
-        for (int attempt = 0; attempt < 5; attempt++)
+        for (int attempt = 0; attempt < 10; attempt++)
         {
             try
             {
-                if (File.Exists(path))
-                {
-                    File.SetAttributes(path, FileAttributes.Normal);
-                    File.Delete(path);
-                }
-
-                return;
-            }
-            catch
-            {
-                if (attempt == 4)
+                if (!Directory.Exists(path))
                 {
                     return;
                 }
 
-                System.Threading.Thread.Sleep(200);
+                foreach (string file in Directory.GetFiles(path))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+
+                Directory.Delete(path, true);
+                return;
+            }
+            catch
+            {
+                System.Threading.Thread.Sleep(300);
             }
         }
     }

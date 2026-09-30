@@ -47,6 +47,31 @@ jobs:
       - name: Validate OTA version ordering
         shell: powershell
         run: .\scripts\test-ota-version.ps1
+      - name: Verify OTA bootstrap payload protection
+        shell: powershell
+        run: |
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          $testDirectory = Join-Path (Get-Location) 'build\bootstrap-test'
+          New-Item -ItemType Directory -Force -Path $testDirectory | Out-Null
+          $payload = Join-Path $testDirectory "Veilark-$version.exe"
+          $bytes = New-Object byte[] (3MB + 17)
+          (New-Object Random 42).NextBytes($bytes)
+          [IO.File]::WriteAllBytes($payload, $bytes)
+          $wrapper = Join-Path $testDirectory 'verify\Veilark-verify.exe'
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output $wrapper -VerificationOnly
+          $before = @(Get-ChildItem -Path (Join-Path $env:SystemRoot 'Temp') -Filter 'Veilark-ota-*' -Directory -ErrorAction SilentlyContinue).Count
+          $output = & $wrapper --bootstrap-verify-only
+          $exitCode = $LASTEXITCODE
+          $expected = (Get-FileHash -Algorithm SHA256 -LiteralPath $payload).Hash
+          if ($exitCode -ne 0 -or (@($output) | Select-Object -Last 1) -ne $expected) {
+            throw "Bootstrap verification failed: exit=$exitCode output=$output"
+          }
+          $after = @(Get-ChildItem -Path (Join-Path $env:SystemRoot 'Temp') -Filter 'Veilark-ota-*' -Directory -ErrorAction SilentlyContinue).Count
+          if ($after -gt $before) { throw 'Protected OTA directory was not removed' }
+          $env:VEILARK_TEST_WRAPPER = $wrapper
+          $env:VEILARK_TEST_VERSION = $version
+          python -c "import os, sys; sys.path.insert(0, 'scripts'); import publish_ota; from pathlib import Path; print('Wrapper file version', publish_ota.validate_installer_version(Path(os.environ['VEILARK_TEST_WRAPPER']), os.environ['VEILARK_TEST_VERSION'], False))"
+          if ($LASTEXITCODE -ne 0) { throw 'Publisher could not read the wrapper file version' }
       - shell: powershell
         run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --max-workers=2 --stacktrace
       - name: Verify native startup contract on isolated Windows runner

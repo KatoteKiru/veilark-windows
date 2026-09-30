@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import uk.senyasenyavski.veilark.model.Profile
@@ -20,12 +21,11 @@ class SingBoxConfigCleanupTest {
       assertFailsWith<IllegalStateException> {
         controller.start(Profile("test", "test", VpnEngine.SingBox, "{}", emptyList(), "test"))
       }
-      assertFalse(Files.exists(directory.resolve("active.json")))
-      assertFalse(Files.exists(directory.resolve("active.json.tmp")))
+      val leftovers = Files.list(directory).use { it.map { path -> path.fileName.toString() }.toList() }
+      assertEquals(emptyList(), leftovers)
       assertFalse(controller.isAlive())
     } finally {
-      Files.deleteIfExists(directory.resolve("active.json"))
-      Files.deleteIfExists(directory.resolve("active.json.tmp"))
+      Files.list(directory).use { entries -> entries.forEach(Files::deleteIfExists) }
       Files.deleteIfExists(directory)
     }
   }

@@ -1,5 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -26,7 +27,11 @@ internal object RuntimeResourceLocator {
       ?.takeIf(String::isNotBlank),
     packagedRoot = installedApplicationRoot(),
   ).firstOrNull { Files.isRegularFile(it) && trustedInstalledPath(it, installedApplicationRoot()) }
-    ?: error("Не найден $fileName. Переустановите Veilark из официального пакета.")
+    ?: throw VpnStartException(
+      code = VpnStatusCode.CORE_NOT_FOUND,
+      message = "Не найден $fileName. Переустановите Veilark из официального пакета.",
+      detail = fileName,
+    )
 
   fun requireDirectory(directoryName: String, overridePath: Path? = null): Path =
     directoryCandidates(directoryName, overridePath, packagedRoot = installedApplicationRoot())
