@@ -391,21 +391,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 320
-    const val CURRENT_VERSION_NAME = "0.3.20"
+    const val CURRENT_VERSION_CODE = 321
+    const val CURRENT_VERSION_NAME = "0.3.21"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.20
-      • Выровнены шрифты, сохранён привычный интерфейс.
-      • Добавление подписки больше не переключает выбранную подписку.
-      • Ограничена обработка чрезмерно длинных сообщений ядра.
-      • Исправлена нумерация будущих OTA-обновлений.
+      Обновлено в 0.3.21
+      • Проверка обновлений продолжается, пока приложение работает в трее.
+      • Уведомление о новой версии показывается один раз.
+      • Фоновая проверка не мешает загрузке и установке обновления.
+      • VPN и маршрутизация не изменены.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.20
-      • Consistent typography with the familiar interface retained.
-      • Adding a subscription no longer changes the existing selection.
-      • Bounded processing of excessively long core messages.
-      • Fixed version numbering for future OTA updates.
+      Updated in 0.3.21
+      • Update checks continue while the app runs in the tray.
+      • One notification per new release.
+      • Background checks preserve download and installation state.
+      • VPN and routing are unchanged.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
