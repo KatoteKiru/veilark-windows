@@ -1,14 +1,19 @@
 param(
-  [Parameter(Mandatory = $true)][string]$CandidateInstaller
+  [Parameter(Mandatory = $true)][string]$CandidateInstaller,
+  [ValidateSet('0.3.18', '0.3.19')][string]$PreviousVersion = '0.3.19'
 )
 
 $ErrorActionPreference = 'Stop'
-$previousUrl = 'https://github.com/KatoteKiru/veilark-windows/releases/download/v0.3.18/Veilark-0.3.18.msi'
-$previousSha256 = '4CE9D422B879E2A3188E905DAB411C029A0FAF0BD8373EC4DB8C700003DC895D'
+$previousUrl = "https://github.com/KatoteKiru/veilark-windows/releases/download/v$PreviousVersion/Veilark-$PreviousVersion.msi"
+$previousSha256 = if ($PreviousVersion -eq '0.3.19') {
+  '5FF4296D64F6280B2DEB56DEFCF44CCA0C15C51D5A94D33BBD6E7D558714C008'
+} else { '4CE9D422B879E2A3188E905DAB411C029A0FAF0BD8373EC4DB8C700003DC895D' }
 $candidate = (Resolve-Path -LiteralPath $CandidateInstaller).Path
 $testDirectory = Join-Path $env:RUNNER_TEMP 'veilark-upgrade-test'
 New-Item -ItemType Directory -Path $testDirectory -Force | Out-Null
-$previous = Join-Path $testDirectory 'Veilark-0.3.18.msi'
+$previous = Join-Path $testDirectory "Veilark-$PreviousVersion.msi"
+$expectedVersion = [regex]::Match((Get-Content -Raw (Join-Path $PSScriptRoot '..\desktopApp\build.gradle.kts')), 'packageVersion = "([^"]+)"').Groups[1].Value
+if (-not $expectedVersion) { throw 'Candidate package version missing' }
 
 Invoke-WebRequest -Uri $previousUrl -OutFile $previous
 $downloadedHash = (Get-FileHash -LiteralPath $previous -Algorithm SHA256).Hash
@@ -29,7 +34,7 @@ function Get-InstalledVersion {
 
 $install = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', "`"$previous`"", '/qn', '/norestart') -Wait -PassThru
 if ($install.ExitCode -notin @(0, 3010)) { throw "Previous MSI install failed: $($install.ExitCode)" }
-if ((Get-InstalledVersion) -ne '0.3.18') { throw 'Previous version was not installed' }
+if ((Get-InstalledVersion) -ne $PreviousVersion) { throw 'Previous version was not installed' }
 
 $dataDirectory = Join-Path $env:LOCALAPPDATA 'Veilark'
 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
@@ -39,7 +44,7 @@ $before = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
 
 $upgrade = Start-Process -FilePath $candidate -ArgumentList @('/quiet', '/norestart') -Wait -PassThru
 if ($upgrade.ExitCode -notin @(0, 3010)) { throw "OTA wrapper upgrade failed: $($upgrade.ExitCode)" }
-if ((Get-InstalledVersion) -ne '0.3.19') { throw 'Candidate version was not installed' }
+if ((Get-InstalledVersion) -ne $expectedVersion) { throw 'Candidate version was not installed' }
 if (-not (Test-Path -LiteralPath 'C:\Program Files\Veilark\Veilark.exe')) {
   throw 'Upgraded application launcher is missing'
 }
@@ -56,4 +61,4 @@ if (-not (Test-Path -LiteralPath $sentinel)) { throw 'Local application data was
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) {
   throw 'Local application data changed during upgrade'
 }
-Write-Host 'In-place upgrade 0.3.18 -> 0.3.19 passed; local data preserved.'
+Write-Host "In-place upgrade $PreviousVersion -> $expectedVersion passed; local data preserved."

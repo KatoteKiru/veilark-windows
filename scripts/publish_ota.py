@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -284,6 +285,15 @@ def main() -> None:
     remote_manifest_tmp = f"{REMOTE_DIR}/.manifest.json.{uuid.uuid4().hex}.tmp"
     client = connect_node(env)
     try:
+        backup_name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+        backup_path = f"/var/backups/veilark/windows/manifest-before-{args.version_code}-{backup_name}.json"
+        _, stdout, stderr = client.exec_command(
+            "install -d -m 0700 /var/backups/veilark/windows && "
+            f"cp -- {shlex.quote(REMOTE_DIR + '/manifest.json')} {shlex.quote(backup_path)} && "
+            f"chmod 0600 -- {shlex.quote(backup_path)}"
+        )
+        if stdout.channel.recv_exit_status() != 0:
+            raise RuntimeError("Mandatory OTA rollback snapshot failed: " + stderr.read().decode(errors="replace"))
         sftp = client.open_sftp()
         try:
             sftp.put(str(local_manifest), remote_manifest_tmp)
@@ -316,6 +326,7 @@ def main() -> None:
                 "sha256": sha256,
                 "size": size,
                 "authenticode": publisher_status,
+                "rollbackManifest": backup_path,
             },
             ensure_ascii=False,
         )

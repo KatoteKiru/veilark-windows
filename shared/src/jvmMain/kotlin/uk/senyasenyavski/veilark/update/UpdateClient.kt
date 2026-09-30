@@ -391,17 +391,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 319
-    const val CURRENT_VERSION_NAME = "0.3.19"
+    const val CURRENT_VERSION_CODE = 320
+    const val CURRENT_VERSION_NAME = "0.3.20"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.19
-      • Исправлен поиск встроенных VPN-ядер в установленном приложении.
-      • Сохранены исправления запуска окна и остановки подключения из 0.3.18.
+      Обновлено в 0.3.20
+      • Выровнены шрифты, сохранён привычный интерфейс.
+      • Добавление подписки больше не переключает выбранную подписку.
+      • Ограничена обработка чрезмерно длинных сообщений ядра.
+      • Исправлена нумерация будущих OTA-обновлений.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.19
-      • Fixed bundled VPN-engine lookup in installed applications.
-      • Retains the 0.3.18 window activation and connection teardown fixes.
+      Updated in 0.3.20
+      • Consistent typography with the familiar interface retained.
+      • Adding a subscription no longer changes the existing selection.
+      • Bounded processing of excessively long core messages.
+      • Fixed version numbering for future OTA updates.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
