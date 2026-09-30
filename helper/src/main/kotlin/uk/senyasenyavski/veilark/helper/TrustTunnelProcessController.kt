@@ -75,6 +75,8 @@ class TrustTunnelProcessController(
         .redirectErrorStream(true)
         .start()
       synchronized(this@TrustTunnelProcessController) { process = started }
+      // The core must not outlive Veilark (crash or forced exit).
+      CoreProcessJob.assignToShared(started, "TrustTunnel")
 
       val logPump = CoreLogPump(
         process = started,

@@ -130,6 +130,12 @@ import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.snapshotFlow
@@ -197,6 +203,7 @@ private class DesktopActions {
   var connect: () -> Unit = {}
   var disconnect: () -> Unit = {}
   var importFile: (NioPath) -> Unit = {}
+  var navigate: (Destination) -> Unit = {}
   var hasProfile: Boolean = false
 }
 
@@ -418,6 +425,23 @@ private fun runVeilark(args: Array<String>) {
   )
   Window(
     onCloseRequest = { windowVisible = false },
+    onPreviewKeyEvent = { event ->
+      val shortcut = if (event.type == KeyEventType.KeyDown) {
+        desktopShortcut(event.key, event.isCtrlPressed, event.isShiftPressed, event.isAltPressed)
+      } else null
+      when (shortcut) {
+        null -> false
+        is DesktopShortcut.Navigate -> { actions.navigate(shortcut.destination); true }
+        DesktopShortcut.HideToTray -> { windowVisible = false; true }
+        DesktopShortcut.ToggleConnection -> {
+          if (!stopping) {
+            if (connected || connecting || stopRequired) actions.disconnect()
+            else if (actions.hasProfile) actions.connect()
+          }
+          true
+        }
+      }
+    },
     visible = windowVisible,
     title = "Veilark",
     icon = painterResource("veilark-app-icon.png"),
@@ -1003,6 +1027,7 @@ private fun VeilarkApp(
     desktopActions.connect = ::connect
     desktopActions.disconnect = ::disconnect
     desktopActions.hasProfile = profile != null
+    desktopActions.navigate = { destination = it }
     desktopActions.importFile = { path ->
       if (configurationLockedNow() || importing || refreshing) {
         scope.launch { snackbar.showSnackbar(language.text("Сначала отключите VPN", "Disconnect VPN first")) }

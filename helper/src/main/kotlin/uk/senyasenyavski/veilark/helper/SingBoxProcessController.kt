@@ -57,6 +57,8 @@ class SingBoxProcessController(
         .redirectErrorStream(true)
         .start()
       synchronized(this@SingBoxProcessController) { process = started }
+      // The core must not outlive Veilark (crash or forced exit).
+      CoreProcessJob.assignToShared(started, "sing-box")
 
       val logPump = CoreLogPump(
         process = started,

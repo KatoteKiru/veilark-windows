@@ -1,5 +1,17 @@
 # Veilark Windows current handoff
 
+## Hardening branch — 2026-09-30 (not published)
+
+Branch `claude/happy-ptolemy-mpow5b` → draft PR into `codex/windows-fluent-stability`.
+No version bump, no OTA publication; trust root, manifest format, UpgradeCode and
+install paths unchanged. Covers: publisher UTF-16 notes limit and version checks
+(tests in CI), elevated bootstrap payload TOCTOU (protected directory plus share
+lock), locked core configs, Job object for cores, update-controller cancellation
+and 90 s first background check, stable error codes with RU/EN text, Windows 11
+caption (dark/Mica/rounded), window memory, tray single click, shortcuts, removal
+of dead UI. Details and residual risks: docs/SECURITY_HARDENING_2026-09-30.md.
+Owner publishes releases himself.
+
 ## Published Windows OTA — 2026-09-30
 
 Windows 0.3.20 / 320 is live on the existing OTA channel and GitHub preview
