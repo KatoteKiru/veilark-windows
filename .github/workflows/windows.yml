@@ -36,7 +36,14 @@ jobs:
         run: .\scripts\bootstrap-runtime.ps1
       - name: Validate OTA publisher
         shell: powershell
-        run: python -m py_compile .\scripts\publish_ota.py
+        run: |
+          python --version
+          python -m pip install --disable-pip-version-check -r .\scripts\requirements-ota.txt
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher dependencies failed to install' }
+          python -m py_compile .\scripts\publish_ota.py
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher does not compile' }
+          python .\scripts\test_publish_ota.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher regression tests failed' }
       - name: Validate OTA version ordering
         shell: powershell
         run: .\scripts\test-ota-version.ps1

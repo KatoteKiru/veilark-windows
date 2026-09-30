@@ -219,6 +219,37 @@ class UpdateClientTest {
     }
   }
 
+  @Test
+  fun `notes limit is measured in UTF-16 units as the publisher enforces`() {
+    val keys = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    val client = UpdateClient(
+      manifestUri = URI("https://updates.example.test/manifest.json"),
+      publicKeyBase64 = Base64.getEncoder().encodeToString(keys.public.encoded),
+      currentVersionCode = 321,
+      allowedHost = "updates.example.test",
+      allowedPort = 443,
+    )
+    fun update(notes: String) = AppUpdate(
+      versionCode = 322,
+      versionName = "0.3.22",
+      installerUrl = "https://updates.example.test/Veilark-0.3.22.exe",
+      sha256 = "C".repeat(64),
+      size = 84,
+      notes = notes,
+    )
+    val rocket = "\uD83D\uDE80"
+    // 2 000 astral code points are exactly 4 000 UTF-16 units: accepted intact.
+    val atLimit = update(rocket.repeat(2_000))
+    assertEquals(atLimit, client.parseAndVerify(manifest(client, atLimit, keys, signNotes = true)))
+    // 2 001 code points (4 002 units) would pass a code-point check in Python,
+    // but the client truncates before verifying, so the signature must fail.
+    // scripts/publish_ota.py rejects such notes before signing.
+    val overLimit = update(rocket.repeat(2_001))
+    assertFailsWith<IllegalArgumentException> {
+      client.parseAndVerify(manifest(client, overLimit, keys, signNotes = true))
+    }
+  }
+
   private fun manifest(
     client: UpdateClient,
     update: AppUpdate,
