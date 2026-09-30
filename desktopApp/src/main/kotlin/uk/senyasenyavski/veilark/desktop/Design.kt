@@ -5,6 +5,19 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import java.io.File
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,17 +37,12 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material.icons.rounded.Update
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,11 +52,11 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Shapes
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -68,15 +76,25 @@ import uk.senyasenyavski.veilark.model.VpnPhase
 import uk.senyasenyavski.veilark.profile.NodeCountry
 
 /**
- * Visual world: Google Material 3 on desktop, the same tonal system as Veilark
- * Android. Noto Sans is the self-hosted face so Windows does not fall back to
- * Segoe. Country marks are drawn geometry, not emoji.
+ * Desktop refinement: familiar Windows navigation and local Segoe typography,
+ * preserving the Veilark mark and blue/neutral semantic palette. Compose remains
+ * the renderer; this is not a claim of native WinUI controls or Mica.
  */
-private val VeilarkSans = FontFamily(
+private val BundledSans = FontFamily(
   Font("fonts/NotoSans-Regular.ttf", FontWeight.Normal),
   Font("fonts/NotoSans-Medium.ttf", FontWeight.Medium),
   Font("fonts/NotoSans-SemiBold.ttf", FontWeight.SemiBold),
 )
+// Use the locally installed Windows typeface; never redistribute system font files.
+private val VeilarkSans = runCatching {
+  val fonts = File(System.getenv("WINDIR") ?: "C:/Windows", "Fonts")
+  val regular = File(fonts, "segoeui.ttf")
+  val semibold = File(fonts, "seguisb.ttf")
+  if (regular.isFile && semibold.isFile) FontFamily(
+    Font(regular, FontWeight.Normal), Font(semibold, FontWeight.Medium),
+    Font(semibold, FontWeight.SemiBold),
+  ) else BundledSans
+}.getOrDefault(BundledSans)
 
 private val DarkColors = darkColorScheme(
   primary = Color(0xFFA1CAFC),
@@ -204,11 +222,11 @@ private val VeilarkTypography = Typography(
 )
 
 private val VeilarkShapes = Shapes(
-  extraSmall = RoundedCornerShape(8.dp),
-  small = RoundedCornerShape(12.dp),
-  medium = RoundedCornerShape(16.dp),
-  large = RoundedCornerShape(24.dp),
-  extraLarge = RoundedCornerShape(28.dp),
+  extraSmall = RoundedCornerShape(4.dp),
+  small = RoundedCornerShape(4.dp),
+  medium = RoundedCornerShape(8.dp),
+  large = RoundedCornerShape(12.dp),
+  extraLarge = RoundedCornerShape(12.dp),
 )
 
 internal val VeilarkEmphasized = tween<Float>(280, easing = FastOutSlowInEasing)
@@ -248,26 +266,47 @@ internal enum class Destination(
     Logs -> language.text("Журнал", "Logs")
   }
 
-  fun barTitle(language: UiLanguage): String = when (this) {
-    Home -> "VPN"
-    Profiles -> language.text("Подписки", "Subscriptions")
-    Routing -> language.text("Маршруты", "Routing")
-    Updates -> language.text("Обновления", "Updates")
-    else -> title(language)
-  }
 }
 
-internal val PrimaryDestinations = listOf(
-  Destination.Home,
-  Destination.Profiles,
-  Destination.Routing,
-  Destination.Updates,
-)
-
-internal val OverflowDestinations = listOf(
-  Destination.Diagnostics,
-  Destination.Logs,
-)
+/** Desktop wayfinding: all destinations remain accessible at narrow widths. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun AppSidebar(destination: Destination, expanded: Boolean, onDestination: (Destination) -> Unit) {
+  val language = LocalUiLanguage.current
+  val colors = MaterialTheme.colorScheme
+  Column(
+    Modifier.width(if (expanded) 184.dp else 56.dp).fillMaxHeight()
+      .verticalScroll(rememberScrollState()).padding(8.dp),
+    verticalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    Destination.entries.forEach { item ->
+      val active = destination == item
+      TooltipArea(tooltip = {
+        Surface(shape = RoundedCornerShape(4.dp), shadowElevation = 2.dp) {
+          Text(item.title(language), Modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall)
+        }
+      }) {
+      Surface(
+        modifier = Modifier.fillMaxWidth().height(40.dp)
+          .clickable { onDestination(item) }
+          .semantics { selected = active; contentDescription = item.title(language) },
+        color = if (active) colors.secondaryContainer else Color.Transparent,
+        shape = RoundedCornerShape(4.dp),
+      ) {
+        Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+          Icon(item.icon, null, Modifier.size(20.dp), tint = if (active) colors.primary else colors.onSurfaceVariant)
+          if (expanded) {
+            Spacer(Modifier.width(10.dp))
+            Text(item.title(language), style = MaterialTheme.typography.labelMedium,
+              fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+              maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+        }
+      }
+      }
+    }
+  }
+}
 
 @Composable
 internal fun BrandMark(modifier: Modifier = Modifier) {
@@ -322,64 +361,6 @@ internal fun AppTopBar(
 }
 
 @Composable
-internal fun AppBottomBar(
-  destination: Destination,
-  onDestination: (Destination) -> Unit,
-) {
-  val language = LocalUiLanguage.current
-  var moreOpen by remember { mutableStateOf(false) }
-  val overflowSelected = destination in OverflowDestinations
-  NavigationBar(
-    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-    tonalElevation = 0.dp,
-    windowInsets = WindowInsets(0, 0, 0, 0),
-  ) {
-    PrimaryDestinations.forEach { item ->
-      NavigationBarItem(
-        selected = item == destination,
-        onClick = { onDestination(item) },
-        icon = { Icon(item.icon, contentDescription = item.title(language)) },
-        label = {
-          Text(
-            item.barTitle(language),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        },
-      )
-    }
-    NavigationBarItem(
-      selected = overflowSelected,
-      onClick = { moreOpen = true },
-      icon = {
-        Box {
-          Icon(
-            Icons.Rounded.MoreHoriz,
-            contentDescription = language.text("Ещё", "More"),
-          )
-          DropdownMenu(
-            expanded = moreOpen,
-            onDismissRequest = { moreOpen = false },
-          ) {
-            OverflowDestinations.forEach { item ->
-              DropdownMenuItem(
-                text = { Text(item.title(language)) },
-                leadingIcon = { Icon(item.icon, contentDescription = null) },
-                onClick = {
-                  moreOpen = false
-                  onDestination(item)
-                },
-              )
-            }
-          }
-        }
-      },
-      label = { Text(language.text("Ещё", "More")) },
-    )
-  }
-}
-
-@Composable
 private fun StatusChip(phase: VpnPhase) {
   val language = LocalUiLanguage.current
   val tone = when (phase) {
@@ -404,7 +385,7 @@ private fun StatusChip(phase: VpnPhase) {
         VpnPhase.Idle -> language.text("Готов", "Ready")
         VpnPhase.NeedsElevation -> language.text("Права", "Admin")
         VpnPhase.Preparing, VpnPhase.Connecting -> language.text("Связь", "Link")
-        is VpnPhase.Connected -> language.text("Защита", "Secure")
+        is VpnPhase.Connected -> language.text("Подключено", "Connected")
         is VpnPhase.Degraded -> language.text("Сбой", "Unstable")
         VpnPhase.Stopping -> language.text("Стоп", "Stop")
         is VpnPhase.Error -> language.text("Ошибка", "Error")

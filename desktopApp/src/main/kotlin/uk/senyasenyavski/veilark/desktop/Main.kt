@@ -195,9 +195,9 @@ private class DesktopActions {
   var hasProfile: Boolean = false
 }
 
-private val InitialWindowWidth = 520.dp
-private val InitialWindowHeight = 700.dp
-private val MinimumWindowWidth = 460.dp
+private val InitialWindowWidth = 900.dp
+private val InitialWindowHeight = 680.dp
+private val MinimumWindowWidth = 540.dp
 private val MinimumWindowHeight = 480.dp
 
 fun main(args: Array<String>) {
@@ -943,15 +943,13 @@ private fun VeilarkApp(
         onLanguage = onLanguage,
       )
     },
-    bottomBar = {
-      AppBottomBar(
-        destination = destination,
-        onDestination = { destination = it },
-      )
-    },
     snackbarHost = { SnackbarHost(snackbar) },
   ) { padding ->
-    Column(Modifier.fillMaxSize().padding(padding)) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+    val expandedNavigation = maxWidth >= 760.dp
+    Row(Modifier.fillMaxSize()) {
+      AppSidebar(destination, expandedNavigation) { destination = it }
+    Column(Modifier.weight(1f).fillMaxHeight()) {
       if (destination != Destination.Updates) {
         UpdateBanner(
           state = updateState,
@@ -1158,6 +1156,8 @@ private fun VeilarkApp(
     }
   }
 
+  }
+  }
   if (importDialog) {
     ImportDialog(
       importing = importing,
@@ -1264,7 +1264,7 @@ private fun ProfileStoreUnavailable(onExit: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(
+internal fun HomeScreen(
   phase: VpnPhase,
   traffic: TrafficSnapshot?,
   elevated: Boolean,
@@ -1579,7 +1579,7 @@ private fun ConnectionMark(
   )
   Box(
     modifier = modifier
-      .size(112.dp)
+      .size(72.dp)
       .graphicsLayer {
         scaleX = scale
         scaleY = scale

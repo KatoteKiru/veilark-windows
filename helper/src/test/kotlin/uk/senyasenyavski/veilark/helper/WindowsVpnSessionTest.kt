@@ -25,6 +25,34 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
 
 class WindowsVpnSessionTest {
+  @Test
+  fun `cancelling the disconnect caller still settles owned shutdown and geo lease`() = runBlocking {
+    val root = java.nio.file.Files.createTempDirectory("veilark-cancelled-disconnect")
+    val controller = FakeController(VpnEngine.SingBox, blockStop = true)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    val geo = uk.senyasenyavski.veilark.model.GeoRoutingAssets(
+      root.resolve("geoip-ru.srs").toString(), root.resolve("geosite-category-ru.srs").toString(), emptyList())
+    try {
+      session.connect(profile(VpnEngine.SingBox).copy(geoRoutingAssets = geo))
+      val disconnecting = launch { session.disconnect() }
+      withTimeout(2_000) {
+        while (controller.stopCalls.get() == 0) delay(10)
+      }
+      disconnecting.cancel()
+      controller.releaseStop()
+      withTimeout(2_000) { disconnecting.join() }
+
+      assertFalse(controller.isAlive())
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
+      assertFalse(GeoGenerationLeases.isPinned(root))
+      session.connect(profile(VpnEngine.SingBox))
+      assertEquals(2, controller.startCalls.get())
+    } finally {
+      controller.releaseStop()
+      session.disconnect()
+      java.nio.file.Files.deleteIfExists(root)
+    }
+  }
   @Test fun `failed stop keeps explicit stop action and locks configuration until retry succeeds`() = runBlocking {
     val controller = FakeController(VpnEngine.SingBox, failOnStop = true)
     val session = WindowsVpnSession(listOf(controller), logger = {})
