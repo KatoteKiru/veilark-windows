@@ -250,10 +250,31 @@ private fun runVeilark(args: Array<String>) {
   val actions = remember { DesktopActions() }
   val sessionState by session.state.collectAsState()
   val trayState = rememberTrayState()
+  val updates = remember { DesktopUpdateController() }
+  val updateNoticePolicy = remember { UpdateNoticePolicy.persistent() }
+  val availableUpdateState by updates.state.collectAsState()
   var windowVisible by remember { mutableStateOf("--minimized" !in args || importLink != null) }
   var activationRevision by remember { mutableStateOf(0L) }
+  var updateOpenRevision by remember { mutableStateOf(0L) }
   var externalImportRequest by remember { mutableStateOf(importLink) }
   var language by remember { mutableStateOf(UiLanguageStore.load()) }
+  LaunchedEffect(updates) {
+    while (true) {
+      delay(UpdateNoticePolicy.INTERVAL_MS)
+      updates.check(background = true)
+    }
+  }
+  LaunchedEffect(availableUpdateState) {
+    val update = (availableUpdateState as? DesktopUpdateState.Available)?.update
+      ?: return@LaunchedEffect
+    if (updateNoticePolicy.shouldNotify(update.versionCode)) {
+      runCatching { trayState.sendNotification(Notification(
+        "Veilark ${update.versionName}",
+        language.text("Доступно обновление. Откройте Veilark → Обновления.",
+          "An update is available. Open Veilark → Updates."), Notification.Type.Info,
+      )) }.onSuccess { updateNoticePolicy.markAttempted(update.versionCode) }
+    }
+  }
   val connected = sessionState.phase is VpnPhase.Connected ||
     sessionState.phase is VpnPhase.Degraded
   val connecting = actions.preparing || sessionState.phase is VpnPhase.Preparing ||
@@ -325,7 +346,10 @@ private fun runVeilark(args: Array<String>) {
       busy -> language.text("Veilark · Подключение", "Veilark · Connecting")
       else -> language.text("Veilark · Отключено", "Veilark · Disconnected")
     },
-    onAction = { windowVisible = true },
+    onAction = {
+      windowVisible = true
+      if (availableUpdateState is DesktopUpdateState.Available) updateOpenRevision++
+    },
     menu = {
       Item(
         when {
@@ -409,6 +433,8 @@ private fun runVeilark(args: Array<String>) {
       CompositionLocalProvider(LocalUiLanguage provides language) {
         VeilarkApp(
           session = session,
+          updates = updates,
+          updateOpenRevision = updateOpenRevision,
           elevationManager = elevationManager,
           desktopActions = actions,
           connectOnLaunch = "--connect" in args,
@@ -435,6 +461,8 @@ private fun runVeilark(args: Array<String>) {
 @Composable
 private fun VeilarkApp(
   session: WindowsVpnSession,
+  updates: DesktopUpdateController,
+  updateOpenRevision: Long,
   elevationManager: ElevationManager,
   desktopActions: DesktopActions,
   connectOnLaunch: Boolean,
@@ -451,7 +479,6 @@ private fun VeilarkApp(
   val importer = remember { ProfileImporter() }
   val profileStore = remember { ProfileStore() }
   val geoPreflight = remember { lazy(LazyThreadSafetyMode.NONE) { GeoRoutingPreflight() } }
-  val updates = remember { DesktopUpdateController() }
   val updateState by updates.state.collectAsState()
   val storedProfilesResult: Result<StoredProfiles> = remember {
     when (val loaded = profileStore.loadResult()) {
@@ -476,6 +503,9 @@ private fun VeilarkApp(
   } else state.phase
   val snackbar = remember { SnackbarHostState() }
   var destination by remember { mutableStateOf(Destination.Home) }
+  LaunchedEffect(updateOpenRevision) {
+    if (updateOpenRevision > 0) destination = Destination.Updates
+  }
   var profiles by remember {
     mutableStateOf(storedProfiles.profiles.associateBy(Profile::engine))
   }

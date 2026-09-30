@@ -51,15 +51,19 @@ class DesktopUpdateController(
     return outcome
   }
 
-  suspend fun check() = operation.withLock {
-    if (mutableState.value is DesktopUpdateState.Downloading) return@withLock
-    mutableState.value = DesktopUpdateState.Checking
+  suspend fun check(background: Boolean = false) = operation.withLock {
+    val previous = mutableState.value
+    if (previous is DesktopUpdateState.Downloading || previous is DesktopUpdateState.Ready ||
+      previous is DesktopUpdateState.Installing) return@withLock
+    if (!background) mutableState.value = DesktopUpdateState.Checking
     runCatching { withContext(Dispatchers.IO) { client.check() } }
       .onSuccess { update ->
         mutableState.value = update?.let(DesktopUpdateState::Available)
           ?: DesktopUpdateState.Current
       }
       .onFailure { error ->
+        if (error is CancellationException) throw error
+        if (background) return@onFailure
         mutableState.value = DesktopUpdateState.Failed(
           error.message ?: "Не удалось проверить обновления",
         )
