@@ -82,3 +82,33 @@ labels, lists, focus/navigation and state must come from the app, not raster tex
 No new executable UI is changed by this brief. The previous top-tab/card source
 candidate remains on the development branch only; production is unchanged.
 Next action: owner chooses/steers the composition; then replace the entire UI.
+
+## Second owner critique: logical B, unacceptable aesthetic
+
+Owner prefers B's connection-manager logic but rejects the harsh, dated appearance
+of every first-round comp. Keep B's list/command/connection organization; soften
+the visual grammar with careful typography, quiet layered surfaces, lightweight
+outline icons and subtle row selection. Remove spreadsheet grid and bulky frames.
+New concept B2 is in `.impeccable/mocks/windows-replacement/concept-B2.png`, with
+exact prompt sidecar and embedded provenance, approved:false. It is illustrative,
+not a runtime screenshot; generated city icons/logo are not yet approved assets.
+
+### Component-library research
+
+- https://github.com/compose-fluent/compose-fluent-ui : direct Compose desktop
+  candidate, Apache-2.0, published tagv0.1.0. Provides Fluent theme/components/icons
+  and layered backgrounds. Maintainers explicitly call it experimental with
+  workarounds/API-change risk. Release sources use Kotlin2.2.0/Compose1.8.2;
+  Veilark currently uses Kotlin2.3.20/Compose1.11.0. Source compatibility is not
+  proved by these versions; validate in an isolated build/render/input probe
+  before pinning or adding it to production. Do not use snapshots by default.
+- https://github.com/lepoco/wpfui : WPF/.NET Fluent candidate and visual reference;
+  not a drop-in dependency for the existing JVM/Compose client. Actual adoption
+  would require a separately reviewed UI migration and safe core boundary.
+- https://github.com/JetBrains/jewel : desktop-focused IntelliJ design language;
+  not selected as the aesthetic for this consumer VPN. Original repo moved into
+  IntelliJ Platform; do not depend on its archived layout blindly.
+
+No library has been integrated and no native Mica, WinUI runtime or performance
+claim follows from B2's image. Current decision: B2 visual approval first, isolated
+Fluent feasibility next; existing VPN, packaging and OTA stay unchanged.
