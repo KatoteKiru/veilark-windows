@@ -1,5 +1,16 @@
 # Veilark Windows current handoff
 
+## Published Windows OTA — 2026-09-30
+
+Windows 0.3.20 / 320 is live on the existing OTA channel and GitHub preview
+v0.3.20, built from 9e3704c. Release CI 36747432837 passed, including isolated
+0.3.19 -> 0.3.20 installation/data preservation. Public redownload hash matches;
+original OTA trust root unchanged; old manifest privately backed up. Local Defender
+found no threat in the wrapper, Authenticode remains NotSigned. See
+docs/RELEASE_0.3.20.md for exact hashes, rollback path and acceptance limits.
+This supersedes earlier "no OTA" statements below. No VPN/server service restart.
+Security backlog remains open; release does not claim full audit closure.
+
 ## Latest decision (2026-09-30, supersedes UI directions below)
 
 Owner rejected the replacement Fluent UI and requested polish of the shipping
