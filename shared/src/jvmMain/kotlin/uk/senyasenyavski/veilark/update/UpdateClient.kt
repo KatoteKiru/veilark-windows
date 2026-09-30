@@ -407,21 +407,21 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 321
-    const val CURRENT_VERSION_NAME = "0.3.21"
+    const val CURRENT_VERSION_CODE = 322
+    const val CURRENT_VERSION_NAME = "0.3.22"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.21
-      • Проверка обновлений продолжается, пока приложение работает в трее.
-      • Уведомление о новой версии показывается один раз.
-      • Фоновая проверка не мешает загрузке и установке обновления.
-      • VPN и маршрутизация не изменены.
+      Обновлено в 0.3.22
+      • Защищены временные файлы установщика и конфигурации ядер.
+      • Улучшены отмена обновлений и обработка ошибок RU/EN.
+      • Системное оформление Windows 11, память положения окна и горячие клавиши.
+      • Улучшена очистка процессов ядер после завершения приложения.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.21
-      • Update checks continue while the app runs in the tray.
-      • One notification per new release.
-      • Background checks preserve download and installation state.
-      • VPN and routing are unchanged.
+      Updated in 0.3.22
+      • Protected temporary installer files and core configurations.
+      • Improved update cancellation and RU/EN error handling.
+      • Native Windows 11 chrome, remembered window placement and shortcuts.
+      • Improved core process cleanup when the application exits.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
