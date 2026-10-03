@@ -1,5 +1,6 @@
 package uk.senyasenyavski.veilark.helper
 
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 import kotlinx.coroutines.delay
 
 internal data class ReadyTunnel(
@@ -39,8 +40,15 @@ internal object TunnelReadiness {
     val deadline = System.nanoTime() + timeoutMillis * 1_000_000L
     var lastCandidate: NetworkAdapter? = null
     while (System.nanoTime() < deadline) {
-      check(process.isAlive) {
-        "VPN-ядро завершилось до создания туннеля${logPump.reasonSuffix()}"
+      if (!process.isAlive) {
+        val exitCode = runCatching { process.exitValue() }.getOrNull()
+        throw VpnStartException(
+          code = VpnStatusCode.CORE_EXITED,
+          message = "VPN-ядро завершилось до создания туннеля, exit=" +
+            (exitCode?.let(NativeProcessDiagnostics::exitCodeHex) ?: "unknown") +
+            logPump.reasonSuffix(),
+          detail = matcher.label,
+        )
       }
       logPump.fatal?.let { error("Ядро сообщило об ошибке: $it") }
 
@@ -63,14 +71,18 @@ internal object TunnelReadiness {
       return it.toReadyTunnel()
     }
     if (requireReadyMarker && lastCandidate != null && !logPump.ready) {
-      error(
-        "Ядро не подтвердило подключение туннеля ${matcher.label} за " +
+      throw VpnStartException(
+        code = VpnStatusCode.CORE_NOT_READY,
+        message = "Ядро не подтвердило подключение туннеля ${matcher.label} за " +
           "${timeoutMillis / 1_000} секунд${logPump.reasonSuffix()}",
+        detail = matcher.label,
       )
     }
-    error(
-      "Windows не подняла туннель ${matcher.label} за ${timeoutMillis / 1_000} секунд" +
+    throw VpnStartException(
+      code = VpnStatusCode.TUN_NOT_CREATED,
+      message = "Windows не подняла туннель ${matcher.label} за ${timeoutMillis / 1_000} секунд" +
         logPump.reasonSuffix(),
+      detail = matcher.label,
     )
   }
 

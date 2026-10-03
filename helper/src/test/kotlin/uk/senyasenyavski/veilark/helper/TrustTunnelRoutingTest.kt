@@ -13,6 +13,43 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class TrustTunnelRoutingTest {
+  @Test fun `bare numeric IPv4 and IPv6 VPN overrides are normalized without DNS names`() {
+    for (address in listOf("192.0.2.1", "2001:db8::1")) {
+      val plan = TrustTunnelRouting.plan(profile(RoutingMode.Manual).copy(
+        appliedRouting = RoutingSettings(mode = RoutingMode.Manual,
+          directEntries = address, vpnEntries = address),
+      ))
+      assertTrue(plan.exclusions.isEmpty())
+    }
+  }
+  @Test
+  fun `Manual identical network VPN override removes direct exclusion`() {
+    val plan = TrustTunnelRouting.plan(profile(RoutingMode.Manual).copy(
+      appliedRouting = RoutingSettings(mode = RoutingMode.Manual,
+        directEntries = "10.0.0.0/8", vpnEntries = "10.0.0.0/8"),
+    ))
+    assertTrue(plan.exclusions.isEmpty())
+  }
+
+  @Test
+  fun `Manual overlapping domain exceptions fail instead of silently bypassing VPN`() {
+    assertFailsWith<IllegalArgumentException> {
+      TrustTunnelRouting.plan(profile(RoutingMode.Manual).copy(
+        appliedRouting = RoutingSettings(mode = RoutingMode.Manual,
+          directEntries = "example.com", vpnEntries = "private.example.com"),
+      ))
+    }
+  }
+
+  @Test
+  fun `Manual overlapping network exceptions fail instead of silently bypassing VPN`() {
+    assertFailsWith<IllegalArgumentException> {
+      TrustTunnelRouting.plan(profile(RoutingMode.Manual).copy(
+        appliedRouting = RoutingSettings(mode = RoutingMode.Manual,
+          directEntries = "10.0.0.0/8", vpnEntries = "10.1.0.0/16"),
+      ))
+    }
+  }
   @Test
   fun `Russia direct replaces generated routing after preserving endpoint`() {
     val profile = profile(RoutingMode.RussiaDirect)

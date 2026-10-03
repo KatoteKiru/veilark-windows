@@ -1,0 +1,3 @@
+# OTA publisher (scripts/publish_ota.py) and its regression tests.
+cryptography==50.0.2
+paramiko==5.0.0

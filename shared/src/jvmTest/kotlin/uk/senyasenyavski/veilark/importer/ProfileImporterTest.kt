@@ -12,7 +12,7 @@ class ProfileImporterTest {
   fun `subscription request identifies the SFA client like Android`() {
     val userAgent = ProfileImporter.subscriptionUserAgent()
 
-    assertTrue(userAgent.startsWith("SFA/1.13.19 Veilark/"))
+    assertTrue(userAgent.startsWith("SFA/1.13.21 Veilark/"))
     assertTrue(userAgent.contains(uk.senyasenyavski.veilark.update.UpdateClient.CURRENT_VERSION_NAME))
   }
 

@@ -23,6 +23,8 @@ import uk.senyasenyavski.veilark.model.SessionState
 import uk.senyasenyavski.veilark.model.TrafficSnapshot
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
+import uk.senyasenyavski.veilark.model.VpnStatusCode
+import uk.senyasenyavski.veilark.model.requiresStopRetry
 import uk.senyasenyavski.veilark.session.VpnSession
 
 class WindowsVpnSession(
@@ -34,6 +36,7 @@ class WindowsVpnSession(
   private val healthChecksEveryTicks: Int = 10,
   private val disconnectJoinTimeoutMillis: Long = 10_000,
   private val logger: (String) -> Unit = SafeLog::write,
+  /** Returns the alias of a competing active tunnel, or `null` when none is up. */
   private val preConnectCheck: () -> String? = { null },
 ) : VpnSession {
   private val controllers = controllers.associateBy(EngineController::engine)
@@ -43,7 +46,9 @@ class WindowsVpnSession(
   private val mutableState = MutableStateFlow(SessionState())
 
   private var activeController: EngineController? = null
+  private var activeGeoLease: AutoCloseable? = null
   private var connectJob: Job? = null
+  private var pendingTeardownJob: Job? = null
   private var monitorJob: Job? = null
 
   init {
@@ -62,8 +67,10 @@ class WindowsVpnSession(
       // controller while that teardown is still in progress.
       if (
         connectJob?.isActive == true ||
+        pendingTeardownJob != null ||
         activeController != null ||
-        mutableState.value.phase is VpnPhase.Stopping
+        mutableState.value.phase is VpnPhase.Stopping ||
+        mutableState.value.phase.requiresStopRetry
       ) return
       val controller = controllers[profile.engine] ?: run {
         publish(
@@ -71,7 +78,8 @@ class WindowsVpnSession(
             engine = profile.engine,
             phase = VpnPhase.Error(
               message = "Ядро ${profile.engine.displayName()} не установлено",
-              code = "ENGINE_NOT_FOUND",
+              code = VpnStatusCode.ENGINE_NOT_FOUND,
+              detail = profile.engine.displayName(),
             ),
             profile = profile,
           ),
@@ -97,7 +105,8 @@ class WindowsVpnSession(
 
   override suspend fun disconnect() = disconnectMutex.withLock {
     val (pending, controller) = mutex.withLock {
-      val pending = connectJob.also { connectJob = null }
+      val pending = connectJob ?: pendingTeardownJob
+      connectJob = null
       val controller = activeController
       monitorJob?.cancel()
       monitorJob = null
@@ -117,7 +126,8 @@ class WindowsVpnSession(
         true
       } == true
     }
-    val stopped = controller?.let { stopOwnedController(it) } ?: Result.success(Unit)
+    val stopped = controller?.let { stopOwnedController(it, retainForPendingStartup = !pendingFinished) }
+      ?: Result.success(Unit)
     val terminated = stopped.mapCatching {
       check(pendingFinished) {
         "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
@@ -125,6 +135,7 @@ class WindowsVpnSession(
       check(controller?.isAlive() != true) { "VPN-ядро всё ещё работает" }
     }
     mutex.withLock {
+      pendingTeardownJob = if (pendingFinished) null else pending
       if (terminated.isSuccess) {
         publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
       } else {
@@ -133,7 +144,8 @@ class WindowsVpnSession(
           mutableState.value.copy(
             phase = VpnPhase.Error(
               message = "Не удалось остановить VPN-ядро",
-              code = "STOP_FAILED",
+              code = VpnStatusCode.STOP_FAILED,
+              stopRequired = true,
             ),
           ),
         )
@@ -146,14 +158,18 @@ class WindowsVpnSession(
     try {
       // ActiveTunnelConflict reads the native Windows interface table. Keep it
       // on the session's IO scope rather than blocking the caller/UI thread.
-      preConnectCheck()?.let { message ->
+      preConnectCheck()?.let { competitor ->
         currentCoroutineContext().ensureActive()
         mutex.withLock {
           if (mutableState.value.phase is VpnPhase.Stopping) return@withLock
           publish(
             SessionState(
               engine = profile.engine,
-              phase = VpnPhase.Error(message, "COMPETING_TUNNEL"),
+              phase = VpnPhase.Error(
+                message = "Активен другой VPN «$competitor». Отключите его и повторите подключение Veilark.",
+                code = VpnStatusCode.COMPETING_TUNNEL,
+                detail = competitor,
+              ),
               profile = profile,
             ),
           )
@@ -164,6 +180,7 @@ class WindowsVpnSession(
       mutex.withLock {
         if (mutableState.value.phase is VpnPhase.Stopping) return
         activeController = controller
+        activeGeoLease = GeoGenerationLeases.acquire(profile.geoRoutingAssets)
         publish(mutableState.value.copy(phase = VpnPhase.Connecting))
       }
       val health = withTimeout(CONNECT_TIMEOUT_MILLIS) { controller.start(profile) }
@@ -173,7 +190,7 @@ class WindowsVpnSession(
           mutableState.value.copy(
             phase = when (health) {
               EngineHealth.Healthy -> VpnPhase.Connected(System.currentTimeMillis())
-              is EngineHealth.Unhealthy -> VpnPhase.Degraded(health.message)
+              is EngineHealth.Unhealthy -> health.toPhase()
             },
             traffic = safeStatistics(controller),
           ),
@@ -184,12 +201,12 @@ class WindowsVpnSession(
       // A cancelled attempt is torn down by whoever cancelled it, except for a
       // connect timeout, which cancels only this coroutine.
       if (cancellation is TimeoutCancellationException) {
-        failConnect(controller, "Подключение не завершилось за 90 секунд", "CONNECT_TIMEOUT")
+        failConnect(controller, "Подключение не завершилось за 90 секунд", VpnStatusCode.CONNECT_TIMEOUT)
       }
       throw cancellation
     } catch (error: Throwable) {
       logger("Ошибка подключения: ${error.message}")
-      failConnect(controller, humanMessage(error), errorCode(error))
+      failConnect(controller, technicalMessage(error), errorCode(error), errorDetail(error))
     }
   }
 
@@ -197,6 +214,7 @@ class WindowsVpnSession(
     controller: EngineController,
     message: String,
     code: String,
+    detail: String = "",
   ) = withContext(NonCancellable) {
     stopOwnedController(controller)
       .onFailure { logger("Ошибка очистки после неудачного запуска: ${it.message}") }
@@ -207,7 +225,9 @@ class WindowsVpnSession(
       if (mutableState.value.phase is VpnPhase.Stopping) return@withLock
       publish(
         mutableState.value.copy(
-          phase = VpnPhase.Error(message, code),
+          phase = VpnPhase.Error(message, code,
+            stopRequired = activeController != null || pendingTeardownJob != null,
+            detail = detail),
           traffic = null,
         ),
       )
@@ -219,7 +239,10 @@ class WindowsVpnSession(
    * timeout and the Stop button can race, but exactly one of them may call the
    * native controller's blocking [EngineController.stop].
    */
-  private suspend fun stopOwnedController(controller: EngineController): Result<Unit> {
+  private suspend fun stopOwnedController(
+    controller: EngineController,
+    retainForPendingStartup: Boolean = false,
+  ): Result<Unit> {
     val claimed = mutex.withLock {
       if (activeController !== controller) {
         false
@@ -236,9 +259,13 @@ class WindowsVpnSession(
         check(!controller.isAlive()) { "VPN-ядро не завершилось" }
       }
     }
+    if (!controller.isAlive() && !retainForPendingStartup) mutex.withLock {
+      activeGeoLease?.close()
+      activeGeoLease = null
+    }
     // Retain a live failed process as the active controller so a subsequent
     // Stop can retry instead of reporting a false Idle state.
-    if (stopped.isFailure && controller.isAlive()) {
+    if (retainForPendingStartup || (stopped.isFailure && controller.isAlive())) {
       mutex.withLock {
         if (activeController == null) activeController = controller
       }
@@ -277,7 +304,7 @@ class WindowsVpnSession(
                 } else {
                   VpnPhase.Connected(System.currentTimeMillis())
                 }
-                is EngineHealth.Unhealthy -> VpnPhase.Degraded(health.message)
+                is EngineHealth.Unhealthy -> health.toPhase()
               },
               traffic = statistics,
             ),
@@ -292,13 +319,16 @@ class WindowsVpnSession(
     val phase = mutableState.value.phase
     if (phase !is VpnPhase.Connected && phase !is VpnPhase.Degraded) return@withLock
     activeController = null
+    activeGeoLease?.close()
+    activeGeoLease = null
     logger("${controller.engine.displayName()} неожиданно завершился")
     publish(
       mutableState.value.copy(
         phase = VpnPhase.Error(
           message = "${controller.engine.displayName()} неожиданно завершился. " +
             "Проверьте журнал и повторите подключение.",
-          code = "CORE_EXITED",
+          code = VpnStatusCode.CORE_EXITED,
+          detail = controller.engine.displayName(),
         ),
         traffic = null,
       ),
@@ -318,7 +348,7 @@ class WindowsVpnSession(
     throw cancellation
   } catch (_: Exception) {
     logger("Не удалось выполнить проверку доступности VPN-туннеля")
-    EngineHealth.Unhealthy("проверка доступности туннеля не выполнена")
+    EngineHealth.Unhealthy("проверка доступности туннеля не выполнена", VpnStatusCode.HEALTH_CHECK_FAILED)
   }
 
   private fun publish(state: SessionState) {
@@ -331,30 +361,27 @@ class WindowsVpnSession(
     bytesOut = bytesOut,
   )
 
-  private fun humanMessage(error: Throwable): String {
+  private fun EngineHealth.Unhealthy.toPhase() = VpnPhase.Degraded(message, code, detail)
+
+  /** Technical journal text; the UI renders [errorCode] instead. */
+  private fun technicalMessage(error: Throwable): String =
+    error.message?.takeIf(String::isNotBlank) ?: "Подключение не выполнено"
+
+  /**
+   * Classifies startup failures by type, never by (localized) message text.
+   * The two English substrings are native Windows/core diagnostics.
+   */
+  private fun errorCode(error: Throwable): String {
+    if (error is VpnStartException) return error.code
     val message = error.message.orEmpty()
     return when {
-      message.contains("already exists", ignoreCase = true) ->
-        "Предыдущий сетевой адаптер не был освобождён. Запустите Veilark от имени " +
-          "администратора, чтобы Veilark смог его удалить."
-      message.contains("Access is denied", ignoreCase = true) ||
-        message.contains("permission", ignoreCase = true) ->
-        "Windows не разрешила создать туннель. Запустите Veilark от имени администратора."
-      message.isNotBlank() -> message
-      else -> "Подключение не выполнено"
+      message.contains("already exists", ignoreCase = true) -> VpnStatusCode.TUN_NAME_TAKEN
+      message.contains("Access is denied", ignoreCase = true) -> VpnStatusCode.ELEVATION_REQUIRED
+      else -> VpnStatusCode.CORE_START_FAILED
     }
   }
 
-  private fun errorCode(error: Throwable): String {
-    val message = error.message.orEmpty()
-    return when {
-      message.contains("Не найден") -> "CORE_NOT_FOUND"
-      message.contains("Конфигурация") -> "CONFIG_INVALID"
-      message.contains("already exists", ignoreCase = true) -> "TUN_NAME_TAKEN"
-      message.contains("Windows не подняла туннель") -> "TUN_NOT_CREATED"
-      else -> "CORE_START_FAILED"
-    }
-  }
+  private fun errorDetail(error: Throwable): String = (error as? VpnStartException)?.detail.orEmpty()
 
   private fun VpnEngine.displayName(): String = when (this) {
     VpnEngine.SingBox -> "sing-box"

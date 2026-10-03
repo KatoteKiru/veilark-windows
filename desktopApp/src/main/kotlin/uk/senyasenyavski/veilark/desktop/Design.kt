@@ -5,18 +5,18 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
@@ -26,7 +26,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,14 +55,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -147,6 +141,13 @@ private val LightColors = lightColorScheme(
 )
 
 private val VeilarkTypography = Typography(
+  // Every Material text role must use the bundled face, including roles used
+  // inside controls. Otherwise dialogs and small titles silently switch fonts.
+  displayLarge = TextStyle(fontFamily = VeilarkSans, fontWeight = FontWeight.Normal, fontSize = 57.sp, lineHeight = 64.sp),
+  displayMedium = TextStyle(fontFamily = VeilarkSans, fontWeight = FontWeight.Normal, fontSize = 45.sp, lineHeight = 52.sp),
+  displaySmall = TextStyle(fontFamily = VeilarkSans, fontWeight = FontWeight.Normal, fontSize = 36.sp, lineHeight = 44.sp),
+  headlineLarge = TextStyle(fontFamily = VeilarkSans, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp),
+  titleSmall = TextStyle(fontFamily = VeilarkSans, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
   headlineMedium = TextStyle(
     fontFamily = VeilarkSans,
     fontWeight = FontWeight.SemiBold,
@@ -218,16 +219,16 @@ private val VeilarkShapes = Shapes(
 )
 
 internal val VeilarkEmphasized = tween<Float>(280, easing = FastOutSlowInEasing)
-internal val VeilarkColorMotion = tween<Color>(360, easing = FastOutSlowInEasing)
+internal val VeilarkColorMotion = tween<Color>(180, easing = FastOutSlowInEasing)
 internal val VeilarkSpring = spring<Float>(
-  dampingRatio = Spring.DampingRatioMediumBouncy,
-  stiffness = Spring.StiffnessMediumLow,
+  dampingRatio = Spring.DampingRatioNoBouncy,
+  stiffness = Spring.StiffnessMedium,
 )
 
 @Composable
-internal fun VeilarkTheme(content: @Composable () -> Unit) {
+internal fun VeilarkTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
   MaterialTheme(
-    colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+    colorScheme = if (darkTheme) DarkColors else LightColors,
     typography = VeilarkTypography,
     shapes = VeilarkShapes,
     content = content,
@@ -238,7 +239,7 @@ internal enum class Destination(
   val icon: ImageVector,
 ) {
   Home(Icons.Rounded.Home),
-  Profiles(Icons.Rounded.Shield),
+  Profiles(Icons.Rounded.Subscriptions),
   Routing(Icons.Rounded.Route),
   Diagnostics(Icons.Rounded.BugReport),
   Updates(Icons.Rounded.Update),
@@ -256,8 +257,8 @@ internal enum class Destination(
 
   fun barTitle(language: UiLanguage): String = when (this) {
     Home -> "VPN"
-    Profiles -> language.text("Серверы", "Servers")
-    Routing -> language.text("Сеть", "Network")
+    Profiles -> language.text("Подписки", "Subscriptions")
+    Routing -> language.text("Маршруты", "Routing")
     Updates -> language.text("Обновления", "Updates")
     else -> title(language)
   }
@@ -275,34 +276,9 @@ internal val OverflowDestinations = listOf(
   Destination.Logs,
 )
 
-private val LogoOnTonal = ColorFilter.colorMatrix(
-  ColorMatrix(
-    floatArrayOf(
-      1f, 0f, 0f, 0f, 0f,
-      0f, 1f, 0f, 0f, 0f,
-      0f, 0f, 1f, 0f, 0f,
-      0.22f, 0.45f, 0.33f, 0f, 0f,
-    ),
-  ),
-)
-
 @Composable
 internal fun BrandMark(modifier: Modifier = Modifier) {
-  Surface(
-    modifier = modifier.size(36.dp),
-    shape = CircleShape,
-    color = MaterialTheme.colorScheme.primaryContainer,
-    tonalElevation = 0.dp,
-    shadowElevation = 0.dp,
-  ) {
-    Image(
-      painter = painterResource("veilark-logo.png"),
-      contentDescription = "Veilark",
-      modifier = Modifier.padding(6.dp).clip(CircleShape),
-      contentScale = ContentScale.Fit,
-      colorFilter = LogoOnTonal,
-    )
-  }
+  BrandGlyph(modifier.size(36.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -454,6 +430,14 @@ internal fun PageHeader(
   subtitle: String,
   action: (@Composable () -> Unit)? = null,
 ) {
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    if (maxWidth < 520.dp && action != null) {
+      Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PageHeader(title, subtitle)
+        action()
+      }
+      return@BoxWithConstraints
+    }
   Row(
     Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.SpaceBetween,
@@ -477,6 +461,7 @@ internal fun PageHeader(
       )
     }
     action?.invoke()
+  }
   }
 }
 
@@ -680,44 +665,4 @@ private fun flagPalette(code: String): FlagPalette = when (code.uppercase()) {
   "HK" -> FlagPalette(background = Color(0xFFDE2910))
   "KR" -> FlagPalette(background = Color.White)
   else -> FlagPalette(background = Color(0xFF275D8C))
-}
-
-@Composable
-internal fun ShieldMark(
-  checked: Boolean,
-  color: Color,
-  modifier: Modifier = Modifier,
-) {
-  Canvas(modifier) {
-    val shield = Path().apply {
-      moveTo(size.width * .5f, size.height * .08f)
-      lineTo(size.width * .82f, size.height * .2f)
-      lineTo(size.width * .78f, size.height * .62f)
-      quadraticTo(size.width * .72f, size.height * .82f, size.width * .5f, size.height * .94f)
-      quadraticTo(size.width * .28f, size.height * .82f, size.width * .22f, size.height * .62f)
-      lineTo(size.width * .18f, size.height * .2f)
-      close()
-    }
-    drawPath(
-      shield,
-      color,
-      style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round),
-    )
-    if (checked) {
-      drawLine(
-        color,
-        Offset(size.width * .34f, size.height * .52f),
-        Offset(size.width * .46f, size.height * .64f),
-        3.5.dp.toPx(),
-        StrokeCap.Round,
-      )
-      drawLine(
-        color,
-        Offset(size.width * .46f, size.height * .64f),
-        Offset(size.width * .68f, size.height * .39f),
-        3.5.dp.toPx(),
-        StrokeCap.Round,
-      )
-    }
-  }
 }

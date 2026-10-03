@@ -23,7 +23,7 @@ Windows 0.3.11 release candidate is implemented:
   `curl.exe` / Schannel, with process exit reported as `CORE_EXITED`;
 - automatic UAC relaunch on Connect with encrypted state handoff, profile-load
   synchronization, and exactly one auto-connect attempt after elevation;
-- official sing-box 1.13.19, TrustTunnel 1.1.5-rc.6, and WinTUN 0.14.1 bootstrap
+- official sing-box 1.13.21, TrustTunnel 1.1.5, and WinTUN 0.14.1 bootstrap
   with pinned SHA-256;
 - `sing-box check` before every sing-box launch and the official TrustTunnel
   setup wizard for `tt://` and endpoint TOML profiles;
@@ -89,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-installed.ps1 -Expecte
 ```
 
 Releases 0.3.2 and 0.3.3 were withdrawn. Version 0.3.11 retains the compact
-Material 3 interface and updates the stable sing-box runtime to 1.13.19. The signed
+Material 3 interface and uses the stable sing-box 1.13.21 runtime. The signed
 public OTA channel uses a self-elevating bootstrap so an installed 0.3.0 or
 0.3.1 can be replaced in place after the user accepts the Windows UAC prompt.
 The artifacts are not Authenticode-signed, so Windows SmartScreen may show the

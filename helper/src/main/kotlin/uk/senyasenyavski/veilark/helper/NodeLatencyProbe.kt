@@ -209,20 +209,10 @@ class NodeLatencyProbe internal constructor(
   }
 
   private fun resolveWizard(): Path {
-    val candidates = buildList {
-      System.getenv("VEILARK_TRUSTTUNNEL_WIZARD")
-        ?.takeIf(String::isNotBlank)
-        ?.let { add(Path.of(it)) }
-      System.getProperty("compose.application.resources.dir")
-        ?.takeIf(String::isNotBlank)
-        ?.let { add(Path.of(it, "setup_wizard.exe")) }
-      add(
-        Path.of("packaging", "resources", "windows", "setup_wizard.exe")
-          .toAbsolutePath(),
-      )
-    }
-    return candidates.firstOrNull(Files::isRegularFile)
-      ?: error("Не найден setup_wizard.exe")
+    return RuntimeResourceLocator.requireFile(
+      fileName = "setup_wizard.exe",
+      environmentName = "VEILARK_TRUSTTUNNEL_WIZARD",
+    )
   }
 
   private fun splitHostPort(value: String): Pair<String, Int>? {

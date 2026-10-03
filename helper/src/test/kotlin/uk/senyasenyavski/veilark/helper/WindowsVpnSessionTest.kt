@@ -7,6 +7,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import uk.senyasenyavski.veilark.model.requiresStopRetry
+import uk.senyasenyavski.veilark.model.locksConfiguration
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +25,63 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
 
 class WindowsVpnSessionTest {
+  @Test
+  fun `cancelling the disconnect caller still settles owned shutdown and geo lease`() = runBlocking {
+    val root = java.nio.file.Files.createTempDirectory("veilark-cancelled-disconnect")
+    val controller = FakeController(VpnEngine.SingBox, blockStop = true)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    val geo = uk.senyasenyavski.veilark.model.GeoRoutingAssets(
+      root.resolve("geoip-ru.srs").toString(), root.resolve("geosite-category-ru.srs").toString(), emptyList())
+    try {
+      session.connect(profile(VpnEngine.SingBox).copy(geoRoutingAssets = geo))
+      val disconnecting = launch { session.disconnect() }
+      withTimeout(2_000) {
+        while (controller.stopCalls.get() == 0) delay(10)
+      }
+      disconnecting.cancel()
+      controller.releaseStop()
+      withTimeout(2_000) { disconnecting.join() }
+
+      assertFalse(controller.isAlive())
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
+      assertFalse(GeoGenerationLeases.isPinned(root))
+      session.connect(profile(VpnEngine.SingBox))
+      assertEquals(2, controller.startCalls.get())
+    } finally {
+      controller.releaseStop()
+      session.disconnect()
+      java.nio.file.Files.deleteIfExists(root)
+    }
+  }
+  @Test fun `failed stop keeps explicit stop action and locks configuration until retry succeeds`() = runBlocking {
+    val controller = FakeController(VpnEngine.SingBox, failOnStop = true)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    try {
+      session.connect(profile(VpnEngine.SingBox))
+      assertFailsWith<IllegalStateException> { session.disconnect() }
+      assertTrue(session.state.value.phase.requiresStopRetry)
+      assertTrue(session.state.value.phase.locksConfiguration)
+      session.connect(profile(VpnEngine.SingBox))
+      assertEquals(1, controller.startCalls.get())
+      controller.failOnStop = false
+      session.disconnect()
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
+      assertFalse(session.state.value.phase.locksConfiguration)
+    } finally { controller.failOnStop = false; session.disconnect() }
+  }
+  @Test fun `active core retains geo generation until owned teardown completes`() = runBlocking {
+    val root = java.nio.file.Files.createTempDirectory("veilark-session-geo-lease")
+    val controller = FakeController(VpnEngine.SingBox)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    try {
+      val geo = uk.senyasenyavski.veilark.model.GeoRoutingAssets(
+        root.resolve("geoip-ru.srs").toString(), root.resolve("geosite-category-ru.srs").toString(), emptyList())
+      session.connect(profile(VpnEngine.SingBox).copy(geoRoutingAssets = geo))
+      assertTrue(GeoGenerationLeases.isPinned(root))
+      session.disconnect()
+      assertFalse(GeoGenerationLeases.isPinned(root))
+    } finally { session.disconnect(); java.nio.file.Files.deleteIfExists(root) }
+  }
   @Test
   fun `active competing tunnel fails before a core is started`() = runBlocking {
     val controller = FakeController(VpnEngine.SingBox)
@@ -364,9 +423,17 @@ class WindowsVpnSessionTest {
       val error = assertIs<VpnPhase.Error>(session.state.value.phase)
       assertEquals("STOP_FAILED", error.code)
 
+      assertTrue(error.requiresStopRetry)
+      assertTrue(error.locksConfiguration)
+      assertFailsWith<IllegalStateException> { session.disconnect() }
+      assertTrue(session.state.value.phase.requiresStopRetry)
+      session.connect(profile(VpnEngine.SingBox))
+      assertEquals(1, controller.startCalls.get())
       controller.releaseStart()
       connecting.join()
       assertFalse(controller.started)
+      session.disconnect()
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
     }
   }
 
@@ -395,7 +462,7 @@ class WindowsVpnSessionTest {
   private class FakeController(
     override val engine: VpnEngine,
     private val failOnStart: Boolean = false,
-    private val failOnStop: Boolean = false,
+    var failOnStop: Boolean = false,
     private val startHealth: EngineHealth = EngineHealth.Healthy,
     blockStart: Boolean = false,
     blockStop: Boolean = false,

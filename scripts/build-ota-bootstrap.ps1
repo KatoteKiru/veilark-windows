@@ -26,7 +26,8 @@ $sourceVersion = [regex]::Match($updateSource, 'CURRENT_VERSION_NAME\s*=\s*"([^"
 $sourceCode = [regex]::Match($updateSource, 'CURRENT_VERSION_CODE\s*=\s*(\d+)').Groups[1].Value
 $packageVersion = [regex]::Match($gradleSource, 'packageVersion\s*=\s*"([^"]+)"').Groups[1].Value
 $upgradeUuid = [regex]::Match($gradleSource, 'upgradeUuid\s*=\s*"([^"]+)"').Groups[1].Value
-$expectedCode = [int](($versionName.Split('.') | ForEach-Object { [int]$_ }) -join '')
+. (Join-Path $PSScriptRoot 'ota-version.ps1')
+$expectedCode = Get-VeilarkVersionCode $versionName
 if ($sourceVersion -ne $versionName -or $packageVersion -ne $versionName -or [int]$sourceCode -ne $expectedCode) {
   throw "OTA version drift: payload=$versionName client=$sourceVersion/$sourceCode package=$packageVersion"
 }
@@ -75,6 +76,7 @@ try {
     $target,
     '/platform:x64',
     '/optimize+',
+    "/win32icon:$(Join-Path $projectRoot 'desktopApp\src\main\resources\veilark.ico')",
     "/win32manifest:$manifest",
     "/resource:$innerPath,Veilark.InstallerPayload",
     "/resource:$hashResource,Veilark.PayloadSha256",
@@ -101,6 +103,12 @@ try {
   }
 } finally {
   if (Test-Path -LiteralPath $temporary) {
-    Remove-Item -LiteralPath $temporary -Recurse -Force
+    $resolvedTemporary = [IO.Path]::GetFullPath($temporary)
+    $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+    if ((Split-Path -Parent $resolvedTemporary).TrimEnd('\') -ne $expectedParent -or
+        (Split-Path -Leaf $resolvedTemporary) -notmatch '^veilark-ota-bootstrap-[a-f0-9]{32}$') {
+      throw 'Refusing cleanup outside the owned bootstrap temporary directory'
+    }
+    Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force
   }
 }

@@ -26,6 +26,7 @@ internal data class NetworkAdapter(
   val mtu: Int,
   val bytesIn: Long,
   val bytesOut: Long,
+  val interfaceGuid: String? = null,
 ) {
   val isTunnel: Boolean
     get() = TUNNEL_DESCRIPTIONS.any { description.contains(it, ignoreCase = true) }
@@ -110,6 +111,7 @@ internal object WindowsNetwork {
     mtu = Mtu,
     bytesIn = InOctets,
     bytesOut = OutOctets,
+    interfaceGuid = InterfaceGuid.toGuidString(),
   )
 
   private fun NetworkAdapter.isFilterPseudoAdapter(): Boolean =

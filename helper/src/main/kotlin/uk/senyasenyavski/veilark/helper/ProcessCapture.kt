@@ -23,12 +23,18 @@ internal fun Process.capture(
   val output = StringBuilder()
   val reader = thread(name = "veilark-process-capture", isDaemon = true) {
     runCatching {
-      inputStream.bufferedReader().useLines { lines ->
-        lines.forEach { line ->
+      inputStream.bufferedReader().use { input ->
+        // readLine allocates an entire native diagnostic before the output cap
+        // can be applied. Drain in fixed chunks even after the cap is reached,
+        // so an oversized line cannot exhaust memory or block the child pipe.
+        val buffer = CharArray(4_096)
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
           synchronized(output) {
             if (output.length < maximumOutputChars) {
               val remaining = maximumOutputChars - output.length
-              output.append(line.take(remaining)).append('\n')
+              output.append(buffer, 0, minOf(count, remaining))
             }
           }
         }

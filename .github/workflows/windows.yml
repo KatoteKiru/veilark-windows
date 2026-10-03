@@ -1,5 +1,8 @@
 name: Windows
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:
@@ -13,6 +16,12 @@ on:
       - "*.gradle.kts"
       - "gradle/**"
   pull_request:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Build versioned Windows OTA package
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -27,6 +36,100 @@ jobs:
         run: .\scripts\bootstrap-runtime.ps1
       - name: Validate OTA publisher
         shell: powershell
-        run: python -m py_compile .\scripts\publish_ota.py
+        run: |
+          python --version
+          python -m pip install --disable-pip-version-check -r .\scripts\requirements-ota.txt
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher dependencies failed to install' }
+          python -m py_compile .\scripts\publish_ota.py
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher does not compile' }
+          python .\scripts\test_publish_ota.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'OTA publisher regression tests failed' }
+      - name: Validate OTA version ordering
+        shell: powershell
+        run: .\scripts\test-ota-version.ps1
+      - name: Verify OTA bootstrap payload protection
+        shell: powershell
+        run: |
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          $testDirectory = Join-Path (Get-Location) 'build\bootstrap-test'
+          New-Item -ItemType Directory -Force -Path $testDirectory | Out-Null
+          $payload = Join-Path $testDirectory "Veilark-$version.exe"
+          $bytes = New-Object byte[] (3MB + 17)
+          (New-Object Random 42).NextBytes($bytes)
+          [IO.File]::WriteAllBytes($payload, $bytes)
+          $wrapper = Join-Path $testDirectory 'verify\Veilark-verify.exe'
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output $wrapper -VerificationOnly
+          $before = @(Get-ChildItem -Path (Join-Path $env:SystemRoot 'Temp') -Filter 'Veilark-ota-*' -Directory -ErrorAction SilentlyContinue).Count
+          $output = & $wrapper --bootstrap-verify-only
+          $exitCode = $LASTEXITCODE
+          $expected = (Get-FileHash -Algorithm SHA256 -LiteralPath $payload).Hash
+          if ($exitCode -ne 0 -or (@($output) | Select-Object -Last 1) -ne $expected) {
+            throw "Bootstrap verification failed: exit=$exitCode output=$output"
+          }
+          $after = @(Get-ChildItem -Path (Join-Path $env:SystemRoot 'Temp') -Filter 'Veilark-ota-*' -Directory -ErrorAction SilentlyContinue).Count
+          if ($after -gt $before) { throw 'Protected OTA directory was not removed' }
+          $env:VEILARK_TEST_WRAPPER = $wrapper
+          $env:VEILARK_TEST_VERSION = $version
+          python -c "import os, sys; sys.path.insert(0, 'scripts'); import publish_ota; from pathlib import Path; print('Wrapper file version', publish_ota.validate_installer_version(Path(os.environ['VEILARK_TEST_WRAPPER']), os.environ['VEILARK_TEST_VERSION'], False))"
+          if ($LASTEXITCODE -ne 0) { throw 'Publisher could not read the wrapper file version' }
       - shell: powershell
-        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --stacktrace
+        run: .\gradlew.bat test :shared:jvmTest :desktopApp:compileKotlin --max-workers=2 --stacktrace
+      - name: Verify native startup contract on isolated Windows runner
+        shell: powershell
+        run: |
+          $env:SING_BOX_CHECKER = (Resolve-Path 'packaging\resources\windows\sing-box.exe').Path
+          $env:VEILARK_TEST_NATIVE_TUN = '1'
+          .\gradlew.bat :helper:test --tests '*SingBoxNativeTunTest' --tests '*SingBoxRuntimeConfigurationTest' --tests '*CoreLogPumpTest' --max-workers=2 --stacktrace
+          $nativeExit = $LASTEXITCODE
+          $resultPath = 'helper\build\test-results\test\TEST-uk.senyasenyavski.veilark.helper.SingBoxNativeTunTest.xml'
+          if (-not (Test-Path -LiteralPath $resultPath)) { throw "Native TUN report missing; Gradle exit=$nativeExit" }
+          [xml]$result = Get-Content -LiteralPath $resultPath
+          $suite = $result.testsuite
+          Write-Host "Native TUN acceptance: executed=$($suite.tests), skipped=$($suite.skipped), failures=$($suite.failures), errors=$($suite.errors)"
+          foreach ($failure in $result.SelectNodes('//testcase/failure | //testcase/error')) {
+            Write-Host "Native TUN failure: $($failure.GetAttribute('message'))"
+            $detail = $failure.InnerText
+            Write-Host $detail.Substring(0, [Math]::Min(3000, $detail.Length))
+          }
+          if ($nativeExit -ne 0) { throw "Native startup contract failed; Gradle exit=$nativeExit" }
+          if ([int]$suite.tests -lt 1 -or [int]$suite.skipped -ne 0 -or [int]$suite.failures -ne 0 -or [int]$suite.errors -ne 0) {
+            throw 'Native TUN acceptance must execute, not skip'
+          }
+      - name: Verify installed application resources
+        shell: powershell
+        run: |
+          .\gradlew.bat :desktopApp:createDistributable --stacktrace
+          .\scripts\verify-packaged-resources.ps1
+      - name: Package verified OTA payload
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        shell: powershell
+        run: |
+          .\gradlew.bat :desktopApp:packageExe :desktopApp:packageMsi --max-workers=2 --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          $payload = "desktopApp\build\compose\binaries\main\exe\Veilark-$version.exe"
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output "build\ota\Veilark-$version.exe"
+          .\scripts\build-ota-bootstrap.ps1 -InnerInstaller $payload -Output "build\verify\Veilark-verify.exe" -VerificationOnly
+          & .\build\verify\Veilark-verify.exe --bootstrap-verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded payload verification failed' }
+          Get-FileHash -Algorithm SHA256 "build\ota\Veilark-$version.exe"
+      - name: Verify in-place upgrade from the published Windows release
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        timeout-minutes: 20
+        shell: powershell
+        run: |
+          $version = [regex]::Match((Get-Content -Raw desktopApp\build.gradle.kts), 'packageVersion = "([^"]+)"').Groups[1].Value
+          .\scripts\test-in-place-upgrade.ps1 -CandidateInstaller "build\ota\Veilark-$version.exe"
+      - name: Upload Windows release candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: veilark-windows-ota
+          retention-days: 7
+          path: |
+            build/ota/Veilark-*.exe
+            desktopApp/build/compose/binaries/main/msi/Veilark-*.msi
+            desktopApp/build/reports/ui/*.png
+            desktopApp/build/test-results/test/*.xml
+            helper/build/test-results/test/*.xml
+            shared/build/test-results/jvmTest/*.xml

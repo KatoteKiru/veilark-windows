@@ -4,8 +4,8 @@
 
 Windows W1 uses two official upstream runtimes:
 
-- sing-box 1.13.19, matching the current Android production core;
-- TrustTunnelClient 1.1.5-rc.6 for Windows x86_64, pinned to the official
+- sing-box 1.13.21, matching the current Android production core;
+- TrustTunnelClient 1.1.5 stable for Windows x86_64, pinned to the official
   release asset SHA-256.
 
 The Android TrustTunnel AAR/JNI is not reused. Veilark packages the official

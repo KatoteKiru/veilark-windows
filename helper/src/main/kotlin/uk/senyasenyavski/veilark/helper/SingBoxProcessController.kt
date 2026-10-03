@@ -1,7 +1,7 @@
 package uk.senyasenyavski.veilark.helper
 
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,11 +10,11 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.profile.ProfileConfiguration
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.util.concurrent.TimeUnit
 
 class SingBoxProcessController(
   private val executableOverride: Path? = null,
+  private val runtimeDirectory: Path = VeilarkPaths.runtimeDirectory,
 ) : EngineController {
   override val engine: VpnEngine = VpnEngine.SingBox
   private var process: Process? = null
@@ -29,35 +29,49 @@ class SingBoxProcessController(
       check(process?.isAlive != true) { "VPN уже запущен" }
     }
     val executable = resolveExecutable()
-    writeConfigAtomically(profile.config)
-    checkConfig(executable)
-    // sing-box cannot reuse a connection name still held by an abandoned core or
-    // by an adapter that a previous, force-terminated run left behind.
-    CoreProcessJanitor.terminateOrphans(executable)
-    WinTunJanitor.removeGhostAdapters()
-
-    val started = ProcessBuilder(
-      executable.toString(),
-      "run",
-      "-c",
-      VeilarkPaths.activeConfig.toString(),
+    // Readiness depends on the INFO startup marker. Imported/stored profiles
+    // normally use warn logging and must not suppress or redirect that marker.
+    // Legacy fixed names from releases before the locked per-run config.
+    Files.deleteIfExists(runtimeDirectory.resolve("active.json"))
+    Files.deleteIfExists(runtimeDirectory.resolve("active.json.tmp"))
+    val config = LockedConfigFile.create(
+      directory = runtimeDirectory,
+      prefix = "active-",
+      suffix = ".json",
+      content = SingBoxRuntimeConfiguration.forStartup(profile.config),
     )
-      .directory(executable.parent.toFile())
-      .redirectErrorStream(true)
-      .start()
-    synchronized(this@SingBoxProcessController) { process = started }
+    try {
+      checkConfig(executable, config.path)
+      // sing-box cannot reuse a connection name still held by an abandoned core or
+      // by an adapter that a previous, force-terminated run left behind.
+      CoreProcessJanitor.terminateOrphans(executable)
+      OwnedWinTunCleanup.recoverStoppedAdapters()
 
-    val logPump = CoreLogPump(
-      process = started,
-      engineName = "sing-box",
-      readyMarkers = listOf("sing-box started"),
-      fatalMarkers = listOf("FATAL", "level=fatal"),
-    ).also(CoreLogPump::start)
-    SafeLog.write("Запуск sing-box ${version(executable)}")
+      val started = ProcessBuilder(
+        executable.toString(),
+        "run",
+        "-c",
+        config.path.toString(),
+      )
+        .directory(executable.parent.toFile())
+        .redirectErrorStream(true)
+        .start()
+      synchronized(this@SingBoxProcessController) { process = started }
+      // The core must not outlive Veilark (crash or forced exit).
+      CoreProcessJob.assignToShared(started, "sing-box")
 
-    val tunnel = TunnelReadiness.await(
-      process = started,
-      logPump = logPump,
+      val logPump = CoreLogPump(
+        process = started,
+        engineName = "sing-box",
+        readyMarkers = listOf("sing-box started"),
+        fatalMarkers = listOf("FATAL", "level=fatal"),
+        diagnosticOnly = true,
+      ).also(CoreLogPump::start)
+      SafeLog.write("Запуск sing-box ${version(executable)}")
+
+      val tunnel = TunnelReadiness.await(
+        process = started,
+        logPump = logPump,
         matcher = TunnelMatcher(
           label = ProfileConfiguration.WINDOWS_TUN_INTERFACE,
           matches = {
@@ -66,20 +80,25 @@ class SingBoxProcessController(
         ),
         requireReadyMarker = true,
       )
-    readyTunnel = tunnel
-    SafeLog.write("Туннель sing-box поднят: ${tunnel.alias} (интерфейс ${tunnel.index})")
-    // The configuration holds credentials and sing-box only reads it at
-    // startup, so it is removed as soon as the tunnel exists.
-    Files.deleteIfExists(VeilarkPaths.activeConfig)
-    // Keep startup independent from external health endpoints. The session
-    // monitor probes browser-equivalent connectivity after Connected is shown.
-    EngineHealth.Healthy
+      readyTunnel = tunnel
+      SafeLog.write("Туннель sing-box поднят: ${tunnel.alias} (интерфейс ${tunnel.index})")
+      // The configuration holds credentials and sing-box only reads it at
+      // startup, so it is released and removed as soon as the tunnel exists.
+      config.close()
+      // Keep startup independent from external health endpoints. The session
+      // monitor probes browser-equivalent connectivity after Connected is shown.
+      EngineHealth.Healthy
+    } finally {
+      config.close()
+    }
   }
 
   override suspend fun stop() = stopMutex.withLock {
     withContext(Dispatchers.IO) {
       val current = synchronized(this@SingBoxProcessController) { process }
         ?: return@withContext
+      val ownedTunnel = readyTunnel
+      val ownedDevice = ownedTunnel?.let { OwnedWinTunCleanup.capture(it) }
       SafeLog.write("Остановка sing-box")
       current.destroy()
       if (!current.waitFor(5, TimeUnit.SECONDS)) {
@@ -93,9 +112,11 @@ class SingBoxProcessController(
           readyTunnel = null
         }
       }
-      Files.deleteIfExists(VeilarkPaths.activeConfig)
-      delay(700)
-      WinTunJanitor.removeGhostAdapters()
+      if (ownedTunnel != null && ownedDevice != null) {
+        if (!OwnedWinTunCleanup.remove(ownedTunnel, ownedDevice)) {
+          SafeLog.write("Не удалось удалить собственный остановленный TUN-адаптер")
+        }
+      }
     }
   }
 
@@ -103,44 +124,36 @@ class SingBoxProcessController(
 
   override suspend fun health(): EngineHealth =
     readyTunnel?.let { TunnelTrafficVerifier.probe(it) }
-      ?: EngineHealth.Unhealthy("туннель не создан")
+      ?: EngineHealth.Unhealthy("туннель не создан", VpnStatusCode.TUNNEL_MISSING)
 
   override fun statistics(): TunnelStatistics? =
     readyTunnel?.let(TunnelTrafficVerifier::statistics)
 
   private fun resolveExecutable(): Path {
-    val candidates = buildList {
-      executableOverride?.let(::add)
-      System.getenv("VEILARK_SING_BOX")?.takeIf(String::isNotBlank)?.let { add(Path.of(it)) }
-      System.getProperty("compose.application.resources.dir")
-        ?.takeIf(String::isNotBlank)
-        ?.let { add(Path.of(it, "sing-box.exe")) }
-      add(
-        Path.of("packaging", "resources", "windows", "sing-box.exe")
-          .toAbsolutePath(),
-      )
-      findOnPath("sing-box.exe")?.let(::add)
-    }
-    return candidates.firstOrNull(Files::isRegularFile)
-      ?: error(
-        "Не найден sing-box.exe. Запустите scripts/bootstrap-runtime.ps1 " +
-          "или задайте VEILARK_SING_BOX",
-      )
+    return RuntimeResourceLocator.requireFile(
+      fileName = "sing-box.exe",
+      overridePath = executableOverride,
+      environmentName = "VEILARK_SING_BOX",
+    )
   }
 
-  private suspend fun checkConfig(executable: Path) {
+  private suspend fun checkConfig(executable: Path, config: Path) {
     val result = ProcessBuilder(
       executable.toString(),
       "check",
       "-c",
-      VeilarkPaths.activeConfig.toString(),
+      config.toString(),
     ).redirectErrorStream(true).start()
       .captureCancellable(20_000)
-    check(result.succeeded) {
+    if (!result.succeeded) {
       val reason = if (result.timedOut) "тайм-аут проверки" else {
         result.output.lineSequence().lastOrNull().orEmpty().take(240)
       }
-      "Конфигурация sing-box отклонена: $reason"
+      throw VpnStartException(
+        code = VpnStatusCode.CONFIG_INVALID,
+        message = "Конфигурация sing-box отклонена: $reason",
+        detail = "sing-box",
+      )
     }
   }
 
@@ -152,21 +165,4 @@ class SingBoxProcessController(
     result.output.lineSequence().firstOrNull()?.take(120) ?: "unknown"
   }.getOrDefault("unknown")
 
-  private fun writeConfigAtomically(config: String) {
-    val temporary = VeilarkPaths.runtimeDirectory.resolve("active.json.tmp")
-    Files.writeString(temporary, config, Charsets.UTF_8)
-    Files.move(
-      temporary,
-      VeilarkPaths.activeConfig,
-      StandardCopyOption.REPLACE_EXISTING,
-      StandardCopyOption.ATOMIC_MOVE,
-    )
-  }
-
-  private fun findOnPath(fileName: String): Path? =
-    System.getenv("PATH")
-      ?.split(System.getProperty("path.separator"))
-      ?.asSequence()
-      ?.map { Path.of(it, fileName) }
-      ?.firstOrNull(Files::isRegularFile)
 }

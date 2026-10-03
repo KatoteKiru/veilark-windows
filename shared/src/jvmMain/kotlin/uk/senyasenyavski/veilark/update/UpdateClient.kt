@@ -67,13 +67,17 @@ class UpdateClient(
       .build()
     val response = client.send(
       request,
-      boundedByteArrayHandler(MAX_MANIFEST_SIZE, "Манифест обновления слишком большой"),
+      boundedByteArrayHandler(MAX_MANIFEST_SIZE, "Update manifest is too large"),
     )
-    require(response.statusCode() == 200) {
-      "Сервер обновлений ответил HTTP ${response.statusCode()}"
+    if (response.statusCode() != 200) {
+      throw UpdateException(
+        UpdateErrorCode.HttpStatus,
+        "Update server returned HTTP ${response.statusCode()}",
+        response.statusCode().toString(),
+      )
     }
-    require(response.body().size <= MAX_MANIFEST_SIZE) {
-      "Манифест обновления слишком большой"
+    ensureUpdate(response.body().size <= MAX_MANIFEST_SIZE, UpdateErrorCode.ManifestInvalid) {
+      "Update manifest is too large"
     }
     return parseAvailableUpdate(response.body().toString(Charsets.UTF_8))
   }
@@ -91,24 +95,24 @@ class UpdateClient(
       size = json.getLong("size"),
       notes = json.optString("notes").take(MAX_NOTES_LENGTH),
     )
-    require(update.versionCode > 0 && update.versionName.isNotBlank()) {
-      "Некорректная версия обновления"
+    ensureUpdate(update.versionCode > 0 && update.versionName.isNotBlank(), UpdateErrorCode.ManifestInvalid) {
+      "Invalid update version"
     }
-    require(update.versionName.matches(SAFE_VERSION_NAME)) {
-      "Некорректное имя версии обновления"
+    ensureUpdate(update.versionName.matches(SAFE_VERSION_NAME), UpdateErrorCode.ManifestInvalid) {
+      "Invalid update version name"
     }
-    require(update.size in 1..MAX_INSTALLER_SIZE) {
-      "Некорректный размер обновления"
+    ensureUpdate(update.size in 1..MAX_INSTALLER_SIZE, UpdateErrorCode.ManifestInvalid) {
+      "Invalid update size"
     }
-    require(update.sha256.matches(Regex("[0-9A-F]{64}"))) {
-      "Некорректная контрольная сумма"
+    ensureUpdate(update.sha256.matches(Regex("[0-9A-F]{64}")), UpdateErrorCode.ManifestInvalid) {
+      "Invalid update checksum"
     }
     requireTrustedUri(URI(update.installerUrl))
     verifySignature(canonicalPayload(update), json.getString("signature"))
     val notesSignature = json.optString("notesSignature").trim()
     if (update.versionCode >= SIGNED_NOTES_VERSION_CODE) {
-      require(notesSignature.isNotBlank()) {
-        "Манифест обновления не подписывает описание версии"
+      ensureUpdate(notesSignature.isNotBlank(), UpdateErrorCode.SignatureInvalid) {
+        "Update manifest does not sign the release notes"
       }
       verifySignature(canonicalPayloadWithNotes(update), notesSignature)
     } else if (notesSignature.isNotBlank()) {
@@ -124,8 +128,10 @@ class UpdateClient(
     isCancelled: () -> Boolean = { false },
   ): Path {
     throwIfCancelled(isCancelled)
-    require(update.size in 1..MAX_INSTALLER_SIZE) { "Некорректный размер обновления" }
-    require(update.versionName.matches(SAFE_VERSION_NAME)) { "Некорректное имя версии обновления" }
+    ensureUpdate(update.size in 1..MAX_INSTALLER_SIZE, UpdateErrorCode.ManifestInvalid) { "Invalid update size" }
+    ensureUpdate(update.versionName.matches(SAFE_VERSION_NAME), UpdateErrorCode.ManifestInvalid) {
+      "Invalid update version name"
+    }
     val installerUri = URI(update.installerUrl)
     requireTrustedUri(installerUri)
     Files.createDirectories(directory)
@@ -161,15 +167,22 @@ class UpdateClient(
     if (offset > 0L) requestBuilder.header("Range", "bytes=$offset-")
     val response = sendCancellable(requestBuilder.build(), isCancelled)
     val append = offset > 0L && response.statusCode() == 206
-    require(response.statusCode() == 200 || append) {
+    if (response.statusCode() != 200 && !append) {
       response.body().close()
-      "Сервер обновлений ответил HTTP ${response.statusCode()}"
+      throw UpdateException(
+        UpdateErrorCode.HttpStatus,
+        "Update server returned HTTP ${response.statusCode()}",
+        response.statusCode().toString(),
+      )
     }
     val start = if (append) offset else 0L
     if (append) {
-      require(contentRangeMatches(response.headers().firstValue("Content-Range").orElse(null), start, update.size)) {
+      ensureUpdate(
+        contentRangeMatches(response.headers().firstValue("Content-Range").orElse(null), start, update.size),
+        UpdateErrorCode.DownloadFailed,
+      ) {
         response.body().close()
-        "Сервер обновлений вернул неверный диапазон"
+        "Update server returned an invalid range"
       }
     }
     val options: Array<OpenOption> = if (append) {
@@ -190,7 +203,9 @@ class UpdateClient(
         copyBounded(input, output, start, update.size, onProgress, isCancelled)
       }
     }
-    require(Files.size(partialPath) == update.size) { "Обновление загрузилось не полностью" }
+    ensureUpdate(Files.size(partialPath) == update.size, UpdateErrorCode.DownloadIncomplete) {
+      "Update download is incomplete"
+    }
     verifyDownloadedInstaller(partialPath, update)
     promoteDownload(partialPath, finalPath)
     return finalPath
@@ -209,12 +224,12 @@ class UpdateClient(
    * artifact from the signed manifest has been validated again.
    */
   fun verifyDownloadedInstaller(path: Path, update: AppUpdate) {
-    require(Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-      "Установщик обновления не найден"
+    ensureUpdate(Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS), UpdateErrorCode.InstallerMissing) {
+      "Update installer was not found"
     }
     if (Files.size(path) != update.size) {
       Files.deleteIfExists(path)
-      throw IllegalArgumentException("Обновление загрузилось не полностью")
+      throw UpdateException(UpdateErrorCode.DownloadIncomplete, "Update download is incomplete")
     }
     val actual = sha256(path)
     if (!MessageDigest.isEqual(
@@ -223,7 +238,7 @@ class UpdateClient(
       )
     ) {
       Files.deleteIfExists(path)
-      throw IllegalArgumentException("Контрольная сумма установщика не совпадает")
+      throw UpdateException(UpdateErrorCode.ChecksumMismatch, "Update installer checksum does not match")
     }
   }
 
@@ -279,12 +294,13 @@ class UpdateClient(
   }
 
   private fun requireTrustedUri(uri: URI) {
-    require(
+    ensureUpdate(
       uri.scheme.equals("https", ignoreCase = true) &&
         uri.host.equals(allowedHost, ignoreCase = true) &&
         effectivePort(uri) == allowedPort &&
         uri.userInfo == null,
-    ) { "Недоверенный адрес обновления" }
+      UpdateErrorCode.UntrustedAddress,
+    ) { "Untrusted update address" }
   }
 
   private fun effectivePort(uri: URI): Int =
@@ -297,8 +313,8 @@ class UpdateClient(
     val verifier = Signature.getInstance("Ed25519")
     verifier.initVerify(key)
     verifier.update(payload.toByteArray(Charsets.UTF_8))
-    require(verifier.verify(Base64.getDecoder().decode(signatureValue))) {
-      "Подпись манифеста обновления недействительна"
+    ensureUpdate(verifier.verify(Base64.getDecoder().decode(signatureValue)), UpdateErrorCode.SignatureInvalid) {
+      "Update manifest signature is invalid"
     }
   }
 
@@ -348,7 +364,7 @@ class UpdateClient(
     } catch (interrupted: InterruptedException) {
       pending.cancel(true)
       Thread.currentThread().interrupt()
-      throw CancellationException("Загрузка обновления отменена").also {
+      throw CancellationException("Update download cancelled").also {
         it.initCause(interrupted)
       }
     } catch (failed: ExecutionException) {
@@ -356,7 +372,7 @@ class UpdateClient(
       when (cause) {
         is RuntimeException -> throw cause
         is Error -> throw cause
-        else -> throw IllegalStateException(cause.message ?: "Не удалось загрузить обновление", cause)
+        else -> throw IllegalStateException(cause.message ?: "Update download failed", cause)
       }
     }
   }
@@ -378,7 +394,7 @@ class UpdateClient(
       if (count < 0) break
       throwIfCancelled(isCancelled)
       copied += count
-      require(copied <= maximum) { "Файл обновления больше заявленного размера" }
+      ensureUpdate(copied <= maximum, UpdateErrorCode.DownloadFailed) { "Update file is larger than declared" }
       output.write(buffer, 0, count)
       onProgress(copied, maximum)
     }
@@ -386,26 +402,24 @@ class UpdateClient(
 
   private fun throwIfCancelled(isCancelled: () -> Boolean) {
     if (isCancelled() || Thread.currentThread().isInterrupted) {
-      throw CancellationException("Загрузка обновления отменена")
+      throw CancellationException("Update download cancelled")
     }
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 312
-    const val CURRENT_VERSION_NAME = "0.3.12"
+    const val CURRENT_VERSION_CODE = 323
+    const val CURRENT_VERSION_NAME = "0.3.23"
     val CURRENT_RELEASE_NOTES = """
-      Исправлено и добавлено в 0.3.12
-      • Удалены встроенные профили доступа и старые автоматические подписки.
-      • Подписка и поддержка открываются только через официальный бот Veilark.
-      • Подменённые Telegram-ссылки и дополнительные параметры отклоняются.
-      • Подписки, маршруты и выбранные серверы сохраняются при обновлении поверх 0.3.x.
+      Обновлено в 0.3.23
+      • Ядро TrustTunnel обновлено до стабильной версии 1.1.7.
+      • Журнал различает ошибки запуска ядра, его завершение и тайм-аут подключения.
+      • Ссылки TrustTunnel скрываются в техническом журнале.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Fixed and added in 0.3.12
-      • Embedded access profiles and legacy automatic subscriptions were removed.
-      • Subscription and support open only through the official Veilark bot.
-      • Lookalike Telegram links and extra parameters are rejected.
-      • Subscriptions, routing and selected servers are preserved when updating over 0.3.x.
+      Updated in 0.3.23
+      • Updated TrustTunnel to stable version 1.1.7.
+      • Logs distinguish native launch failures, process exits and connection timeouts.
+      • TrustTunnel profile links are redacted from technical logs.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"
