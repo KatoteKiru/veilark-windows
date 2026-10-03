@@ -9,6 +9,7 @@ object SafeLog {
   private val secretPatterns = listOf(
     Regex("""(?i)(uuid|password|token|private_key|server_name)\s*[:=]\s*["']?[^"',\s]+"""),
     Regex("""(?i)(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls)://\S+"""),
+    Regex("""(?i)tt://\S+"""),
     Regex("""https://[^\s/?#]+/[^\s]+"""),
     Regex("""(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"""),
   )

@@ -63,5 +63,9 @@ $trustOutput = & (Join-Path $resources 'trusttunnel_client.exe') --version
 $trustExit = $LASTEXITCODE
 $trustOutput
 if ($trustExit -ne 0) { throw 'Packaged TrustTunnel client does not start' }
+$wizardOutput = & (Join-Path $resources 'setup_wizard.exe') --help
+$wizardExit = $LASTEXITCODE
+$wizardOutput | Select-Object -First 1
+if ($wizardExit -ne 0) { throw 'Packaged TrustTunnel setup wizard does not start' }
 
 Write-Host 'Packaged runtime resources verified.'

@@ -1,13 +1,15 @@
 param(
   [Parameter(Mandatory = $true)][string]$CandidateInstaller,
-  [ValidateSet('0.3.18', '0.3.19')][string]$PreviousVersion = '0.3.19'
+  [ValidateSet('0.3.18', '0.3.19', '0.3.22')][string]$PreviousVersion = '0.3.22'
 )
 
 $ErrorActionPreference = 'Stop'
 $previousUrl = "https://github.com/KatoteKiru/veilark-windows/releases/download/v$PreviousVersion/Veilark-$PreviousVersion.msi"
-$previousSha256 = if ($PreviousVersion -eq '0.3.19') {
-  '5FF4296D64F6280B2DEB56DEFCF44CCA0C15C51D5A94D33BBD6E7D558714C008'
-} else { '4CE9D422B879E2A3188E905DAB411C029A0FAF0BD8373EC4DB8C700003DC895D' }
+$previousSha256 = @{
+  '0.3.18' = '4CE9D422B879E2A3188E905DAB411C029A0FAF0BD8373EC4DB8C700003DC895D'
+  '0.3.19' = '5FF4296D64F6280B2DEB56DEFCF44CCA0C15C51D5A94D33BBD6E7D558714C008'
+  '0.3.22' = '4369BF5138561F9B8EA1BF2068FFDD8F1D8C4207E77F51E0677011A71B6C8139'
+}[$PreviousVersion]
 $candidate = (Resolve-Path -LiteralPath $CandidateInstaller).Path
 $testDirectory = Join-Path $env:RUNNER_TEMP 'veilark-upgrade-test'
 New-Item -ItemType Directory -Path $testDirectory -Force | Out-Null
@@ -57,6 +59,18 @@ $core = @($coreCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType L
 if ($core.Count -ne 1) { throw "Expected one installed sing-box core, found $($core.Count)" }
 & $core[0] version | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Installed sing-box core failed to start' }
+$trustCore = Join-Path $resources 'trusttunnel_client.exe'
+$wizard = Join-Path $resources 'setup_wizard.exe'
+if (-not (Test-Path -LiteralPath $trustCore -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $wizard -PathType Leaf)) {
+  throw 'Installed TrustTunnel runtime is incomplete'
+}
+$trustVersion = & $trustCore --version
+if ($LASTEXITCODE -ne 0 -or $trustVersion -notmatch '\b1\.1\.7\b') {
+  throw 'Installed TrustTunnel 1.1.7 failed version verification'
+}
+& $wizard --help | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Installed TrustTunnel wizard failed to start' }
 if (-not (Test-Path -LiteralPath $sentinel)) { throw 'Local application data was removed' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) {
   throw 'Local application data changed during upgrade'

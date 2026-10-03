@@ -66,14 +66,19 @@ class TrustTunnelProcessController(
       // Never run the legacy global WinTUN cleanup on this path.
 
       SafeLog.write("Запуск ${version(client)}")
-      val started = ProcessBuilder(
-        client.toString(),
-        "--config",
-        trustConfig.path.toString(),
-      )
-        .directory(client.parent.toFile())
-        .redirectErrorStream(true)
-        .start()
+      val started = NativeProcessDiagnostics.launch(
+        executable = NativeProcessDiagnostics.Executable.TRUSTTUNNEL_CLIENT,
+        stage = NativeProcessDiagnostics.Stage.CLIENT_START,
+      ) {
+        ProcessBuilder(
+          client.toString(),
+          "--config",
+          trustConfig.path.toString(),
+        )
+          .directory(client.parent.toFile())
+          .redirectErrorStream(true)
+          .start()
+      }
       synchronized(this@TrustTunnelProcessController) { process = started }
       // The core must not outlive Veilark (crash or forced exit).
       CoreProcessJob.assignToShared(started, "TrustTunnel")
@@ -157,20 +162,31 @@ class TrustTunnelProcessController(
     // then only the in-memory copy is validated and used.
     val settings = runtimeDirectory.resolve("trusttunnel-wizard-${UUID.randomUUID()}.toml")
     try {
-      val result = ProcessBuilder(
-        wizard.toString(),
-        "--mode",
-        "non-interactive",
-        option,
-        value,
-        "--settings",
-        settings.toString(),
-      )
-        .directory(wizard.parent.toFile())
-        .redirectErrorStream(true)
-        .start()
+      val result = NativeProcessDiagnostics.launch(
+        executable = NativeProcessDiagnostics.Executable.SETUP_WIZARD,
+        stage = NativeProcessDiagnostics.Stage.WIZARD_START,
+      ) {
+        ProcessBuilder(
+          wizard.toString(),
+          "--mode",
+          "non-interactive",
+          option,
+          value,
+          "--settings",
+          settings.toString(),
+        )
+          .directory(wizard.parent.toFile())
+          .redirectErrorStream(true)
+          .start()
+      }
         .captureCancellable(20_000)
       if (!result.succeeded) {
+        NativeProcessDiagnostics.recordExitFailure(
+          executable = NativeProcessDiagnostics.Executable.SETUP_WIZARD,
+          stage = NativeProcessDiagnostics.Stage.WIZARD_START,
+          exitCode = result.exitCode,
+          timedOut = result.timedOut,
+        )
         val reason = if (result.timedOut) "тайм-аут setup wizard" else {
           result.output.lineSequence().lastOrNull().orEmpty().take(220)
         }
@@ -196,10 +212,24 @@ class TrustTunnelProcessController(
   ): Path = RuntimeResourceLocator.requireFile(fileName, overridePath, environmentName)
 
   private fun version(client: Path): String = runCatching {
-    val result = ProcessBuilder(client.toString(), "--version")
-      .redirectErrorStream(true)
-      .start()
-      .capture(5_000)
-    result.output.lineSequence().firstOrNull()?.take(120) ?: "TrustTunnel"
+    val result = NativeProcessDiagnostics.launch(
+      executable = NativeProcessDiagnostics.Executable.TRUSTTUNNEL_CLIENT,
+      stage = NativeProcessDiagnostics.Stage.CLIENT_VERSION,
+    ) {
+      ProcessBuilder(client.toString(), "--version")
+        .redirectErrorStream(true)
+        .start()
+    }.capture(5_000)
+    if (!result.succeeded) {
+      NativeProcessDiagnostics.recordExitFailure(
+        executable = NativeProcessDiagnostics.Executable.TRUSTTUNNEL_CLIENT,
+        stage = NativeProcessDiagnostics.Stage.CLIENT_VERSION,
+        exitCode = result.exitCode,
+        timedOut = result.timedOut,
+      )
+      "TrustTunnel"
+    } else {
+      result.output.lineSequence().firstOrNull()?.take(120) ?: "TrustTunnel"
+    }
   }.getOrDefault("TrustTunnel")
 }

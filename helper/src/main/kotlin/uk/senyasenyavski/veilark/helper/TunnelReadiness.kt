@@ -40,8 +40,15 @@ internal object TunnelReadiness {
     val deadline = System.nanoTime() + timeoutMillis * 1_000_000L
     var lastCandidate: NetworkAdapter? = null
     while (System.nanoTime() < deadline) {
-      check(process.isAlive) {
-        "VPN-ядро завершилось до создания туннеля${logPump.reasonSuffix()}"
+      if (!process.isAlive) {
+        val exitCode = runCatching { process.exitValue() }.getOrNull()
+        throw VpnStartException(
+          code = VpnStatusCode.CORE_EXITED,
+          message = "VPN-ядро завершилось до создания туннеля, exit=" +
+            (exitCode?.let(NativeProcessDiagnostics::exitCodeHex) ?: "unknown") +
+            logPump.reasonSuffix(),
+          detail = matcher.label,
+        )
       }
       logPump.fatal?.let { error("Ядро сообщило об ошибке: $it") }
 

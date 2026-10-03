@@ -407,21 +407,19 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 322
-    const val CURRENT_VERSION_NAME = "0.3.22"
+    const val CURRENT_VERSION_CODE = 323
+    const val CURRENT_VERSION_NAME = "0.3.23"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.22
-      • Защищены временные файлы установщика и конфигурации ядер.
-      • Улучшены отмена обновлений и обработка ошибок RU/EN.
-      • Системное оформление Windows 11, память положения окна и горячие клавиши.
-      • Улучшена очистка процессов ядер после завершения приложения.
+      Обновлено в 0.3.23
+      • Ядро TrustTunnel обновлено до стабильной версии 1.1.7.
+      • Журнал различает ошибки запуска ядра, его завершение и тайм-аут подключения.
+      • Ссылки TrustTunnel скрываются в техническом журнале.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.22
-      • Protected temporary installer files and core configurations.
-      • Improved update cancellation and RU/EN error handling.
-      • Native Windows 11 chrome, remembered window placement and shortcuts.
-      • Improved core process cleanup when the application exits.
+      Updated in 0.3.23
+      • Updated TrustTunnel to stable version 1.1.7.
+      • Logs distinguish native launch failures, process exits and connection timeouts.
+      • TrustTunnel profile links are redacted from technical logs.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

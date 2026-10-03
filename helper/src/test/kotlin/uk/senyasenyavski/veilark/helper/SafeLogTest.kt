@@ -29,4 +29,14 @@ class SafeLogTest {
     assertFalse(result.contains("11111111-1111-1111-1111-111111111111"))
     assertFalse(result.contains("203.0.113.42"))
   }
+
+  @Test
+  fun `TrustTunnel deep links are redacted`() {
+    val link = "tt://user-secret@example.invalid?token=secret-value"
+
+    val result = SafeLog.redact("wizard rejected $link")
+
+    assertFalse(result.contains(link))
+    assertFalse(result.contains("secret-value"))
+  }
 }
