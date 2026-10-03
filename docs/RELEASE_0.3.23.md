@@ -11,7 +11,7 @@ the reported single-PC Trust failure.
 
 Local helper/shared/desktop tests and fresh packaged-resource smoke passed.
 Physical VPN and the affected PC have not been tested. CI package + in-place
-0.3.22 upgrade is required before OTA publication. No Authenticode certificate;
+0.3.22 upgrade passed before OTA publication. No Authenticode certificate;
 OTA authenticity remains protected by the existing Ed25519 trust key.
 
 Do not reuse this version identity for different public bytes. Publication must
