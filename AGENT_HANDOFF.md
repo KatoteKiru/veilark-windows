@@ -110,3 +110,6 @@ Latest owner decision supersedes that refinement: reject Android/Material visual
 world entirely; replace ALL Windows UI from scratch. Do not promote the prior
 card/tab candidate as an approved design. Direction/implementation gates are in
 docs/WINDOWS_INTERFACE_REBUILD_BRIEF.md; visual concept approval is pending.
+
+## TrustTunnel incident inspection 2026-10-08
+Read docs/TRUST_INCIDENT_CLIENT_2026-10-08.md. Packaged native1.1.7; matchingtag170609c24ca source stores bufferevent failure return-1 asWinsockerror, obscuring realcause. Windows DNS bootstrap candidate0.3.24/324 is now implemented locally; no native/OTA/liveVPN change. Read docs/RELEASE_0.3.24.md for bounds and publication gates. Hypothesis anti_dpi=false→prefixfailure rejected by working storedcustomer HTTPS; no policyflip. Original routingtests10pass. Existing ownerfilespreserved. Actual device outage remains unknown; root owns live transport/server diagnosis.
