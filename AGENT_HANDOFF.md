@@ -1,6 +1,10 @@
 # Veilark Windows current handoff
 
-## Current publication — 2026-10-04 (supersedes historical notes below)
+## Current publication — 2026-10-08 (supersedes historical notes below)
+
+Windows0.3.24/324 LIVE on GitHub/established signedOTA/catalog. Sourcefd316faf, PR3mergeda18db2df, CI37723300905 package+0.3.23upgrade PASS; full public EXE hash/size/manifest+notes signatures verified. TLS-preserving bounded endpointDNS bootstrap,266tests/4gatedskips. No activeVPN/endpoint/proxy restart. AuthenticodeNotSigned/unsigned_preview unchanged. Current evidence/backups docs/RELEASE_0.3.24.md. Actual evening DNS fault confirmed; remaining AndroidTelegram upload complaint under investigation, broadoutage not declaredclosed. Direct WiFiFI/DE TCP blockedWSA10013, systemrouteall3passes with existingNLWintun active; exactfilterowner notproven. Physical affectedPCacceptance pending.
+
+### Historical0.3.23 publication
 
 Windows 0.3.23 / OTA 323 is LIVE, TrustTunnel stable 1.1.7. Candidate bb534a7
 passed local 256 tests and CI 37154146869 package/0.3.22 upgrade checks.

@@ -1,4 +1,4 @@
-# Windows 0.3.24 / OTA324 — candidate, not published
+# Windows 0.3.24 / OTA324 — published 2026-10-08
 
 The actual October7 evening installed-app log records endpoint DNS lookup failure for NL twice, native startup exit1, established-session health timeouts, and later exhausted connection attempts. See TRUST_INCIDENT_CLIENT_2026-10-08.md for the sanitized timeline and the limits of attribution.
 
@@ -13,3 +13,11 @@ Cloudflare schema source: [official DNS JSON API](https://developers.cloudflare.
 Validation before version bump:266 JVM tests passed,0 failures/errors,4 gated skips across helper/shared/desktop. Ten new DNS bootstrap tests cover cache expiry/failure/capacity, endpoint preservation, total budget, malformed/reserved names, and DoH schema/TLS command construction. Real Windows curl request for public `cloudflare.com` through the exact pinned DoH route succeeded. This is DNS transport evidence, not physical affected-device VPN acceptance.
 
 Publication gates: fresh0.3.24 package identity; final CI tests/resource smoke; EXE/MSI package; in-place upgrade from published release preserving data/MSI identity; OTA wrapper verification; original Ed25519 signing lineage; verified rollback backup; complete public-payload hash/size check. Authenticode remains a separate gate; the historical release is unsigned and the publisher's explicit unsigned override may only accept a clean NotSigned installer. Never overwrite0.3.23/323 public bytes. Do not stop the owner's active VPN to test an installer.
+
+CI37723300905 passed all package/resource/native-startup/wrapper checks and the published0.3.23-to0.3.24 in-place upgrade. PR3 merged as a18db2df. GitHub v0.3.24 contains EXE and MSI, built from fd316faf. Existing signed OTA and the Windows application catalog now publish324. Full independent public EXE redownload verified SHA256/size and manifest/notes signatures with the original Ed25519 key.
+
+EXE130904064 bytes, SHA256848ce621434398b35b11ebb9fdc9473fdb014dc7592816ca02d30a6eaa7ad749.
+MSI130304395 bytes, SHA25690623d0a6b853f92263d9dd8021360ebc512a72f4e79dd89de14c000dfdf3f0b.
+OTA rollback /var/backups/veilark/windows/manifest-before-324-20261008T082859Z-7a304a2a.json; catalog backup /var/backups/veilark/catalog/windows-before-324-20261008T083041Z.json. Catalog promotion restarted no service. Authenticode remains NotSigned, truthful unsigned_preview catalog status retained. Installed affected-device VPN acceptance is still pending; the active owner VPN was not stopped or updated.
+
+Additional readonly TCP isolation: all three nodes connect through the system route. Direct Wi-Fi binding returns WSA10013 immediately for FI/DE, while NL succeeds, with the existing NL tunnel active. Thus the standalone native FI/DE probes are affected by local access restrictions and cannot establish a server outage. WFP filter enumeration requires administrator privileges and was unavailable; the exact filter owner is not yet proven. See C:/AI-Agent/reports/trust-windows-tcp-path-20261008.json.
