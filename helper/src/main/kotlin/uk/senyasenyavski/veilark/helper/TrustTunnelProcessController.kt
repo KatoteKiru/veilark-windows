@@ -21,6 +21,7 @@ class TrustTunnelProcessController(
   override val engine: VpnEngine = VpnEngine.TrustTunnel
   private var process: Process? = null
   private val stopMutex = Mutex()
+  private val endpointBootstrap = TrustEndpointBootstrap()
 
   @Volatile
   private var readyTunnel: ReadyTunnel? = null
@@ -53,11 +54,12 @@ class TrustTunnelProcessController(
     // file, so what the client reads is exactly what was validated.
     val compiled = compileConfig(profile.config, wizard)
     TrustTunnelRouting.validateNativeConfigContract(compiled)
+    val bootstrapped = endpointBootstrap.prepare(compiled)
     val trustConfig = LockedConfigFile.create(
       directory = runtimeDirectory,
       prefix = "trusttunnel-",
       suffix = ".toml",
-      content = TrustTunnelRouting.apply(compiled, routingPlan),
+      content = TrustTunnelRouting.apply(bootstrapped, routingPlan),
     )
     try {
       CoreProcessJanitor.terminateOrphans(client)

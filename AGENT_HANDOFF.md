@@ -1,5 +1,32 @@
 # Veilark Windows current handoff
 
+## Current publication — 2026-10-04 (supersedes historical notes below)
+
+Windows 0.3.23 / OTA 323 is LIVE, TrustTunnel stable 1.1.7. Candidate bb534a7
+passed local 256 tests and CI 37154146869 package/0.3.22 upgrade checks.
+PR #2 merged; GitHub v0.3.23 is a normal release with EXE/MSI uploaded.
+Original OTA key/MSI identity retained. Full public payload hash and manifest/notes
+signatures verified. Bot/Mini App catalog updated atomically without restart.
+Exact evidence/rollback/limits: docs/RELEASE_0.3.23.md.
+Affected-PC cause remains UNKNOWN; physical VPN acceptance and Authenticode remain
+open. Local Defender is inactive: do not claim antivirus acceptance.
+Cross-platform next action: finish Android native 1.1.7 build in isolated
+C:/AI-Agent/veilark-android-trust117; never publish the Core-lab Android branch.
+User files docs/RELEASE_0.3.21.md and ui-research/ remain preserved.
+
+The sections below are historical context, not current publication status.
+
+## Stability audit 2026-10-03 — local source only
+
+Report: `C:/AI-Agent/reports/ECOSYSTEM_STABILITY_2026-10-03.md`.
+NativeProcessDiagnostics distinguishes startup stage/Win32/exit code without
+argv/config values; early readiness exit reports CORE_EXITED; SafeLog masks tt://.
+Package smoke now probes setup_wizard --help. Local fresh app-image smoke passed.
+Do NOT publish current 0.3.22 local bytes under the existing version; new candidate
+needs new identity/upgrade acceptance. Affected-PC cause is still unknown, awaiting
+redacted log/UAC/architecture. Production, owner VPN and OTA were not changed.
+User's untracked `docs/RELEASE_0.3.21.md` and `ui-research/` preserved.
+
 ## Published 2026-10-01 — supersedes prior status
 
 Windows 0.3.22 / 322 is live on existing OTA, source `05b3c5c` from Claude
@@ -83,3 +110,6 @@ Latest owner decision supersedes that refinement: reject Android/Material visual
 world entirely; replace ALL Windows UI from scratch. Do not promote the prior
 card/tab candidate as an approved design. Direction/implementation gates are in
 docs/WINDOWS_INTERFACE_REBUILD_BRIEF.md; visual concept approval is pending.
+
+## TrustTunnel incident inspection 2026-10-08
+Read docs/TRUST_INCIDENT_CLIENT_2026-10-08.md. Packaged native1.1.7; matchingtag170609c24ca source stores bufferevent failure return-1 asWinsockerror, obscuring realcause. Windows DNS bootstrap candidate0.3.24/324 is now implemented locally; no native/OTA/liveVPN change. Read docs/RELEASE_0.3.24.md for bounds and publication gates. Hypothesis anti_dpi=false→prefixfailure rejected by working storedcustomer HTTPS; no policyflip. Original routingtests10pass. Existing ownerfilespreserved. Actual device outage remains unknown; root owns live transport/server diagnosis.

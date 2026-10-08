@@ -407,19 +407,15 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 323
-    const val CURRENT_VERSION_NAME = "0.3.23"
+    const val CURRENT_VERSION_CODE = 324
+    const val CURRENT_VERSION_NAME = "0.3.24"
     val CURRENT_RELEASE_NOTES = """
-      Обновлено в 0.3.23
-      • Ядро TrustTunnel обновлено до стабильной версии 1.1.7.
-      • Журнал различает ошибки запуска ядра, его завершение и тайм-аут подключения.
-      • Ссылки TrustTunnel скрываются в техническом журнале.
+      Обновлено в 0.3.24
+      • Улучшено подключение TrustTunnel при временном отказе системного DNS.
     """.trimIndent()
     val CURRENT_RELEASE_NOTES_EN = """
-      Updated in 0.3.23
-      • Updated TrustTunnel to stable version 1.1.7.
-      • Logs distinguish native launch failures, process exits and connection timeouts.
-      • TrustTunnel profile links are redacted from technical logs.
+      Updated in 0.3.24
+      • Improved TrustTunnel startup when the system DNS resolver temporarily fails.
     """.trimIndent()
     const val DEFAULT_MANIFEST_URL =
       "https://nl2.senyasenyavski.uk:2096/veilark/windows/manifest.json"

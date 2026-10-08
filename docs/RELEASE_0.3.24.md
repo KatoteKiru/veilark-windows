@@ -1,0 +1,15 @@
+# Windows 0.3.24 / OTA324 — candidate, not published
+
+The actual October7 evening installed-app log records endpoint DNS lookup failure for NL twice, native startup exit1, established-session health timeouts, and later exhausted connection attempts. See TRUST_INCIDENT_CLIENT_2026-10-08.md for the sanitized timeline and the limits of attribution.
+
+This candidate resolves endpoint domain addresses before native startup under a shared three-second lookup budget. It tries system DNS first (one-second wait, two daemon workers, no queue). If public-name resolution fails, Windows curl/Schannel requests Cloudflare's DNS-over-HTTPS JSON API through a pinned connection address while retaining ordinary TLS certificate verification. The DNS request contains only the endpoint hostname, no client configuration or credentials. Reserved/private names are excluded from external fallback.
+
+Resolved numeric addresses replace only the endpoint address array. Endpoint hostname/SNI, TLS verification, credentials, upstream transport, ClientRandom and anti-DPI settings are retained. Positive answers are cached in memory, at most128 hosts; OS answers use a conservative30-second cache, DoH answers respect the minimum relevant CNAME/A TTL capped at five minutes. At most8 answers per hostname are accepted. Unknown complex TOML, literal addresses and relay syntax remain native-owned; complete lookup failure preserves the original native configuration.
+
+The three-second budget limits DNS future waiting and curl waiting across addresses. Operating-system process creation/scheduling and temporary-file cleanup cannot be given a strict wall-clock guarantee. No unbounded OS lookup queue is created, and stale cache entries never bypass native TLS authentication. Cache entries contain only names/addresses, not passwords or tokens.
+
+Cloudflare schema source: [official DNS JSON API](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/). Status/question/truncation checks, numeric A data, related CNAME owners and TTLs are validated. Unsupported/changed responses fall back to the original native behavior.
+
+Validation before version bump:266 JVM tests passed,0 failures/errors,4 gated skips across helper/shared/desktop. Ten new DNS bootstrap tests cover cache expiry/failure/capacity, endpoint preservation, total budget, malformed/reserved names, and DoH schema/TLS command construction. Real Windows curl request for public `cloudflare.com` through the exact pinned DoH route succeeded. This is DNS transport evidence, not physical affected-device VPN acceptance.
+
+Publication gates: fresh0.3.24 package identity; final CI tests/resource smoke; EXE/MSI package; in-place upgrade from published release preserving data/MSI identity; OTA wrapper verification; original Ed25519 signing lineage; verified rollback backup; complete public-payload hash/size check. Authenticode remains a separate gate; the historical release is unsigned and the publisher's explicit unsigned override may only accept a clean NotSigned installer. Never overwrite0.3.23/323 public bytes. Do not stop the owner's active VPN to test an installer.
