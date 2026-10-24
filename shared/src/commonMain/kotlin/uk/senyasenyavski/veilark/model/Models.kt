@@ -127,7 +127,37 @@ sealed interface ImportResult {
     constructor(profile: Profile, rejectedProfiles: Int) :
       this(listOf(profile), rejectedProfiles)
   }
-  data class Failure(val safeMessage: String) : ImportResult
+  /**
+   * [code] selects the localized UI text. [detail] is a non-translatable
+   * parameter (an HTTP status) or, for [ImportErrorCode.Unsupported] and
+   * [ImportErrorCode.Failed], the importer's technical Russian description.
+   */
+  data class Failure(
+    val code: ImportErrorCode,
+    val detail: String = "",
+  ) : ImportResult
+}
+
+/** Stable, language-independent reasons an import can fail. */
+enum class ImportErrorCode {
+  TooLarge,
+  HttpsRequired,
+  InvalidAddress,
+  Unauthorized,
+  Forbidden,
+  NotFound,
+  DeviceLimit,
+  Gone,
+  NotReady,
+  RateLimited,
+  HttpStatus,
+  TooManyRedirects,
+  Network,
+  Empty,
+  WebPage,
+  NoText,
+  Unsupported,
+  Failed,
 }
 
 /** Byte counters of the active tunnel adapter, as reported by Windows. */

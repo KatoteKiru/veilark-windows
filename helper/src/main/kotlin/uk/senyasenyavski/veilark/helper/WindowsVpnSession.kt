@@ -314,14 +314,32 @@ class WindowsVpnSession(
     }
   }
 
+  /**
+   * The dead core still owns its adapter registration, readiness state and geo
+   * lease. They are released through the normal stop path, registered as the
+   * pending teardown so that connect() waits for it instead of starting the
+   * same controller while it is being stopped.
+   */
   private suspend fun reportCoreExit(controller: EngineController) = mutex.withLock {
     if (activeController !== controller) return@withLock
     val phase = mutableState.value.phase
     if (phase !is VpnPhase.Connected && phase !is VpnPhase.Degraded) return@withLock
-    activeController = null
-    activeGeoLease?.close()
-    activeGeoLease = null
     logger("${controller.engine.displayName()} неожиданно завершился")
+    scope.launch {
+      withContext(NonCancellable) {
+        stopOwnedController(controller)
+          .onFailure { logger("Ошибка очистки после завершения ядра: ${it.message}") }
+      }
+    }.also { teardown ->
+      pendingTeardownJob = teardown
+      teardown.invokeOnCompletion {
+        scope.launch {
+          mutex.withLock {
+            if (pendingTeardownJob === teardown) pendingTeardownJob = null
+          }
+        }
+      }
+    }
     publish(
       mutableState.value.copy(
         phase = VpnPhase.Error(

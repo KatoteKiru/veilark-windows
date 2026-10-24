@@ -17,6 +17,7 @@ import java.nio.file.attribute.FileTime
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.Signature
+import java.security.SignatureException
 import java.security.spec.X509EncodedKeySpec
 import java.time.Duration
 import java.util.Base64
@@ -313,7 +314,16 @@ class UpdateClient(
     val verifier = Signature.getInstance("Ed25519")
     verifier.initVerify(key)
     verifier.update(payload.toByteArray(Charsets.UTF_8))
-    ensureUpdate(verifier.verify(Base64.getDecoder().decode(signatureValue)), UpdateErrorCode.SignatureInvalid) {
+    // A malformed signature is an invalid one: never let it surface as a
+    // generic parse error or skip verification.
+    val verified = try {
+      verifier.verify(Base64.getDecoder().decode(signatureValue))
+    } catch (_: IllegalArgumentException) {
+      false
+    } catch (_: SignatureException) {
+      false
+    }
+    ensureUpdate(verified, UpdateErrorCode.SignatureInvalid) {
       "Update manifest signature is invalid"
     }
   }

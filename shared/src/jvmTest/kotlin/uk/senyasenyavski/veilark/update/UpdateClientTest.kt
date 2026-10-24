@@ -272,6 +272,10 @@ class UpdateClientTest {
       )
     }
     assertEquals(UpdateErrorCode.UntrustedAddress, foreign.error.code)
+    val notBase64 = assertFailsWith<UpdateException> {
+      client.parseAndVerify(JSONObject(signed.toString()).put("signature", "not base64!").toString())
+    }
+    assertEquals(UpdateErrorCode.SignatureInvalid, notBase64.error.code)
     val malformed = runCatching { client.parseAndVerify("{") }.exceptionOrNull()!!
     assertEquals(UpdateErrorCode.ManifestInvalid, malformed.toUpdateError(UpdateErrorCode.CheckFailed).code)
   }

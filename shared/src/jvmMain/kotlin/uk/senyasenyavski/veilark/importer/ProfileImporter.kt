@@ -2,16 +2,29 @@ package uk.senyasenyavski.veilark.importer
 
 import com.example.veilark.profile.SubscriptionParser
 import com.example.veilark.profile.SubscriptionFetcher
+import uk.senyasenyavski.veilark.model.ImportErrorCode
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.update.UpdateClient
+import java.io.IOException
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+
+/**
+ * An import failure with a known cause. [message] is technical journal text;
+ * the UI renders [code], with [detail] as an untranslated parameter.
+ */
+internal class ImportException(
+  val code: ImportErrorCode,
+  message: String,
+  val detail: String = "",
+  cause: Throwable? = null,
+) : IllegalStateException(message, cause)
 
 class ProfileImporter(
   private val parser: SubscriptionParser = SubscriptionParser(),
@@ -21,19 +34,25 @@ class ProfileImporter(
     compile(text.toByteArray(Charsets.UTF_8), sourceLabel)
 
   fun fromFile(path: Path): ImportResult = runCatching {
-    require(Files.size(path) <= MAX_BYTES) { "Файл профиля больше 4 МБ" }
+    if (Files.size(path) > MAX_BYTES) {
+      throw ImportException(ImportErrorCode.TooLarge, "Файл профиля больше 4 МБ")
+    }
     compile(Files.readAllBytes(path), path.fileName.toString())
-  }.getOrElse { ImportResult.Failure(it.safeMessage()) }
+  }.getOrElse(::failure)
 
   fun fromHttps(url: String): ImportResult = runCatching {
-    val uri = URI(url.trim())
-    require(uri.scheme.equals("https", ignoreCase = true)) {
-      "Подписка должна использовать HTTPS"
+    val uri = runCatching { URI(url.trim()) }.getOrElse {
+      throw ImportException(ImportErrorCode.InvalidAddress, "Адрес подписки некорректен", cause = it)
     }
-    require(!uri.host.isNullOrBlank()) { "В ссылке подписки нет адреса сервера" }
+    if (!uri.scheme.equals("https", ignoreCase = true)) {
+      throw ImportException(ImportErrorCode.HttpsRequired, "Подписка должна использовать HTTPS")
+    }
+    if (uri.host.isNullOrBlank()) {
+      throw ImportException(ImportErrorCode.InvalidAddress, "В ссылке подписки нет адреса сервера")
+    }
     val body = fetchSubscription(uri.toString())
     compile(body, uri.host, uri.toString())
-  }.getOrElse { ImportResult.Failure(it.safeMessage()) }
+  }.getOrElse(::failure)
 
   private fun compile(
     bytes: ByteArray,
@@ -77,7 +96,7 @@ class ProfileImporter(
       }
     }
     ImportResult.Success(profiles, result.rejectedCount)
-  }.getOrElse { ImportResult.Failure(it.safeMessage()) }
+  }.getOrElse(::failure)
 
   private fun trustTunnelProfile(
     configs: List<String>,
@@ -165,8 +184,18 @@ class ProfileImporter(
       "SFA/$SING_BOX_COMPAT_VERSION Veilark/${UpdateClient.CURRENT_VERSION_NAME}"
   }
 
-  private fun Throwable.safeMessage(): String = when (this) {
-    is IllegalArgumentException -> message ?: "Профиль не поддерживается"
-    else -> "Не удалось импортировать профиль: ${message ?: javaClass.simpleName}"
+  /**
+   * Parser messages are Russian descriptions of what was rejected; they are
+   * passed as [ImportResult.Failure.detail] for the Russian UI only.
+   */
+  private fun failure(error: Throwable): ImportResult.Failure = when (error) {
+    is ImportException -> ImportResult.Failure(error.code, error.detail)
+    is IOException -> ImportResult.Failure(ImportErrorCode.Network)
+    is IllegalArgumentException, is IllegalStateException ->
+      ImportResult.Failure(ImportErrorCode.Unsupported, error.message.orEmpty())
+    else -> ImportResult.Failure(
+      ImportErrorCode.Failed,
+      "Не удалось импортировать профиль: ${error.message ?: error.javaClass.simpleName}",
+    )
   }
 }

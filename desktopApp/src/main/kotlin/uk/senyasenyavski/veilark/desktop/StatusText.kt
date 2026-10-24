@@ -1,7 +1,10 @@
 package uk.senyasenyavski.veilark.desktop
 
+import uk.senyasenyavski.veilark.helper.GeoRoutingUnavailableException
 import uk.senyasenyavski.veilark.helper.UpdateInstallOutcome
 import uk.senyasenyavski.veilark.helper.UpdateInstallPhase
+import uk.senyasenyavski.veilark.model.ImportErrorCode
+import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.VpnPhase
 import uk.senyasenyavski.veilark.model.VpnStatusCode
 import uk.senyasenyavski.veilark.update.UpdateError
@@ -153,6 +156,113 @@ private fun technicalFallback(
     normalized.isBlank() || normalized.length > 180 || lower.contains("exception") ||
     lower.contains("javax.") || lower.contains("java.") || lower.contains("sun.")
   ) fallback else normalized
+}
+
+/**
+ * Snackbar text for an exception from the helper or profile code. Their
+ * messages are Russian, so they are shown only in the Russian UI.
+ */
+internal fun failureText(
+  error: Throwable,
+  russian: String,
+  english: String,
+  language: UiLanguage,
+): String = when {
+  error is GeoRoutingUnavailableException && error.refreshFailed -> language.text(
+    "Не удалось обновить геоданные. Предыдущая проверенная версия сохранена.",
+    "Could not update geo data. The previous verified version was kept.",
+  )
+  error is GeoRoutingUnavailableException -> language.text(
+    "Геоданные маршрутизации не готовы. Обновите их и повторите подключение.",
+    "Routing geo data is not ready. Update it and connect again.",
+  )
+  language == UiLanguage.Russian -> error.message?.takeIf(String::isNotBlank) ?: russian
+  else -> english
+}
+
+/**
+ * Localized text for a failed import. For parser rejections the importer's
+ * Russian description is more specific than any generic text, so the Russian
+ * UI keeps it.
+ */
+internal fun importFailureText(failure: ImportResult.Failure, language: UiLanguage): String {
+  val status = failure.detail
+  return when (failure.code) {
+    ImportErrorCode.TooLarge -> language.text(
+      "Профиль больше 4 МБ",
+      "The profile is larger than 4 MB",
+    )
+    ImportErrorCode.HttpsRequired -> language.text(
+      "Подписка должна использовать HTTPS",
+      "The subscription must use HTTPS",
+    )
+    ImportErrorCode.InvalidAddress -> language.text(
+      "Адрес подписки некорректен",
+      "The subscription address is invalid",
+    )
+    ImportErrorCode.Unauthorized -> language.text(
+      "Сервер подписки требует авторизацию (HTTP 401)",
+      "The subscription server requires authorization (HTTP 401)",
+    )
+    ImportErrorCode.Forbidden -> language.text(
+      "Доступ к подписке запрещён или исчерпан лимит устройств (HTTP 403)",
+      "Access to the subscription is denied or the device limit is reached (HTTP 403)",
+    )
+    ImportErrorCode.NotFound -> language.text(
+      "Ссылка подписки не найдена или устарела (HTTP 404)",
+      "The subscription link was not found or has expired (HTTP 404)",
+    )
+    ImportErrorCode.DeviceLimit -> language.text(
+      "Лимит устройств подписки исчерпан (HTTP 409)",
+      "The subscription device limit is reached (HTTP 409)",
+    )
+    ImportErrorCode.Gone -> language.text(
+      "Подписка удалена или истекла (HTTP 410)",
+      "The subscription was deleted or has expired (HTTP 410)",
+    )
+    ImportErrorCode.NotReady -> language.text(
+      "Подписка ещё подготавливается. Повторите обновление немного позже (HTTP 503)",
+      "The subscription is still being prepared. Refresh again a little later (HTTP 503)",
+    )
+    ImportErrorCode.RateLimited -> language.text(
+      "Слишком много запросов к подписке (HTTP 429)",
+      "Too many requests to the subscription (HTTP 429)",
+    )
+    ImportErrorCode.HttpStatus -> language.text(
+      "Сервер подписки ответил HTTP $status",
+      "The subscription server returned HTTP $status",
+    )
+    ImportErrorCode.TooManyRedirects -> language.text(
+      "Слишком много перенаправлений",
+      "Too many redirects",
+    )
+    ImportErrorCode.Network -> language.text(
+      "Не удалось загрузить подписку. Проверьте подключение к интернету.",
+      "Could not download the subscription. Check your internet connection.",
+    )
+    ImportErrorCode.Empty -> language.text(
+      "Сервер вернул пустую подписку",
+      "The server returned an empty subscription",
+    )
+    ImportErrorCode.WebPage -> language.text(
+      "Сервер вернул веб-страницу вместо подписки",
+      "The server returned a web page instead of a subscription",
+    )
+    ImportErrorCode.NoText -> language.text(
+      "В буфере обмена нет текстового профиля",
+      "The clipboard contains no text profile",
+    )
+    ImportErrorCode.Unsupported -> if (language == UiLanguage.Russian && failure.detail.isNotBlank()) {
+      failure.detail
+    } else {
+      language.text("Профиль не поддерживается", "The profile is not supported")
+    }
+    ImportErrorCode.Failed -> if (language == UiLanguage.Russian && failure.detail.isNotBlank()) {
+      failure.detail
+    } else {
+      language.text("Не удалось импортировать профиль", "Could not import the profile")
+    }
+  }
 }
 
 /** Localized text for an OTA failure reported by [UpdateError]. */

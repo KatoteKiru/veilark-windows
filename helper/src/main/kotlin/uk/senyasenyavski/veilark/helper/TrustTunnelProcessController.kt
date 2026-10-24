@@ -30,6 +30,8 @@ class TrustTunnelProcessController(
     require(profile.engine == engine) { "Профиль предназначен для другого ядра" }
     synchronized(this@TrustTunnelProcessController) {
       check(process?.isAlive != true) { "TrustTunnel уже запущен" }
+      // Never report the adapter of a previous run that exited on its own.
+      readyTunnel = null
     }
     val client = resolveBinary(
       overridePath = clientOverride,
