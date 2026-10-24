@@ -150,6 +150,11 @@ class WindowsVpnSessionTest {
         assertEquals("CORE_EXITED", error.code)
         assertTrue(error.message.contains(engine.displayName))
         assertNull(session.state.value.traffic)
+        // The dead core is still stopped so its adapter and lease are released.
+        withTimeout(2_000) {
+          while (controller.stopCalls.get() == 0) delay(10)
+        }
+        assertEquals(1, controller.stopCalls.get())
       }
     }
   }

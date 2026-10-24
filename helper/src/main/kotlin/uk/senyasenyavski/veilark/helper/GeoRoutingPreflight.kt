@@ -16,9 +16,15 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.UUID
 
-/** Safe, user-facing failure. It deliberately contains no process output or URL. */
-class GeoRoutingUnavailableException internal constructor(message: String) :
-  IllegalStateException(message)
+/**
+ * Safe failure. It deliberately contains no process output or URL; [message]
+ * is journal text and the UI renders [refreshFailed].
+ */
+class GeoRoutingUnavailableException internal constructor(
+  message: String,
+  /** `true` when an explicit refresh failed; `false` when no valid data is ready for connecting. */
+  val refreshFailed: Boolean = false,
+) : IllegalStateException(message)
 
 /**
  * The installer ships a hash-pinned RU rule-set snapshot. Connections always
@@ -37,20 +43,24 @@ class GeoRoutingPreflight(
     bundledDirectory = resolveBundledDirectory(bundledDirectoryOverride),
   )
 
-  suspend fun refresh(): GeoRoutingAssets = safely(UPDATE_ERROR) { cache.refresh() }
+  suspend fun refresh(): GeoRoutingAssets = safely(UPDATE_ERROR, refreshFailed = true) { cache.refresh() }
 
   suspend fun requirePrepared(routing: RoutingSettings): GeoRoutingAssets? {
     if (!routing.mode.requiresGeoData) return null
     return safely(MISSING_ERROR) { cache.loadValidOrSeed() }
   }
 
-  private suspend fun <T> safely(message: String, action: suspend () -> T): T = try {
+  private suspend fun <T> safely(
+    message: String,
+    refreshFailed: Boolean = false,
+    action: suspend () -> T,
+  ): T = try {
     action()
   } catch (cancellation: CancellationException) {
     throw cancellation
   } catch (_: Throwable) {
     SafeLog.write("Геоданные маршрутизации не прошли локальную проверку")
-    throw GeoRoutingUnavailableException(message)
+    throw GeoRoutingUnavailableException(message, refreshFailed)
   }
 
   private companion object {

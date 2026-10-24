@@ -27,6 +27,8 @@ class SingBoxProcessController(
     require(profile.engine == engine) { "Профиль предназначен для другого ядра" }
     synchronized(this@SingBoxProcessController) {
       check(process?.isAlive != true) { "VPN уже запущен" }
+      // Never report the adapter of a previous run that exited on its own.
+      readyTunnel = null
     }
     val executable = resolveExecutable()
     // Readiness depends on the INFO startup marker. Imported/stored profiles
