@@ -7,16 +7,21 @@ import java.time.Instant
 
 object SafeLog {
   private val secretPatterns = listOf(
-    Regex("""(?i)(uuid|password|token|private_key|server_name)\s*[:=]\s*["']?[^"',\s]+"""),
+    // Covers TOML/query `key = value` as well as JSON `"key": "value"`.
+    Regex("""(?i)(uuid|password|token|private_key|pre_shared_key|short_id|server_name)["']?\s*[:=]\s*["']?[^"',\s]+"""),
     Regex("""(?i)(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls)://\S+"""),
     Regex("""(?i)tt://\S+"""),
     Regex("""https://[^\s/?#]+/[^\s]+"""),
     Regex("""(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"""),
   )
 
+  /**
+   * Never throws: the journal is diagnostics only, and a full disk or a locked
+   * log file must not abort a core start or, worse, a core stop.
+   */
   @Synchronized
   fun write(message: String) {
-    writeTo(VeilarkPaths.logFile, message)
+    runCatching { writeTo(VeilarkPaths.logFile, message) }
   }
 
   @Synchronized
@@ -38,7 +43,7 @@ object SafeLog {
         append(')')
       }
     }
-    writeTo(VeilarkPaths.logFile, summary)
+    runCatching { writeTo(VeilarkPaths.logFile, summary) }
   }
 
   internal fun writeTo(path: java.nio.file.Path, message: String) {

@@ -204,7 +204,7 @@ private class DesktopActions {
   var disconnect: () -> Unit = {}
   var importFile: (NioPath) -> Unit = {}
   var navigate: (Destination) -> Unit = {}
-  var hasProfile: Boolean = false
+  var hasProfile by mutableStateOf(false)
 }
 
 private val InitialWindowWidth = 520.dp
@@ -396,7 +396,9 @@ private fun runVeilark(args: Array<String>) {
           else -> language.text("Подключить", "Connect")
         },
         enabled = !stopping && (connected || connecting || stopRequired || actions.hasProfile),
-        onClick = if (connected || connecting || stopRequired) actions.disconnect else actions.connect,
+        // Resolved at click time: VeilarkApp installs the real handlers after
+        // the tray menu has already been composed.
+        onClick = { if (connected || connecting || stopRequired) actions.disconnect() else actions.connect() },
       )
       Item(language.text("Открыть Veilark", "Open Veilark"), onClick = openWindow)
       Separator()
@@ -554,7 +556,6 @@ private fun VeilarkApp(
   val scope = rememberCoroutineScope()
   val preparation = remember(scope) { ConnectionPreparation(scope) }
   val preparing by preparation.busy.collectAsState()
-  desktopActions.preparing = preparing
   val importer = remember { ProfileImporter() }
   val profileStore = remember { ProfileStore() }
   val geoPreflight = remember { lazy(LazyThreadSafetyMode.NONE) { GeoRoutingPreflight() } }
@@ -720,12 +721,19 @@ private fun VeilarkApp(
     }
     if (!elevationManager.isElevated()) {
       scope.launch {
-        withContext(Dispatchers.IO) {
-          profileStore.save(
-            currentStored(),
-          )
+        // The elevated instance connects with whatever this store holds, so a
+        // failed save must not hand it a stale selection.
+        val saved = runCatching {
+          withContext(Dispatchers.IO) { profileStore.save(currentStored()) }
         }
-        if (elevationManager.relaunch(listOf("--connect"))) {
+        if (saved.isFailure) {
+          snackbar.showSnackbar(
+            language.text(
+              "Не удалось сохранить выбор перед перезапуском с правами администратора",
+              "Could not save the selection before restarting as administrator",
+            ),
+          )
+        } else if (elevationManager.relaunch(listOf("--connect"))) {
           onExit()
         } else {
           snackbar.showSnackbar(
@@ -1024,6 +1032,7 @@ private fun VeilarkApp(
   }
 
   SideEffect {
+    desktopActions.preparing = preparing
     desktopActions.connect = ::connect
     desktopActions.disconnect = ::disconnect
     desktopActions.hasProfile = profile != null
@@ -1187,7 +1196,7 @@ private fun VeilarkApp(
                 scope.launch { snackbar.showSnackbar(language.text("Сначала остановите VPN", "Stop VPN first")) }
                 return@ProfilesScreen
               }
-              chooseProfileFile()?.let { path ->
+              chooseProfileFile(language)?.let { path ->
                 importing = true
                 scope.launch {
                   val result = withContext(Dispatchers.IO) { importer.fromFile(path) }
@@ -1217,7 +1226,10 @@ private fun VeilarkApp(
                       direct.domains.isNotEmpty() || direct.networks.isNotEmpty() ||
                         viaVpn.domains.isNotEmpty() || viaVpn.networks.isNotEmpty(),
                     ) {
-                      "Добавьте хотя бы один домен или IP-диапазон"
+                      language.text(
+                        "Добавьте хотя бы один домен или IP-диапазон",
+                        "Add at least one domain or IP range",
+                      )
                     }
                   }
                 }
@@ -1610,20 +1622,18 @@ internal fun CompactConnectionWorkspace(
         Icon(Icons.Rounded.Add, null, Modifier.size(17.dp))
         Text(language.text("Добавить", "Add"), Modifier.padding(start = 5.dp))
       }
-      if (profile != null) {
-        TextButton(
-          onClick = onRefresh,
-          enabled = !configurationLocked && !refreshing && profile.sourceUrl != null,
-        ) {
-          if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-          else Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
-          Text(language.text("Обновить", "Refresh"), Modifier.padding(start = 5.dp))
-        }
-        TextButton(onClick = onProbe, enabled = !configurationLocked && !probing) {
-          if (probing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-          else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
-          Text(language.text("Пинг", "Ping"), Modifier.padding(start = 5.dp))
-        }
+      TextButton(
+        onClick = onRefresh,
+        enabled = !configurationLocked && !refreshing && profile.sourceUrl != null,
+      ) {
+        if (refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        else Icon(Icons.Rounded.Sync, null, Modifier.size(17.dp))
+        Text(language.text("Обновить", "Refresh"), Modifier.padding(start = 5.dp))
+      }
+      TextButton(onClick = onProbe, enabled = !configurationLocked && !probing) {
+        if (probing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        else Icon(Icons.Rounded.Speed, null, Modifier.size(17.dp))
+        Text(language.text("Пинг", "Ping"), Modifier.padding(start = 5.dp))
       }
     }
 
@@ -2323,8 +2333,8 @@ private fun CompactTrafficEvidence(
   }
   Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
     Text(
-      "${traffic?.let { formatBytes(it.bytesIn) } ?: "—"} / " +
-        (traffic?.let { formatBytes(it.bytesOut) } ?: "—"),
+      "${traffic?.let { formatBytes(it.bytesIn, language) } ?: "—"} / " +
+        (traffic?.let { formatBytes(it.bytesOut, language) } ?: "—"),
       style = MaterialTheme.typography.titleMedium,
       fontWeight = FontWeight.SemiBold,
     )
@@ -2369,9 +2379,9 @@ private fun ElevationNotice(modifier: Modifier = Modifier) {
   }
 }
 
-private fun formatBytes(value: Long): String {
-  if (value < 1_024) return "$value Б"
-  val units = listOf("КБ", "МБ", "ГБ", "ТБ")
+private fun formatBytes(value: Long, language: UiLanguage): String {
+  if (value < 1_024) return "$value ${language.text("Б", "B")}"
+  val units = language.text("КБ МБ ГБ ТБ", "KB MB GB TB").split(' ')
   var amount = value.toDouble() / 1_024
   var unit = 0
   while (amount >= 1_024 && unit < units.lastIndex) {
@@ -3667,7 +3677,13 @@ private fun LogsScreen() {
   var log by remember { mutableStateOf(readLog()) }
   val verticalScroll = rememberScrollState(initial = Int.MAX_VALUE)
   val horizontalScroll = rememberScrollState()
-  val visibleLog = log.ifBlank { language.text("Ошибок и сетевых событий пока нет", "No errors or network events yet") }
+  val visibleLog = log.let { current ->
+    when {
+      current == null -> language.text("Не удалось прочитать журнал", "Could not read the log")
+      current.isBlank() -> language.text("Ошибок и сетевых событий пока нет", "No errors or network events yet")
+      else -> current
+    }
+  }
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Column(
       modifier = Modifier.fillMaxSize().widthIn(max = 720.dp)
@@ -3681,7 +3697,7 @@ private fun LogsScreen() {
             IconButton(
               onClick = {
                 Toolkit.getDefaultToolkit().systemClipboard
-                  .setContents(StringSelection(log), null)
+                  .setContents(StringSelection(log.orEmpty()), null)
               },
             ) {
               Icon(
@@ -3834,22 +3850,25 @@ private fun ImportDialog(
   )
 }
 
-private fun chooseProfileFile(): NioPath? {
-  val dialog = FileDialog(null as Frame?, "Выберите профиль", FileDialog.LOAD).apply {
-    setFilenameFilter { _, name ->
-      name.endsWith(".json", true) ||
-        name.endsWith(".txt", true) ||
-        name.endsWith(".yaml", true) ||
-        name.endsWith(".yml", true)
-    }
+private fun chooseProfileFile(language: UiLanguage): NioPath? {
+  val extensions = listOf("json", "txt", "yaml", "yml", "toml")
+  val dialog = FileDialog(null as Frame?, language.text("Выберите профиль", "Choose a profile"), FileDialog.LOAD).apply {
+    // The Windows file dialog ignores FilenameFilter and only honours a
+    // wildcard pattern in the initial file name.
+    file = extensions.joinToString(";") { "*.$it" }
+    setFilenameFilter { _, name -> extensions.any { name.endsWith(".$it", ignoreCase = true) } }
     isVisible = true
   }
   return dialog.file?.let { NioPath.of(dialog.directory, it) }
 }
 
-private fun readLog(): String = runCatching {
+/** The last journal lines, or `null` when the file cannot be read. */
+private fun readLog(): String? = runCatching {
   if (!Files.exists(VeilarkPaths.logFile)) return@runCatching ""
-  Files.readAllLines(VeilarkPaths.logFile, Charsets.UTF_8)
+  // Malformed bytes are replaced; readAllLines would reject the whole journal.
+  String(Files.readAllBytes(VeilarkPaths.logFile), Charsets.UTF_8)
+    .lines()
+    .dropLastWhile(String::isEmpty)
     .takeLast(250)
     .joinToString(System.lineSeparator())
-}.getOrDefault("Не удалось прочитать журнал")
+}.getOrNull()
