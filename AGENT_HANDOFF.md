@@ -1,5 +1,18 @@
 # Veilark Windows current handoff
 
+26Oct RU app input implemented: FairwayIpv4Routes extracts only IPv4 CIDRs from
+existing validated GeoRoutingAssets, canonicalizes exact union by sorted ranges,
+merges only actual covered addresses, rejects malformed/noncanonical input and
+native output overflow before OS changes. No new Geo download/DB/UI; legacy
+consumers unchanged. Shipped pinned SRS decoded offline in isolated temp cache:
+8681 IPv4 inputs ->8681 exact prefixes (already minimal, NOT advertised1550),
+fits native16384.6targetedcases0fail/0error/0skip+desktopcompilePASS11s; independent
+bounded source review no blocker. Not yet passed to native host or installed.
+Vector's additive configure_host48/prefix8 source contract acknowledged, but
+not consumed until compiled/frozen candidate; old8fd DLL has no such export.
+Next: bind actual configure_host and runtime owner to app after fullhost contract
+is ready; preserve live network. See reports/windows-fairway-20261025/RU_ROUTE_INPUT.md.
+
 26Oct FROZEN API CONSUMED: Vector private Core940801c7 supplies implemented v1
 header/config112/status64/CDECL9exports and candidate DLL8fd89a17 (AUTH only).
 Atlas FairwayNativeLibrary now resolves actual exports with restricted System32
