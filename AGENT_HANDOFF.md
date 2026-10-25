@@ -1,5 +1,12 @@
 # Veilark Windows current handoff
 
+25Oct endpointreview: VectorportableWindowsrecoverycasePASS17.05s(realUDPNoise/
+syntheticHostPort), notWintun/WAN. Newprivatewindows-network endpointleaf reviewed
+read-only: confirmedcreatedroutecustody lost ifreadbackverify+cleanupbothfail;
+sentVector, noAtlasCoreedit. Also endpointrowverify isnotuplinkhealth; own/32 can
+maskdefaultgatewaydrift. See reports/windows-fairway-20261025/ENDPOINT_ROUTE_REVIEW.md.
+AwaitVectorfix/frozenhostABI; no liveWindowsnetworkoperations/engineactivation.
+
 25Oct UACconsumercheckpoint: sourceconfirmedMain persistsDPAPIprofiles thenpasses
 only--connect toexistingrunas; no privatekey transfer viaargv/envatthisboundary.
 Addedhandledsavefailure/cancellation inpre-elevationcoroutine; desktopcompile
