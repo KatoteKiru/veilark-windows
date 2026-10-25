@@ -1,5 +1,21 @@
 # Veilark Windows current handoff
 
+26Oct FROZEN API CONSUMED: Vector private Core940801c7 supplies implemented v1
+header/config112/status64/CDECL9exports and candidate DLL8fd89a17 (AUTH only).
+Atlas FairwayNativeLibrary now resolves actual exports with restricted System32
+dependency lookup, exact explicit offsets, caller+Memory key wipe, status parse
+only after OK. DLL and verified read lease retained for every owner/inflight;
+worker exit does not release custody. Join/Release serialized; failed release
+retains owner; rejected-load cleanup also retained for retry. Independent review
+caught that last failure path and confirmed fix. Product begin/start blocked
+while FULL_TUN absent. Real development DLL memory-only lifecycle/concurrent
+Stop/Join/Status test PASS, no begin_auth/socket/routes/Wintun calls.
+Full helper185/0fail/0error/2gatedskip +desktopcompile PASS22s. Evidence:
+reports/windows-fairway-20261025/JNA_V1_INTEGRATION.md and jna-v1-regression.json.
+No installer/OTA/public push. Next: consume Vector full host capability only
+after DNS/RU/WFP/cleanup completion and actual acceptance; then EngineController
+and subscription enrollment integration. This checkpoint is NOT a working VPN.
+
 26Oct resumed with Vector (successful direct ACK): native host address/MTU and
 ownership-before-side-effects continue; implemented exports/header NOT frozen.
 Atlas added VerifiedNativeArtifact: absolute canonical regular-file path,
