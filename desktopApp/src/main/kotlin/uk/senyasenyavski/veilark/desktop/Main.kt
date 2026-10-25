@@ -720,10 +720,20 @@ private fun VeilarkApp(
     }
     if (!elevationManager.isElevated()) {
       scope.launch {
-        withContext(Dispatchers.IO) {
-          profileStore.save(
-            currentStored(),
+        try {
+          withContext(Dispatchers.IO) {
+            profileStore.save(currentStored())
+          }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+          throw cancelled
+        } catch (_: Exception) {
+          snackbar.showSnackbar(
+            language.text(
+              "Не удалось сохранить подписки. Исходное хранилище и резервная копия сохранены.",
+              "Could not save subscriptions. The original store and backup were preserved.",
+            ),
           )
+          return@launch
         }
         if (elevationManager.relaunch(listOf("--connect"))) {
           onExit()

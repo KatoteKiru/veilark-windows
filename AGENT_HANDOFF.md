@@ -1,5 +1,12 @@
 # Veilark Windows current handoff
 
+25Oct UACconsumercheckpoint: sourceconfirmedMain persistsDPAPIprofiles thenpasses
+only--connect toexistingrunas; no privatekey transfer viaargv/envatthisboundary.
+Addedhandledsavefailure/cancellation inpre-elevationcoroutine; desktopcompile
+PASS58s. No actualUAC/nativeDLL/adapter/routingchange. See rootreports/windows-
+fairway-20261025/ELEVATION_BOUNDARY.md. Vectorleafcheckpointdc67c3c frozenprivate;
+portable1193Legacyrecoveryparitynext, CABIhostpolicy/activationstillpending.
+
 25Oct Atlas GUIDstorage implemented: FairwayAdapterIdentityStore DPAPI metadata,
 oneGUIDperexistinginstallation, independentofsubscription/privatekeys; create-only
 winner/race-safe, corruptionmismatchfailno rotation, exactWindows16B GUIDlayout.
