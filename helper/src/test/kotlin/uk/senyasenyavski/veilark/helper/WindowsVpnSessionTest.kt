@@ -23,6 +23,7 @@ import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
 import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
+import uk.senyasenyavski.veilark.model.VpnStatusCode
 
 class WindowsVpnSessionTest {
   @Test
@@ -459,6 +460,66 @@ class WindowsVpnSessionTest {
     logger = {},
   )
 
+  @Test
+  fun `worker exit retains pending host resources and prevents another start`() = runBlocking {
+    val controller = FakeController(VpnEngine.SingBox)
+    val session = fastSession(controller)
+    session.connect(profile(VpnEngine.SingBox))
+    controller.pendingResources = true
+    controller.crash()
+    withTimeout(2_000) {
+      while (session.state.value.phase !is VpnPhase.Error) delay(10)
+    }
+    val error = assertIs<VpnPhase.Error>(session.state.value.phase)
+    assertEquals(VpnStatusCode.CORE_EXITED, error.code)
+    assertTrue(error.requiresStopRetry)
+    assertTrue(error.locksConfiguration)
+    session.connect(profile(VpnEngine.SingBox))
+    assertEquals(1, controller.startCalls.get())
+    session.disconnect()
+    assertEquals(1, controller.stopCalls.get())
+    assertIs<VpnPhase.Idle>(session.state.value.phase)
+    session.connect(profile(VpnEngine.SingBox))
+    assertEquals(2, controller.startCalls.get())
+    session.disconnect()
+  }
+
+  @Test
+  fun `failed cleanup after worker exit keeps owner for a later stop retry`() = runBlocking {
+    val controller = FakeController(VpnEngine.SingBox)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    session.connect(profile(VpnEngine.SingBox))
+    controller.pendingResources = true
+    controller.crash()
+    controller.failOnStop = true
+    assertFailsWith<IllegalStateException> { session.disconnect() }
+    assertTrue(session.state.value.phase.requiresStopRetry)
+    session.connect(profile(VpnEngine.SingBox))
+    assertEquals(1, controller.startCalls.get())
+    controller.failOnStop = false
+    session.disconnect()
+    assertEquals(2, controller.stopCalls.get())
+    assertFalse(controller.hasOwnedResources())
+    assertIs<VpnPhase.Idle>(session.state.value.phase)
+  }
+
+  @Test
+  fun `successful stop return cannot publish idle while host resources remain`() = runBlocking {
+    val controller = FakeController(VpnEngine.SingBox)
+    val session = WindowsVpnSession(listOf(controller), logger = {})
+    session.connect(profile(VpnEngine.SingBox))
+    controller.pendingResources = true
+    controller.retainResourcesAfterStop = true
+    assertFailsWith<IllegalStateException> { session.disconnect() }
+    assertFalse(controller.isAlive())
+    assertTrue(controller.hasOwnedResources())
+    assertTrue(session.state.value.phase.requiresStopRetry)
+    controller.retainResourcesAfterStop = false
+    session.disconnect()
+    assertEquals(2, controller.stopCalls.get())
+    assertIs<VpnPhase.Idle>(session.state.value.phase)
+  }
+
   private class FakeController(
     override val engine: VpnEngine,
     private val failOnStart: Boolean = false,
@@ -470,6 +531,8 @@ class WindowsVpnSessionTest {
   ) : EngineController {
     var started = false
     var stopped = false
+    var pendingResources = false
+    var retainResourcesAfterStop = false
     var health: EngineHealth = EngineHealth.Healthy
     var statistics: TunnelStatistics? = null
     var healthFailure: Throwable? = null
@@ -505,12 +568,14 @@ class WindowsVpnSessionTest {
         if (failOnStop) error("stop failed")
         stopped = true
         started = false
+        if (!retainResourcesAfterStop) pendingResources = false
       } finally {
         concurrentStops.decrementAndGet()
       }
     }
 
     override fun isAlive(): Boolean = started
+    override fun hasOwnedResources(): Boolean = started || pendingResources
     override suspend fun health(): EngineHealth {
       healthFailure?.let { throw it }
       return health

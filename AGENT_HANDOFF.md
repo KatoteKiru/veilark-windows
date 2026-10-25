@@ -1,5 +1,13 @@
 # Veilark Windows current handoff
 
+25Oct appcustodycontract implemented: EngineController.hasOwnedResources default
+isAlive (legacyunchanged), Nativeoverride musttrack unreleasedowner independently
+ofworker. WindowsVpnSession retainscontroller+GeoLease/stopRequired onworkerexit
+withpendingcleanup; failed/incompleteStop blocksIdle/newStart untilretry succeeds.
+3newregressions; helpertests+desktopcompilePASS26s. Combinedshared/helper272cases
+0fail/0error/4skip. See RESOURCE_CUSTODY.md. Vector ACKsame contract; Core3175902
+typedendpointcustodyfixcheckedsource. NativeCABI/fullpolicy/activationpending.
+
 25Oct endpointreview: VectorportableWindowsrecoverycasePASS17.05s(realUDPNoise/
 syntheticHostPort), notWintun/WAN. Newprivatewindows-network endpointleaf reviewed
 read-only: confirmedcreatedroutecustody lost ifreadbackverify+cleanupbothfail;

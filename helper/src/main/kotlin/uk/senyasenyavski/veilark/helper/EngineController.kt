@@ -12,6 +12,11 @@ interface EngineController {
 
   suspend fun stop()
   fun isAlive(): Boolean
+  /** Includes native handles and pending host-policy cleanup after a worker exits.
+   * Short, nonblocking query. A stopped worker alone is not proof of release.
+   * Existing process controllers retain their original liveness semantics.
+   */
+  fun hasOwnedResources(): Boolean = isAlive()
   /** Browser-equivalent connectivity check, executed outside the startup gate. */
   suspend fun health(): EngineHealth = EngineHealth.Healthy
 

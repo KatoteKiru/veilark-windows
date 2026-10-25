@@ -132,7 +132,7 @@ class WindowsVpnSession(
       check(pendingFinished) {
         "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
       }
-      check(controller?.isAlive() != true) { "VPN-ядро всё ещё работает" }
+      check(controller?.hasOwnedResources() != true) { "Ресурсы VPN-ядра ещё не освобождены" }
     }
     mutex.withLock {
       pendingTeardownJob = if (pendingFinished) null else pending
@@ -256,16 +256,16 @@ class WindowsVpnSession(
     val stopped = withContext(NonCancellable) {
       runCatching {
         controller.stop()
-        check(!controller.isAlive()) { "VPN-ядро не завершилось" }
+        check(!controller.hasOwnedResources()) { "Ресурсы VPN-ядра ещё не освобождены" }
       }
     }
-    if (!controller.isAlive() && !retainForPendingStartup) mutex.withLock {
+    if (!controller.hasOwnedResources() && !retainForPendingStartup) mutex.withLock {
       activeGeoLease?.close()
       activeGeoLease = null
     }
-    // Retain a live failed process as the active controller so a subsequent
-    // Stop can retry instead of reporting a false Idle state.
-    if (retainForPendingStartup || (stopped.isFailure && controller.isAlive())) {
+    // Retain pending host-policy/native ownership even after its worker exits;
+    // a subsequent Stop must retry instead of reporting a false Idle state.
+    if (retainForPendingStartup || (stopped.isFailure && controller.hasOwnedResources())) {
       mutex.withLock {
         if (activeController == null) activeController = controller
       }
@@ -318,9 +318,12 @@ class WindowsVpnSession(
     if (activeController !== controller) return@withLock
     val phase = mutableState.value.phase
     if (phase !is VpnPhase.Connected && phase !is VpnPhase.Degraded) return@withLock
-    activeController = null
-    activeGeoLease?.close()
-    activeGeoLease = null
+    val cleanupRequired = controller.hasOwnedResources()
+    if (!cleanupRequired) {
+      activeController = null
+      activeGeoLease?.close()
+      activeGeoLease = null
+    }
     logger("${controller.engine.displayName()} неожиданно завершился")
     publish(
       mutableState.value.copy(
@@ -329,6 +332,7 @@ class WindowsVpnSession(
             "Проверьте журнал и повторите подключение.",
           code = VpnStatusCode.CORE_EXITED,
           detail = controller.engine.displayName(),
+          stopRequired = cleanupRequired,
         ),
         traffic = null,
       ),
