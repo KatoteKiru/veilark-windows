@@ -1,5 +1,18 @@
 # Veilark Windows current handoff
 
+26Oct resumed with Vector (successful direct ACK): native host address/MTU and
+ownership-before-side-effects continue; implemented exports/header NOT frozen.
+Atlas added VerifiedNativeArtifact: absolute canonical regular-file path,
+packaged size/SHA256 pin, Windows FILE_SHARE_READ handle held through synchronous
+loader callback; denies concurrent write/delete, releases on validation/load
+failure, preserves original exception if close also fails. Not wired to a loader
+yet; no speculative JNA or product enable. Four actual Windows filesystem tests
+PASS; full helper184 cases/0fail/0error/2gatedskip +desktopcompile PASS27s.
+Independent bounded source review complete; no broad security/ACL/dependency or
+parent-directory race guarantee. See reports/windows-fairway-20261025/NATIVE_ARTIFACT_GATE.md.
+Next: Vector completes host policy +real C exports; wire verified pins/load flags,
+DPAPI GUID/device keys and owner-aware controller. No public push or OTA.
+
 25Oct appcustodycontract implemented: EngineController.hasOwnedResources default
 isAlive (legacyunchanged), Nativeoverride musttrack unreleasedowner independently
 ofworker. WindowsVpnSession retainscontroller+GeoLease/stopRequired onworkerexit
