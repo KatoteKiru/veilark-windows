@@ -1,5 +1,27 @@
 # Veilark Windows current handoff
 
+25Oct ACTIVE RESUMED after Beta15 publication: owner says continue Windows.
+Vector ACK confirmed: native owns Wintun/routes/DNS/WFP lifecycle in Corebranch
+codex/windows-core-enrollment-20261025, privatecheckoutveilark-fairway-passage-
+integration-20261024/fc77d7b. DLL+CABI/JNA agreed; header not frozen/implemented,
+do NOT invent a JNA layout or enable product engine before native acceptance.
+Atlas owns EngineController integration/DPAPI/import/updater. Same subscription
+needs independent keys per installation under existing entitlement/device model.
+Atlas fixed raw exception/bearer/key disclosure in import UI and malformed or
+duplicate schema fallback into sing-box. Shared90cases0fail/0error/2conditional
+skipPASS; report reports/windows-fairway-20261025/import-regression.json. Existing
+engines/UI/network untouched. Preserve useruntrackeddocs/RELEASE_0.3.21.md and
+ui-research/. No newWindowsinstaller/OTA yet. Native recovery must include portable
+equivalent of1193Legacy repair before product activation; fc77 pump lacks it.
+Android85/server135a published and protected; prior priority override below old.
+
+25Oct priority override: Fairway silent-stall investigation before Windows.
+See C:/AI-Agent/reports/fairway-stall-20261025/INCIDENT.md. Live server unchanged;
+Legacy return-path monitoring gap confirmed, incident cause not proven.
+Vector ownership ACK is now confirmed in reports/windows-fairway-20261025/
+VECTOR_HANDOFF.md; Core checkpointfc77d7b includes portable packetpump but no
+Wintun/backend acceptance. Windows local app checkpoint6d06a49 remains protected.
+
 ## 25 October 2026 — Fairway preparation, NOT a Windows release
 
 Owner requests Fairway compatibility and one subscription usable on phone+PC.

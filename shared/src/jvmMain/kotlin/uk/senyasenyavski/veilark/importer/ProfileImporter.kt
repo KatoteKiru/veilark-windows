@@ -47,7 +47,8 @@ class ProfileImporter(
     // The portable profile codec is prepared separately; Windows runtime and
     // per-device enrollment must be integrated before enabling this engine.
     val coreSchema = if (text.startsWith("{")) {
-      runCatching { CoreProfileJson.topLevelSchema(text) }.getOrNull()
+      // Malformed/ambiguous schema must not fall through into another engine.
+      CoreProfileJson.topLevelSchema(text)
     } else null
     if (coreSchema?.let { it.startsWith("veilark-core-") || it.startsWith("veilark-argon-") } == true) {
       return@runCatching ImportResult.Failure(
@@ -173,13 +174,36 @@ class ProfileImporter(
   internal companion object {
     private const val SING_BOX_COMPAT_VERSION = "1.13.21"
     private const val MAX_BYTES = 4L * 1024 * 1024
+    // Only fixed, reviewed messages cross into UI. Parser/network exceptions can
+    // contain a complete bearer URL, malformed JSON or private-key material.
+    private val SAFE_FAILURE_MESSAGES = setOf(
+      "Файл профиля больше 4 МБ",
+      "Подписка должна использовать HTTPS",
+      "В ссылке подписки нет адреса сервера",
+      "Адрес подписки некорректен",
+      "Разрешены только HTTPS-подписки",
+      "Подписка больше 4 МБ",
+      "Сервер вернул пустую подписку",
+      "Слишком много перенаправлений",
+      "Перенаправление без адреса",
+      "Сервер подписки требует авторизацию (HTTP 401)",
+      "Доступ к подписке запрещён или исчерпан лимит устройств (HTTP 403)",
+      "Ссылка подписки не найдена или устарела (HTTP 404)",
+      "Лимит устройств подписки исчерпан (HTTP 409)",
+      "Подписка удалена или истекла (HTTP 410)",
+      "Подписка ещё подготавливается. Повторите обновление немного позже (HTTP 503)",
+      "Слишком много запросов к подписке (HTTP 429)",
+      "Не удалось загрузить подписку",
+    )
 
     internal fun subscriptionUserAgent(): String =
       "SFA/$SING_BOX_COMPAT_VERSION Veilark/${UpdateClient.CURRENT_VERSION_NAME}"
   }
 
-  private fun Throwable.safeMessage(): String = when (this) {
-    is IllegalArgumentException -> message ?: "Профиль не поддерживается"
-    else -> "Не удалось импортировать профиль: ${message ?: javaClass.simpleName}"
+  private fun Throwable.safeMessage(): String {
+    val detail = message
+    if (detail in SAFE_FAILURE_MESSAGES) return checkNotNull(detail)
+    if (this is java.net.URISyntaxException) return "Адрес подписки некорректен"
+    return "Не удалось импортировать профиль. Проверьте ссылку или файл подписки."
   }
 }
