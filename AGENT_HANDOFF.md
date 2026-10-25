@@ -4,7 +4,7 @@
 isAlive (legacyunchanged), Nativeoverride musttrack unreleasedowner independently
 ofworker. WindowsVpnSession retainscontroller+GeoLease/stopRequired onworkerexit
 withpendingcleanup; failed/incompleteStop blocksIdle/newStart untilretry succeeds.
-3newregressions; helpertests+desktopcompilePASS26s. Combinedshared/helper272cases
+3newregressions; helpertests+desktopcompilePASS26s. Combinedshared/helper270cases
 0fail/0error/4skip. See RESOURCE_CUSTODY.md. Vector ACKsame contract; Core3175902
 typedendpointcustodyfixcheckedsource. NativeCABI/fullpolicy/activationpending.
 
