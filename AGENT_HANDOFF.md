@@ -1,5 +1,14 @@
 # Veilark Windows current handoff
 
+25Oct Atlas GUIDstorage implemented: FairwayAdapterIdentityStore DPAPI metadata,
+oneGUIDperexistinginstallation, independentofsubscription/privatekeys; create-only
+winner/race-safe, corruptionmismatchfailno rotation, exactWindows16B GUIDlayout.
+ClientInstallationIdentity extractedfromexistingheaderprovider: samePreferences
+path/install_id/flush policy, sharedbylocalmetadata+subscriptionheaders.6targeted
+checks includingrealDPAPI PASS; fullshared+helper269/0fail/0error/4skipPASS. See
+reports/windows-fairway-20261025/ADAPTER_IDENTITY.md. No native activation/adapter/
+networkchange. Vectorleafrequires nonzeroGUID; futureCABIawaitsfrozenheader.
+
 25Oct nativeconsumerfollowup: Vector WIP has WindowsArcRAII leaf +HostPort bridge,
 not a productbackend. Atlas boundedreadreview/artifactinspection saved under
 reports/windows-fairway-20261025/NATIVE_CONSUMER_REVIEW.md andwintun-artifact.json.
