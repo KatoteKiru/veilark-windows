@@ -22,6 +22,7 @@ class FairwayNativeLibraryTest {
     try {
       assertEquals(1L, library.capabilities)
       assertFalse(library.supportsFullTunnel)
+      assertFalse(library.supportsHostConfiguration)
       val invalid = ByteArray(32) { 1 }
       val failure = assertFailsWith<NativeCallException> { create(library, invalid, ByteArray(32)) }
       assertEquals(-1, failure.result)
@@ -41,6 +42,9 @@ class FairwayNativeLibraryTest {
         assertFalse(status.workerAlive)
         assertTrue(status.ownerAlive)
         assertTrue(status.canRelease)
+        assertFailsWith<IllegalStateException> {
+          owner.configureHost(Path.of("C:\\synthetic\\wintun.dll"), listOf(byteArrayOf(1, 1, 1, 1)), emptyList())
+        }
         assertEquals(0, status.resourceMask)
         assertEquals(0L, status.txBytes)
         assertEquals(0L, status.rxBytes)

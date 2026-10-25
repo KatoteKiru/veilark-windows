@@ -1,5 +1,16 @@
 # Veilark Windows current handoff
 
+26Oct additive host API now CONSUMED: compiled candidateb45a91/34249486B exports
+optionalconfigure_host. JNA48-byte descriptor/UTF16path/IPv4DNS/prefix8buffers
+match frozenheadera82ce7; private buffers live/immutable through call. RealJNA
+accepted all8681 shippedverifiedRU prefixes +DNS inALLOCATED; no worker/routes/
+file or host start. Endpoint/32/repeated configure/invalid inputs rejected.
+Old8fd9export DLL stillloads; configure unavailable failslocally.2actualDLLcases
+0fail/0error/0skip +desktopcompilePASS16s; source review no blocker. FULL_TUN is
+stillunset; application engine/UI notenabled. See JNA_V1_INTEGRATION.md follow-up.
+Next Vector fullhostactor/DNS/RU/WFP/cleanup, then appcontroller+enrollment and
+actual Windows traffic acceptance. No OTA/driver/hostVPN changes.
+
 26Oct RU app input implemented: FairwayIpv4Routes extracts only IPv4 CIDRs from
 existing validated GeoRoutingAssets, canonicalizes exact union by sorted ranges,
 merges only actual covered addresses, rejects malformed/noncanonical input and

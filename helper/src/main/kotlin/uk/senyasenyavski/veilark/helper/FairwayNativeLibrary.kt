@@ -29,6 +29,7 @@ internal class FairwayNativeLibrary private constructor(
   private var closed = false
 
   val supportsFullTunnel: Boolean get() = capabilities and CAP_FULL_TUN != 0L
+  val supportsHostConfiguration: Boolean get() = functions.containsKey("configure_host")
 
   /** Consumes/erases the supplied key even on validation/native failure. No secret toString. */
   fun create(
@@ -69,6 +70,48 @@ internal class FairwayNativeLibrary private constructor(
 
     /** Worker liveness must never be substituted for this custody check. */
     fun hasOwnedResources(): Boolean = !released
+
+    /** Copies all caller data into private buffers, held immutable until native returns.
+     * Configuration is accepted once, before auth; this call does not start networking.
+     */
+    fun configureHost(wintunPath: Path, dnsIpv4: List<ByteArray>, directCidrs: List<String>) = ownedCall {
+      check(supportsHostConfiguration) { "Native host configuration export is unavailable" }
+      require(wintunPath.isAbsolute) { "Wintun path must be absolute" }
+      val path = wintunPath.toString()
+      require(path.length in 1..32767 && '\u0000' !in path) { "Invalid Wintun path" }
+      require(dnsIpv4.size in 1..4) { "Invalid native DNS count" }
+      val dns = dnsIpv4.map { it.copyOf() }
+      require(dns.all { ip ->
+        ip.size == 4 && (ip[0].toInt() and 255) in 1..223 && ip[0] != 127.toByte()
+      } && dns.map { it.toList() }.distinct().size == dns.size) { "Invalid native DNS addresses" }
+      val cidrs = FairwayIpv4Routes.compact(directCidrs)
+      Memory(path.length * 2L).use { pathBuffer ->
+        for (index in path.indices) pathBuffer.setShort(index * 2L, path[index].code.toShort())
+        Memory(dns.size * 4L).use { dnsBuffer ->
+          dns.forEachIndexed { index, ip -> dnsBuffer.write(index * 4L, ip, 0, 4) }
+          val prefixBuffer = if (cidrs.isEmpty()) null else Memory(cidrs.size * 8L)
+          prefixBuffer.use { prefixes ->
+            cidrs.forEachIndexed { index, cidr ->
+              val ip = cidr.substringBefore('/').split('.').map { it.toInt().toByte() }.toByteArray()
+              prefixes!!.write(index * 8L, ip, 0, 4)
+              prefixes.setInt(index * 8L + 4, cidr.substringAfter('/').toInt())
+            }
+            Memory(HOST_CONFIG_SIZE).use { host ->
+              host.clear()
+              host.setInt(0, HOST_CONFIG_SIZE.toInt())
+              host.setInt(4, ABI)
+              host.setPointer(8, pathBuffer)
+              host.setInt(16, path.length)
+              host.setPointer(24, dnsBuffer)
+              host.setInt(32, dns.size)
+              host.setInt(36, cidrs.size)
+              host.setPointer(40, prefixes)
+              requireOk("configure_host", int("configure_host", id, host))
+            }
+          }
+        }
+      }
+    }
 
     fun status(): Status = ownedCall {
       Memory(STATUS_SIZE).use { output ->
@@ -155,6 +198,7 @@ internal class FairwayNativeLibrary private constructor(
     const val ABI = 1
     const val CONFIG_SIZE = 112L
     const val STATUS_SIZE = 64L
+    const val HOST_CONFIG_SIZE = 48L
     const val CAP_FULL_TUN = 2L
     private const val JOIN_TIMEOUT = -5
     private const val LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x800
@@ -201,6 +245,9 @@ internal class FairwayNativeLibrary private constructor(
           val address = symbols.GetProcAddress(module, "vwc_$name")
           check(address != null) { "Native export is missing" }
           Function.getFunction(address, Function.C_CONVENTION)
+        }.toMutableMap()
+        symbols.GetProcAddress(module, "vwc_configure_host")?.let { address ->
+          functions["configure_host"] = Function.getFunction(address, Function.C_CONVENTION)
         }
         check(functions.getValue("abi_version").invokeInt(emptyArray()) == ABI) { "Native ABI mismatch" }
         val capabilities = functions.getValue("capabilities").invokeLong(emptyArray())
