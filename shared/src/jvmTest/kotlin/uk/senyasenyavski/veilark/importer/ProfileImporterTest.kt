@@ -2,12 +2,22 @@ package uk.senyasenyavski.veilark.importer
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.VpnEngine
 
 class ProfileImporterTest {
+  @Test
+  fun `reserved Core profile cannot become sing-box even with proxy outbounds`() {
+    val result = assertIs<ImportResult.Failure>(ProfileImporter().fromText(
+      """{"schema":"veilark-argon-profile-v1","identity":{"client_static_private_base64":"synthetic-secret"},"outbounds":[{"type":"vless","tag":"wrong-engine","server":"example.invalid","server_port":443,"uuid":"00000000-0000-0000-0000-000000000001"}]}""",
+    ))
+    assertTrue(result.safeMessage.contains("Fairway"))
+    assertFalse(result.safeMessage.contains("synthetic-secret"))
+  }
+
   @Test
   fun `subscription request identifies the SFA client like Android`() {
     val userAgent = ProfileImporter.subscriptionUserAgent()

@@ -2,6 +2,7 @@ package uk.senyasenyavski.veilark.importer
 
 import com.example.veilark.profile.SubscriptionParser
 import com.example.veilark.profile.SubscriptionFetcher
+import com.example.veilark.profile.CoreProfileJson
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
@@ -41,6 +42,18 @@ class ProfileImporter(
     sourceUrl: String? = null,
   ): ImportResult = runCatching {
     val text = bytes.toString(Charsets.UTF_8).trim().removePrefix("\uFEFF")
+    // Core is a separate native engine. Never interpret its credential document
+    // as a sing-box config, including documents with nested proxy outbounds.
+    // The portable profile codec is prepared separately; Windows runtime and
+    // per-device enrollment must be integrated before enabling this engine.
+    val coreSchema = if (text.startsWith("{")) {
+      runCatching { CoreProfileJson.topLevelSchema(text) }.getOrNull()
+    } else null
+    if (coreSchema?.let { it.startsWith("veilark-core-") || it.startsWith("veilark-argon-") } == true) {
+      return@runCatching ImportResult.Failure(
+        "Подключение Fairway в этой версии Veilark для Windows пока недоступно.",
+      )
+    }
     if (looksLikeTrustTunnelToml(text)) {
       return@runCatching trustTunnelProfile(
         configs = listOf(text),

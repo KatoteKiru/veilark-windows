@@ -48,7 +48,9 @@ compose.desktop {
       vendor = "Veilark"
       // jdk.unsupported: ExtendedOpenOption share-mode lock for core configs
       // (LockedConfigFile); also used by JNA.
-      modules("java.net.http", "java.logging", "java.naming", "java.security.jgss", "jdk.unsupported")
+      // X25519 device keys use the JDK SunEC provider. String-based JCA lookup
+      // is not visible to jdeps, so retain its module in the packaged runtime.
+      modules("java.net.http", "java.logging", "java.naming", "java.security.jgss", "jdk.unsupported", "jdk.crypto.ec")
       appResourcesRootDir.set(rootProject.layout.projectDirectory.dir("packaging/resources"))
       windows {
         iconFile.set(project.file("src/main/resources/veilark.ico"))

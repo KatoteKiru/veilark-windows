@@ -53,6 +53,9 @@ if (Test-Path -LiteralPath $runtimeRelease -PathType Leaf) {
   if (-not $modulesLine -or $modulesLine.Line -notmatch '\bjdk\.unsupported\b') {
     throw 'Packaged Java runtime lacks jdk.unsupported (core config share lock)'
   }
+  if ($modulesLine.Line -notmatch '\bjdk\.crypto\.ec\b') {
+    throw 'Packaged Java runtime lacks jdk.crypto.ec (X25519 device identity)'
+  }
 }
 
 $singBoxOutput = & (Join-Path $resources 'sing-box.exe') version

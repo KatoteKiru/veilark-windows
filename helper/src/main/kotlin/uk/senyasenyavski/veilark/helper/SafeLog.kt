@@ -7,9 +7,10 @@ import java.time.Instant
 
 object SafeLog {
   private val secretPatterns = listOf(
-    Regex("""(?i)(uuid|password|token|private_key|server_name)\s*[:=]\s*["']?[^"',\s]+"""),
+    Regex("""(?i)(?<![A-Za-z0-9_])(uuid|password|token|private_key|server_name|client_static_private_base64|X-Veilark-Install-Id)["']?\s*[:=]\s*["']?[^"',\s}]+"""),
     Regex("""(?i)(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls)://\S+"""),
     Regex("""(?i)tt://\S+"""),
+    Regex("""(?i)veilark://\S+"""),
     Regex("""https://[^\s/?#]+/[^\s]+"""),
     Regex("""(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"""),
   )

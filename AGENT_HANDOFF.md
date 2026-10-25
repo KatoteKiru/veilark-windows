@@ -1,5 +1,26 @@
 # Veilark Windows current handoff
 
+## 25 October 2026 — Fairway preparation, NOT a Windows release
+
+Owner requests Fairway compatibility and one subscription usable on phone+PC.
+Local branch local/windows-fairway-20261025 from0a4d12c; preserve user-untracked
+docs/RELEASE_0.3.21.md and ui-research/. No version bump/OTA/live network changes.
+Contract/evidence: C:/AI-Agent/reports/windows-fairway-20261025/TEAM_CONTRACT.md.
+Core server has one active session per static client key; separate device keys
+are required. Existing controlplane has per-install devices/3slots, but only
+Trust/sing-box providers, notCore. Reuse that model, no parallel account store.
+Windows has NO Core Wintun dataplane yet; don't enable an inoperative engine.
+Atlas prepares identical strict Android Core profile codec, DPAPI device-key
+storage and import/log boundaries. Vector requested native backend and atomic
+provider enrollment/revoke. Coordination request also in Core checkout handoff;
+no delivery/ack claimed via stale app thread connector. Preparation testsPASS:
+286cases/0fail/0error/4gatedskips, desktopcompile +isolatedJDK17runtimePASS,
+SunEC/X25519provider presentinactualjimage. StrictAndroidparserbyteidentical;
+8devicekeystorecases include JDKpeerDH+6waycreate. See docs/FAIRWAY_WINDOWS_PREPARATION_2026-10-25.md.
+No WindowsTUN/device-enrollment/installeracceptance inferred. Coreprovider+native
+backend stillrequired beforeUIactivation ornewWindowsrelease.
+Published Android Beta14 and serverc959/configad5 remain unchanged.
+
 ## Current publication — 2026-10-08 (supersedes historical notes below)
 
 Windows0.3.24/324 LIVE on GitHub/established signedOTA/catalog. Sourcefd316faf, PR3mergeda18db2df, CI37723300905 package+0.3.23upgrade PASS; full public EXE hash/size/manifest+notes signatures verified. TLS-preserving bounded endpointDNS bootstrap,266tests/4gatedskips. No activeVPN/endpoint/proxy restart. AuthenticodeNotSigned/unsigned_preview unchanged. Current evidence/backups docs/RELEASE_0.3.24.md. Actual evening DNS fault confirmed; remaining AndroidTelegram upload complaint under investigation, broadoutage not declaredclosed. Direct WiFiFI/DE TCP blockedWSA10013, systemrouteall3passes with existingNLWintun active; exactfilterowner notproven. Physical affectedPCacceptance pending.
