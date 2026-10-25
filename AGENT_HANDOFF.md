@@ -1,5 +1,12 @@
 # Veilark Windows current handoff
 
+25Oct nativeconsumerfollowup: Vector WIP has WindowsArcRAII leaf +HostPort bridge,
+not a productbackend. Atlas boundedreadreview/artifactinspection saved under
+reports/windows-fairway-20261025/NATIVE_CONSUMER_REVIEW.md andwintun-artifact.json.
+Existingx64Wintun0.14.1/427552B/SHAe5da8447/AuthentiCodeValid/10requiredexports.
+Notloaded/noadapter/networkchanges. Stableinstallation-boundGUID requested before
+production toavoidrandomNLAentries; CABIheaderstillpending, no speculativeJNA.
+
 25Oct ACTIVE RESUMED after Beta15 publication: owner says continue Windows.
 Vector ACK confirmed: native owns Wintun/routes/DNS/WFP lifecycle in Corebranch
 codex/windows-core-enrollment-20261025, privatecheckoutveilark-fairway-passage-
