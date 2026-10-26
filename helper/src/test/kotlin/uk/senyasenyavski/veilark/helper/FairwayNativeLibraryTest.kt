@@ -4,6 +4,12 @@ import com.sun.jna.Platform
 import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -13,6 +19,34 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 class FairwayNativeLibraryTest {
+  @Test fun `cancelled connection finally can release native owner without UI waits`() = runBlocking {
+    library().use { library ->
+      val owner = create(library, ByteArray(32) { (it + 1).toByte() })
+      try {
+        val connecting = launch {
+          try { awaitCancellation() }
+          finally { owner.stopAndRelease(1_000) }
+        }
+        yield()
+        connecting.cancelAndJoin()
+        assertFalse(owner.hasOwnedResources())
+        owner.stopAndRelease(0) // Already-released retry is harmless.
+      } finally { if (owner.hasOwnedResources()) owner.release() }
+    }
+  }
+
+  @Test fun `simultaneous application teardown calls serialize and release once`() = runBlocking {
+    library().use { library ->
+      val owner = create(library, ByteArray(32) { (it + 1).toByte() })
+      try {
+        assertFailsWith<IllegalArgumentException> { owner.stopAndRelease(30_001) }
+        assertTrue(owner.hasOwnedResources())
+        coroutineScope { repeat(3) { launch { owner.stopAndRelease(1_000) } } }
+        assertFalse(owner.hasOwnedResources())
+      } finally { if (owner.hasOwnedResources()) owner.release() }
+    }
+  }
+
   @Test fun `frozen auth only DLL has exact memory lifecycle without network side effects`() {
     val dll = System.getenv("VEILARK_NATIVE_TEST_DLL")
     assumeTrue(Platform.isWindows() && !dll.isNullOrBlank(), "Explicit private development DLL required")
@@ -84,4 +118,11 @@ class FairwayNativeLibraryTest {
     key, pin, ByteArray(16) { (it + 1).toByte() },
     byteArrayOf(192.toByte(), 0, 2, 1), 443, 1360, 1L,
   )
+
+  private fun library(): FairwayNativeLibrary {
+    val dll = System.getenv("VEILARK_NATIVE_TEST_DLL")
+    assumeTrue(Platform.isWindows() && !dll.isNullOrBlank(), "Explicit private development DLL required")
+    return FairwayNativeLibrary.load(Path.of(dll!!), NativeArtifactPin(32_646_791,
+      "8fd89a1791b40feeeba06b852be8f686cf0b492d6dfb641ebbbd6139cb1d46dd"))
+  }
 }

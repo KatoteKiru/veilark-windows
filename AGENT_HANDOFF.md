@@ -1,5 +1,16 @@
 # Veilark Windows current handoff
 
+26Oct app teardown bridge implemented: Owner.stopAndRelease on NonCancellable+IO,
+serialized coroutine mutex, explicit Stop->boundedJoin->confirmedcanRelease/
+worker/resources->Release. Failure retainsowner/DLL for explicit retry; no polling
+or automatic cleanup loop. Join timeout is not an end-to-end dispatcher/queue
+deadline. Actual8fd DLL3targetedcasesPASS/0skip (2new: cancellationfinally and
+simultaneousstop), desktopcompilePASS63s includingGradledaemonstartup; bounded
+source review no blocker. No real host cleanup failure or traffic acceptance.
+Readonlyrunnerinventory: HyperVGet-VM unavailable, WindowsSandbox.exe absent;
+not proof no other runner exists. ActiveVPNPC remainsunsuitable. Vector continues
+durablejournal/setupgatewaygap. No fullhostartifact/OSchanges/UI/OTAenable.
+
 26Oct consumer now honors native static CAP_PROCESS_PIN8: reports restart-needed
 policy and retains verified file lease for process lifetime after logical module
 close, including rejected-load cleanup. Retained leases dedup by canonical path

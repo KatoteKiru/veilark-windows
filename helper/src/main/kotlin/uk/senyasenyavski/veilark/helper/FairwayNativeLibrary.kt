@@ -12,6 +12,11 @@ import com.sun.jna.win32.StdCallLibrary
 import java.io.Closeable
 import java.nio.ByteOrder
 import java.nio.file.Path
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** Exact consumer of frozen veilark_windows_native.h v1 (private Core 940801c7).
  * AUTH-only libraries may be inspected/allocated but cannot start a product tunnel.
@@ -69,6 +74,7 @@ internal class FairwayNativeLibrary private constructor(
 
   inner class Owner internal constructor(private val id: Long) {
     private val joinRelease = Any()
+    private val teardown = Mutex()
     @Volatile private var released = false
 
     /** Worker liveness must never be substituted for this custody check. */
@@ -144,6 +150,28 @@ internal class FairwayNativeLibrary private constructor(
 
     fun requestStop() = ownedCall { requireOk("request_stop", int("request_stop", id)) }
 
+    /** Application teardown boundary: survives connect cancellation, never waits
+     * on the UI dispatcher, and retains the owner on timeout/cleanup failure.
+     * No polling or retries without another explicit call. Library lifetime is
+     * still separate: other owners/inflight calls may keep it loaded.
+     * timeoutMs bounds native Join, not dispatcher scheduling or mutex queueing.
+     */
+    suspend fun stopAndRelease(timeoutMs: Int) {
+      require(timeoutMs in 0..30_000)
+      withContext(NonCancellable + Dispatchers.IO) {
+        teardown.withLock {
+          if (released) return@withLock
+          requestStop()
+          if (!join(timeoutMs)) throw NativeCallException("join", JOIN_TIMEOUT)
+          val state = status()
+          if (!state.canRelease || state.workerAlive || state.resourceMask != 0) {
+            throw NativeCallException("cleanup", CLEANUP_REQUIRED)
+          }
+          release()
+        }
+      }
+    }
+
     /** Use a background dispatcher for waits. Timeout is a result, not proof of cleanup. */
     fun join(timeoutMs: Int): Boolean = synchronized(joinRelease) {
       require(timeoutMs in 0..30_000)
@@ -211,6 +239,7 @@ internal class FairwayNativeLibrary private constructor(
     const val CAP_FULL_TUN = 2L
     const val CAP_PROCESS_PIN = 8L
     private const val JOIN_TIMEOUT = -5
+    private const val CLEANUP_REQUIRED = -6
     private const val LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x800
     private val names = listOf("abi_version", "capabilities", "create", "begin_auth", "start_host", "request_stop", "join", "release", "status")
     private val rejectedMonitor = Any()
