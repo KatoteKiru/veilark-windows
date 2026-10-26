@@ -410,3 +410,11 @@ No product enablement, new version, packaged candidate, OTA or host action.
 Controlplane publication/fence source in sibling8cf8a95:
 29binding+10publication+7commercial checksPASS; runtimeACK/provider/deliveryopen.
 Vector owns present-resource recovery; actualprivateCIquota remainsunverified.
+
+26Oct current private CI blocker verified by Vector: Core run40362452133,
+check121711196408 on47efbe3 was notstarted duefailedaccountpayment/spendinglimit.
+This is current evidence, unlike historicalOct8 notes. PublicWindowsOct24 green
+runs do not establish private runner availability. No spending/billing mutation.
+Asked owner for restored privateActions eligibility or separate cleanWindowsVM.
+Continue source work; no accepted actualWindowsTUN/OTA. Do not moveprivateCore
+source/plainDLL into publicapprepo or treat encryptedbundle as billingpermission.
