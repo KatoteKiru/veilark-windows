@@ -1,5 +1,18 @@
 # Veilark Windows current handoff
 
+26Oct legacy store rollback checkpoint implemented: before first Core save,
+create immutable encrypted profiles.dat.before-fairway.bak. Exact legacy bytes
+are reused only after strict raw v1-v6/two-engine decode; otherwise legacy-only
+projection excludes Core fields/config. Existing corrupt/incompatible checkpoint
+refuses save before replacing primary. No automatic restore or profile deletion.
+Create-only hard link publishes forced staged file; unsupported filesystem fails
+closed. No directory fsync/full cross-process transaction guarantee claimed.
+ProfileStoreTest8 + FairwayRollbackStoreTest5 + CoreProductGateTest3:16 cases,
+0fail/0error/0skip; desktopcompile PASS19s. Scoped review found normalization
+edge, fixed and regression passed; final source review no remaining blocker.
+Store rollback source gate now closed; manual rollback/installer acceptance still
+pending with actual isolated Windows runtime. No public push or OTA activation.
+
 26Oct releasefactory/uplink source ready: fixed appresourceDLL+trustedbuildpin,
 fixedWintunpath, existingDPAPIinstallationGUID. ReadonlyGetBestInterfaceEx selects
 OSrouteindex; require exactactivephysical/nonfilter/nontunnelLUID, neverfallback
@@ -9,7 +22,7 @@ changingcurrentVPN. SeparateCorebutton action nowboundtoCoremodel viareleaseflag
 Finalfullregression: shared93/helper201=294cases/0fail/0error/4conditionalskip,
 desktopcompilePASS31s; report full-app-integration-20261026.json. BeforeOTA remain
 nativejournal/recovery+acceptedDLL, per-deviceenrollment/encryptedlink transport,
-store rollback compatibility, actual isolatedWindows traffic/stop/installer/OTA.
+actual isolatedWindows traffic/stop/installer/rollback/OTA.
 
 26Oct app engine integration source implemented: VeilarkCore distinct enum with
 availableInProduct=false; strictLegacy profile importer has opt-in preparation

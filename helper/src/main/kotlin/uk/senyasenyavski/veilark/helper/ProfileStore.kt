@@ -12,6 +12,10 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.channels.Channels
+import java.nio.channels.FileChannel
+import java.nio.ByteBuffer
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -102,14 +106,14 @@ class ProfileStore(
       val validPrimary = if (Files.isRegularFile(path)) {
         runCatching {
           val existing = readBoundedBytes(path)
-          decode(protector.unprotect(existing))
-          existing
+          existing to decode(protector.unprotect(existing))
         }.getOrNull()
       } else {
         null
       }
+      if (containsCore(value)) ensureLegacyRollback(value, validPrimary)
       if (validPrimary != null) {
-        Files.write(backupTemporary, validPrimary)
+        Files.write(backupTemporary, validPrimary.first)
         moveReplacing(backupTemporary, backupPath)
       }
       moveReplacing(temporary, path)
@@ -119,8 +123,69 @@ class ProfileStore(
     }
   }
 
-  private fun decodeProtected(candidate: Path): StoredProfiles =
-    decode(protector.unprotect(readBoundedBytes(candidate)))
+  /** Immutable encrypted checkpoint, never an automatic load/restore fallback. */
+  internal val legacyRollbackPath: Path
+    get() = path.resolveSibling("${path.fileName}.before-fairway.bak")
+
+  private fun containsCore(value: StoredProfiles): Boolean =
+    value.selectedEngine == VpnEngine.VeilarkCore ||
+      value.profiles.any { it.engine == VpnEngine.VeilarkCore } ||
+      value.subscriptions.any { source -> source.profiles.any { it.engine == VpnEngine.VeilarkCore } } ||
+      value.selectedNodeTags.containsKey(VpnEngine.VeilarkCore) ||
+      value.selectedSubscriptionIds.containsKey(VpnEngine.VeilarkCore)
+
+  private fun readLegacyRollback(): StoredProfiles {
+    require(Files.isRegularFile(legacyRollbackPath, NOFOLLOW_LINKS)) { "Legacy rollback checkpoint is invalid" }
+    return decodeProtected(legacyRollbackPath, allowCore = false).also {
+      require(!containsCore(it)) { "Legacy rollback checkpoint contains an unsupported engine" }
+    }
+  }
+
+  private fun ensureLegacyRollback(value: StoredProfiles, primary: Pair<ByteArray, StoredProfiles>?) {
+    if (Files.exists(legacyRollbackPath, NOFOLLOW_LINKS)) {
+      readLegacyRollback()
+      return
+    }
+    // Preserve exact old ciphertext whenever a compatible primary exists.
+    // On a fresh install or an already-new store, retain only legacy sources.
+    val compatiblePrimary = primary?.first?.takeIf { ciphertext ->
+      runCatching { decode(protector.unprotect(ciphertext), allowCore = false) }.isSuccess
+    }
+    val encrypted = compatiblePrimary ?: run {
+      check(CURRENT_VERSION == 6) { "Legacy rollback projection requires a versioned encoder" }
+      val base = primary?.second ?: value
+      val normalized = SubscriptionCatalog.normalize(base)
+      val subscriptions = normalized.subscriptions.mapNotNull { record ->
+        val profiles = record.profiles.filter { it.engine != VpnEngine.VeilarkCore }
+        if (profiles.isEmpty()) null else record.copy(profiles = profiles)
+      }
+      val projection = SubscriptionCatalog.rebuild(
+        normalized.copy(selectedEngine = normalized.selectedEngine.takeUnless { it == VpnEngine.VeilarkCore } ?: VpnEngine.SingBox),
+        subscriptions,
+        normalized.selectedSubscriptionIds.filterKeys { it != VpnEngine.VeilarkCore },
+      )
+      check(!containsCore(projection))
+      val plaintext = encode(projection)
+      try { protector.protect(plaintext).also { require(it !== plaintext) { "Invalid checkpoint protection" } } }
+      finally { plaintext.fill(0) }
+    }
+    require(encrypted.size.toLong() <= MAX_STORE_BYTES) { "Legacy rollback checkpoint is too large" }
+    val temporary = Files.createTempFile(path.parent, ".legacy-rollback-", ".pending")
+    try {
+      FileChannel.open(temporary, StandardOpenOption.WRITE).use { channel ->
+        val bytes = ByteBuffer.wrap(encrypted)
+        while (bytes.hasRemaining()) channel.write(bytes)
+        channel.force(true)
+      }
+      require(!containsCore(decodeProtected(temporary, allowCore = false))) { "Legacy rollback checkpoint validation failed" }
+      try { Files.createLink(legacyRollbackPath, temporary) }
+      catch (_: FileAlreadyExistsException) { /* Verify the winning checkpoint, never overwrite it. */ }
+      readLegacyRollback()
+    } finally { Files.deleteIfExists(temporary) }
+  }
+
+  private fun decodeProtected(candidate: Path, allowCore: Boolean = true): StoredProfiles =
+    decode(protector.unprotect(readBoundedBytes(candidate)), allowCore)
 
   private fun readBoundedBytes(candidate: Path): ByteArray =
     Files.newByteChannel(candidate, StandardOpenOption.READ).use { channel ->
@@ -192,12 +257,13 @@ class ProfileStore(
       bytes.toByteArray()
     }
 
-  private fun decode(value: ByteArray): StoredProfiles =
+  private fun decode(value: ByteArray, allowCore: Boolean = true): StoredProfiles =
     DataInputStream(ByteArrayInputStream(value)).use { input ->
       require(input.readInt() == MAGIC) { "Неверный формат хранилища" }
       val version = input.readInt()
-      require(version in 1..CURRENT_VERSION) { "Неподдерживаемая версия хранилища" }
-      val selected = enumValueOf<VpnEngine>(input.readUTF())
+      require(version in 1..(if (allowCore) CURRENT_VERSION else 6)) { "Неподдерживаемая версия хранилища" }
+      val engineCount = if (allowCore) VpnEngine.entries.size else 2
+      val selected = input.readEngine(allowCore)
       val routing = if (version >= 2) {
         RoutingSettings(
           mode = enumValueOf<RoutingMode>(input.readUTF()),
@@ -210,8 +276,8 @@ class ProfileStore(
       }
       val selectedNodeTags = if (version >= 3) {
         buildMap {
-          repeat(input.readBoundedCount(VpnEngine.entries.size)) {
-            put(enumValueOf<VpnEngine>(input.readUTF()), input.readString())
+          repeat(input.readBoundedCount(engineCount)) {
+            put(input.readEngine(allowCore), input.readString())
           }
         }
       } else {
@@ -224,14 +290,14 @@ class ProfileStore(
           val sourceLabel = input.readString()
           val sourceUrl = if (input.readBoolean()) input.readString() else null
           val origin = enumValueOf<SubscriptionOrigin>(input.readUTF())
-          val profiles = List(input.readBoundedCount(VpnEngine.entries.size)) {
-            input.readProfile(version)
+          val profiles = List(input.readBoundedCount(engineCount)) {
+            input.readProfile(version, allowCore)
           }
           SubscriptionRecord(id, name, profiles, sourceLabel, sourceUrl, origin)
         }
         val selectedSubscriptions = buildMap {
-          repeat(input.readBoundedCount(VpnEngine.entries.size)) {
-            put(enumValueOf<VpnEngine>(input.readUTF()), input.readString())
+          repeat(input.readBoundedCount(engineCount)) {
+            put(input.readEngine(allowCore), input.readString())
           }
         }
         SubscriptionCatalog.rebuild(
@@ -245,7 +311,7 @@ class ProfileStore(
         )
       } else {
         val profiles = List(input.readBoundedCount(MAX_LEGACY_PROFILES)) {
-          input.readProfile(version)
+          input.readProfile(version, allowCore)
         }
         SubscriptionCatalog.normalize(
           StoredProfiles(profiles, selected, routing, selectedNodeTags),
@@ -276,11 +342,15 @@ class ProfileStore(
     profile.sourceUrl?.let { writeString(it) }
   }
 
-  private fun DataInputStream.readProfile(version: Int): Profile {
+  private fun DataInputStream.readEngine(allowCore: Boolean): VpnEngine = enumValueOf<VpnEngine>(readUTF()).also {
+    require(allowCore || it == VpnEngine.SingBox || it == VpnEngine.TrustTunnel) { "Unsupported legacy engine" }
+  }
+
+  private fun DataInputStream.readProfile(version: Int, allowCore: Boolean): Profile {
     val profile = Profile(
       id = readString(),
       name = readString(),
-      engine = enumValueOf(readUTF()),
+      engine = readEngine(allowCore),
       config = readString(MAX_CONFIG_BYTES),
       sourceLabel = readString(),
       nodes = List(readBoundedCount(MAX_NODES)) {
