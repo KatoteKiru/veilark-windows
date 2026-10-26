@@ -407,6 +407,6 @@ size/hash mismatch against the compiled pin. No external/profile/ENV releaseflag
 Targeted CoreProductGate/FairwayController tests +desktopcompilePASS61s (one
 optionalAUTHfixture skipped). PowerShell AST parse and diffcheckPASS.
 No product enablement, new version, packaged candidate, OTA or host action.
-Controlplane publication/fence source in sibling2351e8a (superseded if amended):
+Controlplane publication/fence source in sibling8cf8a95:
 29binding+10publication+7commercial checksPASS; runtimeACK/provider/deliveryopen.
 Vector owns present-resource recovery; actualprivateCIquota remainsunverified.
