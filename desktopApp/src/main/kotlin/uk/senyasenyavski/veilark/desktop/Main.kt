@@ -1776,25 +1776,41 @@ private fun EngineSelector(
   onEngineSelect: (VpnEngine) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  Surface(
-    modifier = modifier.fillMaxWidth(),
-    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    shape = RoundedCornerShape(20.dp),
-  ) {
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(3.dp).selectableGroup(),
-      horizontalArrangement = Arrangement.spacedBy(2.dp),
+  val language = LocalUiLanguage.current
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Surface(
+      modifier = Modifier.fillMaxWidth(),
+      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      shape = RoundedCornerShape(20.dp),
     ) {
-      VpnEngine.entries.forEach { engine ->
-        EngineChoice(
-          engine = engine,
-          selected = selectedEngine == engine,
-          configured = engine in availableEngines,
-          enabled = enabled,
-          modifier = Modifier.weight(1f),
-          onSelect = onEngineSelect,
-        )
+      Row(
+        modifier = Modifier.fillMaxWidth().padding(3.dp).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+      ) {
+        VpnEngine.entries.forEach { engine ->
+          EngineChoice(
+            engine = engine,
+            selected = selectedEngine == engine,
+            configured = engine in availableEngines,
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            onSelect = onEngineSelect,
+          )
+        }
       }
+    }
+    // Match Android's separate Core/Fairway entry. Enable only when the native
+    // host, application controller and real Windows traffic acceptance are ready.
+    // AUTH/HOST_LAB capabilities must never activate this product action.
+    OutlinedButton(
+      onClick = {},
+      enabled = false,
+      modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+        stateDescription = language.text("Пока недоступно", "Not available yet")
+      },
+      shape = RoundedCornerShape(18.dp),
+    ) {
+      Text(language.text("Veilark Core (маршрут: Fairway)", "Veilark Core (route: Fairway)"))
     }
   }
 }

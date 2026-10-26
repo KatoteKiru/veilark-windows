@@ -1,5 +1,15 @@
 # Veilark Windows current handoff
 
+26Oct OWNER UI REQUIREMENT: Fairway must have a separate button, analogous to
+Android's separate Core entry below sing-box/TrustTunnel. Implemented in Windows
+EngineSelector as separate full-width button with official RU/EN Core/Fairway
+label. Disabled until real host/controller/acceptance ready; does not alter
+legacy selection/storage/engine enum. Accessible unavailable state, no extra
+technical UI text/redesign. Existing nativeCompose visual render PASS54s; inspected
+light/dark and150%DPI output, label fits. No real app installation/networkstart.
+Next connect this separate entry to the actual Core controller/subscription once
+native fullhost/recovery/isolatedtraffic gates pass. Do not foldFairway intolegacy.
+
 26Oct app teardown bridge implemented: Owner.stopAndRelease on NonCancellable+IO,
 serialized coroutine mutex, explicit Stop->boundedJoin->confirmedcanRelease/
 worker/resources->Release. Failure retainsowner/DLL for explicit retry; no polling
