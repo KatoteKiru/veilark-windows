@@ -418,3 +418,12 @@ runs do not establish private runner availability. No spending/billing mutation.
 Asked owner for restored privateActions eligibility or separate cleanWindowsVM.
 Continue source work; no accepted actualWindowsTUN/OTA. Do not moveprivateCore
 source/plainDLL into publicapprepo or treat encryptedbundle as billingpermission.
+
+## Owner decision26October: final Windows test after release
+Owner declined restoring privateActions or providing VM: exact reply
+«Нет, я проверю сам после выпуска». Treat actual Windows host/device acceptance
+as deferred owner test, not PASS and not mandatory VM/Billing question. Continue
+source/runtime completion and packaging; never promote missing implementation or
+lab-only capability as working product. No current-PC network permission inferred.
+Vector prepares explicit implemented host-beta capability artifact separately;
+Atlas still must finish enrollment/delivery and matched release composition.
