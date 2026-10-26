@@ -1,5 +1,16 @@
 # Veilark Windows current handoff
 
+26Oct releasefactory/uplink source ready: fixed appresourceDLL+trustedbuildpin,
+fixedWintunpath, existingDPAPIinstallationGUID. ReadonlyGetBestInterfaceEx selects
+OSrouteindex; require exactactivephysical/nonfilter/nontunnelLUID, neverfallback
+tootherNIC. Sameguard asnativeCapturedUplink; actualreadonlylookupPASS without
+changingcurrentVPN. SeparateCorebutton action nowboundtoCoremodel viareleaseflag
+(stillfalse); defaultcontrollers stilllegacyonly. Nofake readiness or hoststart.
+Finalfullregression: shared93/helper201=294cases/0fail/0error/4conditionalskip,
+desktopcompilePASS31s; report full-app-integration-20261026.json. BeforeOTA remain
+nativejournal/recovery+acceptedDLL, per-deviceenrollment/encryptedlink transport,
+store rollback compatibility, actual isolatedWindows traffic/stop/installer/OTA.
+
 26Oct app engine integration source implemented: VeilarkCore distinct enum with
 availableInProduct=false; strictLegacy profile importer has opt-in preparation
 switch(defaultclosed); Core config/routing never enters sing-box; unsupported

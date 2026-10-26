@@ -2,11 +2,13 @@ package uk.senyasenyavski.veilark.helper
 
 import com.sun.jna.Library
 import com.sun.jna.Native
+import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.platform.win32.IPHlpAPI
 import com.sun.jna.platform.win32.IPHlpAPI.MIB_IF_ROW2
 import com.sun.jna.ptr.PointerByReference
+import com.sun.jna.ptr.IntByReference
 import com.sun.jna.win32.W32APIOptions
 
 /**
@@ -27,6 +29,7 @@ internal data class NetworkAdapter(
   val bytesIn: Long,
   val bytesOut: Long,
   val interfaceGuid: String? = null,
+  val eligibleCoreUplink: Boolean = false,
 ) {
   val isTunnel: Boolean
     get() = TUNNEL_DESCRIPTIONS.any { description.contains(it, ignoreCase = true) }
@@ -50,6 +53,7 @@ internal object WindowsNetwork {
     fun GetIfTable2(table: PointerByReference): Int
 
     fun FreeMibTable(table: Pointer)
+    fun GetBestInterfaceEx(destination: Pointer, bestIndex: IntByReference): Int
 
     companion object {
       val INSTANCE: IpHelper =
@@ -66,6 +70,33 @@ internal object WindowsNetwork {
 
   fun matching(predicate: (NetworkAdapter) -> Boolean): List<NetworkAdapter> =
     adapters().filter(predicate)
+
+  /** Read-only route lookup. Never choose a different NIC to bypass an active VPN. */
+  fun bestIpv4InterfaceIndex(endpoint: String): Int {
+    val octets = endpoint.split('.')
+    require(octets.size == 4 && octets.all { it.matches(Regex("0|[1-9][0-9]{0,2}")) && it.toInt() in 0..255 })
+    require(octets[0].toInt() in 1..223 && octets[0].toInt() != 127)
+    Memory(16).use { destination -> // SOCKADDR_IN: native family, network-order address.
+      destination.clear()
+      destination.setShort(0, 2) // AF_INET
+      destination.write(4, octets.map { it.toInt().toByte() }.toByteArray(), 0, 4)
+      val output = IntByReference(0)
+      val result = IpHelper.INSTANCE.GetBestInterfaceEx(destination, output)
+      check(result == 0 && output.value > 0) { "Cannot select the endpoint route interface" }
+      return output.value
+    }
+  }
+
+  fun coreUplink(endpoint: String): Long =
+    requireCoreUplink(bestIpv4InterfaceIndex(endpoint), adapters()).luid
+
+  internal fun requireCoreUplink(index: Int, adapters: List<NetworkAdapter>): NetworkAdapter {
+    val selected = adapters.singleOrNull { it.index == index }
+    require(selected != null && selected.operational && selected.luid != 0L && selected.eligibleCoreUplink) {
+      "Endpoint route does not use a supported physical uplink"
+    }
+    return selected
+  }
 
   /**
    * Refreshes a single adapter by LUID. The LUID is stable for the lifetime of
@@ -112,6 +143,8 @@ internal object WindowsNetwork {
     bytesIn = InOctets,
     bytesOut = OutOctets,
     interfaceGuid = InterfaceGuid.toGuidString(),
+    eligibleCoreUplink = InterfaceIndex > 0 && InterfaceLuid != 0L && OperStatus == OPER_STATUS_UP &&
+      (InterfaceAndOperStatusFlags.toInt() and 3) == 1 && Type != 131 && Type != 24 && TunnelType == 0,
   )
 
   private fun NetworkAdapter.isFilterPseudoAdapter(): Boolean =

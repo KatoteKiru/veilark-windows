@@ -1803,11 +1803,19 @@ private fun EngineSelector(
     // host, application controller and real Windows traffic acceptance are ready.
     // AUTH/HOST_LAB capabilities must never activate this product action.
     OutlinedButton(
-      onClick = {},
-      enabled = false,
+      onClick = { if (enabled && VpnEngine.VeilarkCore.availableInProduct) onEngineSelect(VpnEngine.VeilarkCore) },
+      enabled = enabled && VpnEngine.VeilarkCore.availableInProduct,
       modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
-        stateDescription = language.text("Пока недоступно", "Not available yet")
+        stateDescription = when {
+          !VpnEngine.VeilarkCore.availableInProduct -> language.text("Пока недоступно", "Not available yet")
+          selectedEngine == VpnEngine.VeilarkCore -> language.text("Выбрано", "Selected")
+          else -> language.text("Не выбрано", "Not selected")
+        }
       },
+      colors = ButtonDefaults.outlinedButtonColors(
+        containerColor = if (VpnEngine.VeilarkCore.availableInProduct && selectedEngine == VpnEngine.VeilarkCore)
+          MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+      ),
       shape = RoundedCornerShape(18.dp),
     ) {
       Text(language.text("Veilark Core (маршрут: Fairway)", "Veilark Core (route: Fairway)"))

@@ -3,6 +3,7 @@ package uk.senyasenyavski.veilark.helper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 /**
  * Exercises the native interface table against the running system. These checks
@@ -11,6 +12,22 @@ import kotlin.test.assertTrue
  */
 class WindowsNetworkTest {
   private val onWindows = System.getProperty("os.name").orEmpty().startsWith("Windows", true)
+
+  @Test fun `route selected interface is read without connecting or modifying routes`() {
+    if (!onWindows) return
+    val index = WindowsNetwork.bestIpv4InterfaceIndex("192.0.2.1")
+    assertTrue(index > 0)
+    assertTrue(WindowsNetwork.adapters().any { it.index == index })
+  }
+
+  @Test fun `Core never substitutes another physical NIC for route selected VPN or ambiguous index`() {
+    val physical = NetworkAdapter(2, 22, "Ethernet", "physical", true, 1500, 0, 0, eligibleCoreUplink = true)
+    val vpn = NetworkAdapter(3, 33, "VPN", "Wintun", true, 1360, 0, 0)
+    assertEquals(22, WindowsNetwork.requireCoreUplink(2, listOf(physical, vpn)).luid.toInt())
+    assertFailsWith<IllegalArgumentException> { WindowsNetwork.requireCoreUplink(3, listOf(physical, vpn)) }
+    assertFailsWith<IllegalArgumentException> { WindowsNetwork.requireCoreUplink(2, listOf(physical, physical)) }
+    assertFailsWith<IllegalArgumentException> { WindowsNetwork.requireCoreUplink(2, listOf(physical.copy(operational = false))) }
+  }
 
   @Test
   fun `the interface table is readable`() {
