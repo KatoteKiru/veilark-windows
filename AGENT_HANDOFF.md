@@ -1,5 +1,16 @@
 # Veilark Windows current handoff
 
+26Oct consumer now honors native static CAP_PROCESS_PIN8: reports restart-needed
+policy and retains verified file lease for process lifetime after logical module
+close, including rejected-load cleanup. Retained leases dedup by canonical path
+and verified SHA to avoid per-reconnect handle growth. Existing8fd/b45 nonpin
+behavior unchanged.6targetedcases0fail/0skip+desktopcompilePASS13s. Newbit8 branch
+source implemented; native pin/latecallback execution NOTtested (newlabartifact
+not ready). Host-labcaps13 still lacks FULL_TUN2; no appenable/host invocation.
+Unknown loadedimages rejected beforecapabilitydiscovery retainleaseconservatively
+forprocesslife; no assumption that early ABI/export failure provesunloadability.
+Next native durable crash/watch reconciliation, then real isolated Windows runner.
+
 26Oct additive host API now CONSUMED: compiled candidateb45a91/34249486B exports
 optionalconfigure_host. JNA48-byte descriptor/UTF16path/IPv4DNS/prefix8buffers
 match frozenheadera82ce7; private buffers live/immutable through call. RealJNA

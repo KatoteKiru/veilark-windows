@@ -29,6 +29,7 @@ class FairwayNativeHostPlanTest {
       FairwayNativeLibrary.load(Path.of(dll!!), pin).use { library ->
         assertTrue(library.supportsHostConfiguration)
         assertFalse(library.supportsFullTunnel)
+        assertFalse(library.requiresProcessRestartForUpdate)
         val key = ByteArray(32) { (it + 1).toByte() }
         val owner = library.create(key, ByteArray(32) { (it + 33).toByte() }, ByteArray(16) { (it + 1).toByte() },
           byteArrayOf(192.toByte(), 0, 2, 1), 443, 1360, 1)

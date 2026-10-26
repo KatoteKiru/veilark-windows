@@ -27,9 +27,12 @@ internal class FairwayNativeLibrary private constructor(
   private val owners = mutableSetOf<Long>()
   private var calls = 0
   private var closed = false
+  private var leaseFinished = false
 
   val supportsFullTunnel: Boolean get() = capabilities and CAP_FULL_TUN != 0L
   val supportsHostConfiguration: Boolean get() = functions.containsKey("configure_host")
+  /** Static MAY-pin policy; a logical FreeLibrary does not prove physical unload. */
+  val requiresProcessRestartForUpdate: Boolean get() = capabilities and CAP_PROCESS_PIN != 0L
 
   /** Consumes/erases the supplied key even on validation/native failure. No secret toString. */
   fun create(
@@ -179,11 +182,17 @@ internal class FairwayNativeLibrary private constructor(
   }
 
   override fun close() = synchronized(monitor) {
-    if (closed) { lease.close(); return@synchronized }
+    if (closed) { finishLease(); return@synchronized }
     check(owners.isEmpty() && calls == 0) { "Native library still owns handles or calls" }
     check(Kernel32.INSTANCE.FreeLibrary(module)) { "Cannot unload native library" }
     closed = true
-    lease.close()
+    finishLease()
+  }
+
+  private fun finishLease() {
+    if (leaseFinished) return
+    finishArtifactLease(lease, requiresProcessRestartForUpdate)
+    leaseFinished = true
   }
 
   private fun <T> call(body: () -> T): T {
@@ -200,11 +209,25 @@ internal class FairwayNativeLibrary private constructor(
     const val STATUS_SIZE = 64L
     const val HOST_CONFIG_SIZE = 48L
     const val CAP_FULL_TUN = 2L
+    const val CAP_PROCESS_PIN = 8L
     private const val JOIN_TIMEOUT = -5
     private const val LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x800
     private val names = listOf("abi_version", "capabilities", "create", "begin_auth", "start_host", "request_stop", "join", "release", "status")
     private val rejectedMonitor = Any()
     private val rejectedLoads = mutableListOf<RejectedLoad>()
+    // Deliberately never closed: callback code may remain pinned in this image
+    // after all logical owners are released. Windows closes handles at exit.
+    private val processPinnedLeases = mutableMapOf<Pair<Path, String>, VerifiedNativeArtifact.Lease>()
+
+    private fun finishArtifactLease(lease: VerifiedNativeArtifact.Lease, processPinned: Boolean) {
+      if (processPinned) synchronized(processPinnedLeases) {
+        val identity = lease.path to lease.sha256
+        val existing = processPinnedLeases[identity]
+        if (existing == null) processPinnedLeases[identity] = lease
+        else if (existing !== lease) lease.close()
+      }
+      else lease.close()
+    }
 
     /** No timer: a later load or an explicit cleanup retry retains failures in custody. */
     fun retryRejectedLoads(): Int = synchronized(rejectedMonitor) {
@@ -218,13 +241,14 @@ internal class FairwayNativeLibrary private constructor(
 
     private class RejectedLoad(
       private var module: HMODULE?, private val lease: VerifiedNativeArtifact.Lease,
+      private val processPinned: Boolean,
     ) {
       fun close() {
         module?.let {
           check(Kernel32.INSTANCE.FreeLibrary(it)) { "Cannot unload rejected native library" }
           module = null
         }
-        lease.close()
+        finishArtifactLease(lease, processPinned)
       }
     }
 
@@ -237,9 +261,13 @@ internal class FairwayNativeLibrary private constructor(
       check(retryRejectedLoads() == 0) { "Previous native library cleanup requires retry" }
       val lease = VerifiedNativeArtifact.open(path, pin)
       var module: HMODULE? = null
+      var processPinned = false
       try {
         module = Kernel32.INSTANCE.LoadLibraryEx(lease.path.toString(), null, LOAD_LIBRARY_SEARCH_SYSTEM32)
         check(module != null && Pointer.nativeValue(module.pointer) != 0L) { "Cannot load pinned native library" }
+        // Until capabilities are known, an export/ABI rejection cannot prove
+        // that the loaded image is unloadable. Keep unknown images conservative.
+        processPinned = true
         val symbols = Native.load("kernel32", Symbols::class.java)
         val functions = names.associateWith { name ->
           val address = symbols.GetProcAddress(module, "vwc_$name")
@@ -251,10 +279,11 @@ internal class FairwayNativeLibrary private constructor(
         }
         check(functions.getValue("abi_version").invokeInt(emptyArray()) == ABI) { "Native ABI mismatch" }
         val capabilities = functions.getValue("capabilities").invokeLong(emptyArray())
+        processPinned = capabilities and CAP_PROCESS_PIN != 0L
         return FairwayNativeLibrary(lease, module, functions, capabilities)
       } catch (error: Throwable) {
         val loaded = module?.takeIf { Pointer.nativeValue(it.pointer) != 0L }
-        val rejected = RejectedLoad(loaded, lease)
+        val rejected = RejectedLoad(loaded, lease, processPinned)
         synchronized(rejectedMonitor) {
           // Register custody before attempting fallible cleanup, even on ABI/export rejection.
           rejectedLoads.add(rejected)

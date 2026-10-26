@@ -40,7 +40,7 @@ internal object VerifiedNativeArtifact {
       null, WinNT.OPEN_EXISTING, WinNT.FILE_ATTRIBUTE_NORMAL, null,
     )
     check(handle != null && handle != WinBase.INVALID_HANDLE_VALUE) { "Cannot lock native artifact" }
-    val lease = Lease(canonical, handle)
+    val lease = Lease(canonical, pin.sha256.lowercase(), handle)
     try {
       check(Files.size(canonical) == pin.size) { "Native artifact size mismatch" }
       val digest = MessageDigest.getInstance("SHA-256")
@@ -65,7 +65,7 @@ internal object VerifiedNativeArtifact {
     }
   }
 
-  class Lease internal constructor(val path: Path, private var handle: WinNT.HANDLE?) : Closeable {
+  class Lease internal constructor(val path: Path, val sha256: String, private var handle: WinNT.HANDLE?) : Closeable {
     @Synchronized override fun close() {
       val current = handle ?: return
       check(Kernel32.INSTANCE.CloseHandle(current)) { "Cannot close native artifact lock" }

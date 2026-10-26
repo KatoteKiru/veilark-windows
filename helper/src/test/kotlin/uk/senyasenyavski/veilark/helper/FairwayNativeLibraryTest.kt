@@ -22,6 +22,7 @@ class FairwayNativeLibraryTest {
     try {
       assertEquals(1L, library.capabilities)
       assertFalse(library.supportsFullTunnel)
+      assertFalse(library.requiresProcessRestartForUpdate)
       assertFalse(library.supportsHostConfiguration)
       val invalid = ByteArray(32) { 1 }
       val failure = assertFailsWith<NativeCallException> { create(library, invalid, ByteArray(32)) }
