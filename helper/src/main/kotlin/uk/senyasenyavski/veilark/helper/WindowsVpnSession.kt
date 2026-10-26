@@ -28,10 +28,7 @@ import uk.senyasenyavski.veilark.model.requiresStopRetry
 import uk.senyasenyavski.veilark.session.VpnSession
 
 class WindowsVpnSession(
-  controllers: List<EngineController> = listOf(
-    SingBoxProcessController(),
-    TrustTunnelProcessController(),
-  ),
+  controllers: List<EngineController> = FairwayControllerFactory.productControllers(),
   private val statisticsIntervalMillis: Long = 2_000,
   private val healthChecksEveryTicks: Int = 10,
   private val disconnectJoinTimeoutMillis: Long = 10_000,

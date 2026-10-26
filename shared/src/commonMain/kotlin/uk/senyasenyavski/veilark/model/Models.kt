@@ -6,7 +6,7 @@ enum class VpnEngine {
   VeilarkCore;
 
   /** Release gate, not inferred from AUTH/HOST_LAB or profile presence. */
-  val availableInProduct: Boolean get() = this != VeilarkCore
+  val availableInProduct: Boolean get() = this != VeilarkCore || FairwayRelease.accepted
 }
 
 enum class RoutingMode {

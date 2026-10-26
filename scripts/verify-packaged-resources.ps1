@@ -37,6 +37,30 @@ foreach ($relative in $required) {
   }
 }
 
+# The compiled release decision and native resource must move together. An
+# unaccepted private lab DLL must never leak into an ordinary installer.
+$fairwayMetadata = Join-Path $projectRoot 'shared\src\commonMain\kotlin\uk\senyasenyavski\veilark\model\FairwayRelease.kt'
+$fairwaySource = Get-Content -LiteralPath $fairwayMetadata -Raw
+$acceptedMatch = [regex]::Match($fairwaySource, 'const val accepted = (true|false)\b')
+if (-not $acceptedMatch.Success) { throw 'Fairway release decision is missing or ambiguous' }
+$coreRelative = 'veilark_windows_native.dll'
+$corePackaged = Join-Path $resources $coreRelative
+$coreSource = Join-Path $source $coreRelative
+if ($acceptedMatch.Groups[1].Value -eq 'true') {
+  $sizeMatch = [regex]::Match($fairwaySource, 'const val nativeSize = ([1-9][0-9]*)L\b')
+  $hashMatch = [regex]::Match($fairwaySource, 'const val nativeSha256 = "([0-9a-f]{64})"')
+  if (-not $sizeMatch.Success -or -not $hashMatch.Success) { throw 'Accepted Fairway has no immutable native pin' }
+  foreach ($nativePath in @($coreSource, $corePackaged)) {
+    if (-not (Test-Path -LiteralPath $nativePath -PathType Leaf)) { throw 'Accepted Fairway native DLL is missing' }
+    if ((Get-Item -LiteralPath $nativePath).Length -ne [long]$sizeMatch.Groups[1].Value -or
+        (Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash -ine $hashMatch.Groups[1].Value) {
+      throw 'Fairway native DLL does not match immutable release metadata'
+    }
+  }
+} elseif ((Test-Path -LiteralPath $corePackaged) -or (Test-Path -LiteralPath $coreSource)) {
+  throw 'Unaccepted Fairway DLL must not be packaged'
+}
+
 $launcherConfig = Join-Path $image 'app\Veilark.cfg'
 if (-not (Test-Path -LiteralPath $launcherConfig -PathType Leaf)) {
   throw 'Packaged launcher configuration is missing'

@@ -397,3 +397,16 @@ remains16df365/a8e29e, not rebuilt from47efbe3; actual JNA memory pairing belong
 only to that frozen artifact. Open: OS-visible ownership/run manifest for present
 crash leftovers, real filesystem/traffic acceptance, trusted provider delivery.
 No release/OTA or account/server mutation occurred.
+
+## 26 October: single release composition
+FairwayRelease immutable common metadata now drives UI/catalog and default
+controller registration. accepted=false; native pin unset until accepted artifact.
+Future promotion registers realfactory without separate manualcontroller edits.
+Packaging verifier rejects unacceptedlab DLL inclusion, or accepted DLL missing/
+size/hash mismatch against the compiled pin. No external/profile/ENV releaseflags.
+Targeted CoreProductGate/FairwayController tests +desktopcompilePASS61s (one
+optionalAUTHfixture skipped). PowerShell AST parse and diffcheckPASS.
+No product enablement, new version, packaged candidate, OTA or host action.
+Controlplane publication/fence source in sibling2351e8a (superseded if amended):
+29binding+10publication+7commercial checksPASS; runtimeACK/provider/deliveryopen.
+Vector owns present-resource recovery; actualprivateCIquota remainsunverified.
