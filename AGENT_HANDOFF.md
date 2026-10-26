@@ -381,3 +381,11 @@ Read docs/TRUST_INCIDENT_CLIENT_2026-10-08.md. Packaged native1.1.7; matchingtag
 - Source only: durable antirollback and real Linux acceptance still open.
 - Vector notified. Native FULL_TUN, provider/delivery and isolated Windows traffic
   acceptance still prevent enabling Fairway/OTA. Android/live server unchanged.
+
+## 26 October: absence recovery lab native pairing
+- Vector source16df365, frozen DLL a8e29eb24b22e63da47959b2d0459d82c424fc274a13a43e414717ac5c97202d,
+  41748721 bytes in reports/windows-fairway-20261025/native-v1-absence-recovery-lab-20261026.
+- New explicit-env pinned JNA test passed8s, two memory lifecycle cycles, no skip.
+  ABI1/caps13/process-pin/configure_host/Stop/Release compatible; FULL_TUN rejected.
+- No auth/host/journal OS execution; real crash recovery and forwarding not accepted.
+- Existing journal fixture retained independently. No runtime product pin/OTA changes.
