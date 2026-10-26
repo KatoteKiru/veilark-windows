@@ -3,6 +3,8 @@ package uk.senyasenyavski.veilark.importer
 import com.example.veilark.profile.SubscriptionParser
 import com.example.veilark.profile.SubscriptionFetcher
 import com.example.veilark.profile.CoreProfileJson
+import com.example.veilark.profile.CoreArgonProfile
+import com.example.veilark.profile.CoreArgonHandshakeProfile
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
@@ -17,6 +19,7 @@ import java.security.MessageDigest
 class ProfileImporter(
   private val parser: SubscriptionParser = SubscriptionParser(),
   private val fetchSubscription: (String) -> ByteArray = { SubscriptionFetcher.fetchBlocking(it) },
+  private val allowCoreProfiles: Boolean = VpnEngine.VeilarkCore.availableInProduct,
 ) {
   fun fromText(text: String, sourceLabel: String = "Вставка"): ImportResult =
     compile(text.toByteArray(Charsets.UTF_8), sourceLabel)
@@ -51,6 +54,17 @@ class ProfileImporter(
       CoreProfileJson.topLevelSchema(text)
     } else null
     if (coreSchema?.let { it.startsWith("veilark-core-") || it.startsWith("veilark-argon-") } == true) {
+      if (allowCoreProfiles) {
+        return@runCatching CoreArgonProfile.parse(text).use { core ->
+          require(core.handshakeProfile == CoreArgonHandshakeProfile.LEGACY) { "Unsupported Core wire profile" }
+          val id = stableId(text)
+          ImportResult.Success(Profile(
+            id = id, name = core.name, engine = VpnEngine.VeilarkCore,
+            config = text, nodes = listOf(Node("core-$id", core.name, "Fairway")),
+            sourceLabel = sourceLabel.take(100), sourceUrl = sourceUrl,
+          ), 0)
+        }
+      }
       return@runCatching ImportResult.Failure(
         "Подключение Fairway в этой версии Veilark для Windows пока недоступно.",
       )

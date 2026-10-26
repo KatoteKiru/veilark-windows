@@ -390,6 +390,7 @@ class WindowsVpnSession(
   private fun VpnEngine.displayName(): String = when (this) {
     VpnEngine.SingBox -> "sing-box"
     VpnEngine.TrustTunnel -> "TrustTunnel"
+    VpnEngine.VeilarkCore -> "Veilark Core (маршрут: Fairway)"
   }
 
   private companion object {

@@ -3,6 +3,10 @@ package uk.senyasenyavski.veilark.model
 enum class VpnEngine {
   SingBox,
   TrustTunnel,
+  VeilarkCore;
+
+  /** Release gate, not inferred from AUTH/HOST_LAB or profile presence. */
+  val availableInProduct: Boolean get() = this != VeilarkCore
 }
 
 enum class RoutingMode {

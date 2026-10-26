@@ -609,5 +609,9 @@ class WindowsVpnSessionTest {
   )
 
   private val VpnEngine.displayName: String
-    get() = if (this == VpnEngine.SingBox) "sing-box" else "TrustTunnel"
+    get() = when (this) {
+      VpnEngine.SingBox -> "sing-box"
+      VpnEngine.TrustTunnel -> "TrustTunnel"
+      VpnEngine.VeilarkCore -> "Veilark Core (маршрут: Fairway)"
+    }
 }

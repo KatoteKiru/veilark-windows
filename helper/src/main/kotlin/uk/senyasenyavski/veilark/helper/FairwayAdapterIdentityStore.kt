@@ -23,6 +23,11 @@ class FairwayAdapterIdentity internal constructor(private val guid: UUID) {
     .putShort(guid.mostSignificantBits.toShort())
     .order(ByteOrder.BIG_ENDIAN).putLong(guid.leastSignificantBits).array()
 
+  /** Compare the OS adapter identity; never identify an owned tunnel by alias alone. */
+  internal fun matchesWindowsGuid(value: String?): Boolean = value?.let {
+    runCatching { UUID.fromString(it.removeSurrounding("{", "}")) == guid }.getOrDefault(false)
+  } ?: false
+
   override fun toString(): String = "FairwayAdapterIdentity([redacted])"
 }
 

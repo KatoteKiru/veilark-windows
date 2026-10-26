@@ -100,6 +100,7 @@ class NodeLatencyProbe internal constructor(
     return try {
       val target = when (profile.engine) {
         VpnEngine.SingBox -> singBoxTargets[node.tag]
+        VpnEngine.VeilarkCore -> null // A Legacy UDP peer is not a TCP latency target.
         VpnEngine.TrustTunnel ->
           trustTunnelTarget(profile.endpointConfigs[node.tag] ?: profile.config)
       } ?: return NodeLatency(millis = null, available = false)

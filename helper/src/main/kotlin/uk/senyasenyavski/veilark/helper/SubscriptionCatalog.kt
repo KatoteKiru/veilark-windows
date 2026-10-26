@@ -105,6 +105,7 @@ object SubscriptionCatalog {
     subscriptionId: String,
   ): StoredProfiles {
     val migrated = normalize(stored)
+    require(engine.availableInProduct) { "Это ядро пока недоступно" }
     require(
       migrated.subscriptions.any {
         it.id == subscriptionId && it.profile(engine) != null
@@ -189,7 +190,7 @@ object SubscriptionCatalog {
       "Повторяющийся идентификатор подписки"
     }
     val selections = buildMap {
-      VpnEngine.entries.forEach { engine ->
+      VpnEngine.entries.filter { it.availableInProduct }.forEach { engine ->
         val requested = requestedSelections[engine]
         val selected = subscriptions.firstOrNull {
           it.id == requested && it.profile(engine) != null
@@ -197,7 +198,7 @@ object SubscriptionCatalog {
         if (selected != null) put(engine, selected.id)
       }
     }
-    val profiles = VpnEngine.entries.mapNotNull { engine ->
+    val profiles = VpnEngine.entries.filter { it.availableInProduct }.mapNotNull { engine ->
       val subscriptionId = selections[engine] ?: return@mapNotNull null
       subscriptions.first { it.id == subscriptionId }.profile(engine)
     }
@@ -228,6 +229,6 @@ object SubscriptionCatalog {
     if (profile.engine == VpnEngine.SingBox) {
       ProfileSelection.AUTOMATIC_TAG
     } else {
-      checkNotNull(profile.nodes.firstOrNull()?.tag) { "TrustTunnel-профиль не содержит серверов" }
+      checkNotNull(profile.nodes.firstOrNull()?.tag) { "Профиль не содержит серверов" }
     }
 }

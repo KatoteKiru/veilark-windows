@@ -1787,7 +1787,7 @@ private fun EngineSelector(
         modifier = Modifier.fillMaxWidth().padding(3.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
       ) {
-        VpnEngine.entries.forEach { engine ->
+        listOf(VpnEngine.SingBox, VpnEngine.TrustTunnel).forEach { engine ->
           EngineChoice(
             engine = engine,
             selected = selectedEngine == engine,
@@ -2969,6 +2969,7 @@ private val VpnEngine.displayName: String
   get() = when (this) {
     VpnEngine.SingBox -> "sing-box"
     VpnEngine.TrustTunnel -> "TrustTunnel"
+    VpnEngine.VeilarkCore -> "Veilark Core (маршрут: Fairway)"
   }
 
 @Composable

@@ -1,5 +1,20 @@
 # Veilark Windows current handoff
 
+26Oct app engine integration source implemented: VeilarkCore distinct enum with
+availableInProduct=false; strictLegacy profile importer has opt-in preparation
+switch(defaultclosed); Core config/routing never enters sing-box; unsupported
+routing/TLSfragment fail. Catalog keeps Core subscription records but excludes
+them from active profiles/selection until releasegate. Legacyselectorexplicittwo.
+FairwayEngineController now uses registeredowner/config/auth/host/status pipeline,
+exactinstallationGUID adapter check, realLUIDstats, noidleHTTPhealthprobes; cleanup
+retainsDLL/owner and survivescaller cancellation. Not registered in defaultapp.
+Shared93cases/0fail/2skip; fullhelperPASS +desktopcompile27s, final2controllercases
+actualAUTHDLLPASS10s. Earlier testlabel assumed2engines, fixednowexhaustive3.
+Scopedsource review no blocker. NO fullnativepath/trafficacceptance.
+Next: releasefactory trustedartifactmanifest/uplinkcapture/installationmetadata;
+per-device enrollment/encryptedlinkformat, profile-store rollback policy, then
+isolatedhost/installer/OTA. Coreimport/button remain gateduntiltheseareaccepted.
+
 26Oct OWNER UI REQUIREMENT: Fairway must have a separate button, analogous to
 Android's separate Core entry below sing-box/TrustTunnel. Implemented in Windows
 EngineSelector as separate full-width button with official RU/EN Core/Fairway
