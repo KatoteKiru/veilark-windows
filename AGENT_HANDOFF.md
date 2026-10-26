@@ -1,5 +1,31 @@
 # Veilark Windows current handoff
 
+26Oct Core per-device binding storage committed in bot sibling ae4ae38: explicit
+additive v1 migration, immutable pending public-key identity under existing paid
+owner/device/install/slot/expiry guards; same-transaction sealed baseline +pending
+revoke/admin/purchase/restricted guards.22 new tempDB testsPASS4.067s,17 old
+protected-baseline/support testsPASS7.132s; real init_db schema compatibility,
+reviewfixes and secret scan170PASS. No automatic DB migration or live changes.
+Still no authorized HTTP claim/publication/daemonack/revoke/admin migration or
+encrypted Windows enrollment delivery; pending record grants no network access.
+Vector native source a3154e4 improves live-owned IO repair, no new frozen DLL;
+restart ownership/executor and real host acceptance remain open before OTA.
+
+26Oct Atlas control-plane prerequisite source fixed in sibling
+C:/AI-Agent/veilark-bot-logic-tma branch local/windows-core-provider-boundary-20261026:
+unknown kinds no longer become Trust cleanup/revoke or sing-box delivery URLs.
+8 targeted temporary-DB/mocked-provider cases passed21.951s, source review clear,
+secret scan168filesPASS. Not deployed; Core provider/schema/ownership-to-publisher
+integration still absent. Vector native recovery WIP untouched. No OTA readiness.
+
+26Oct owner will perform physical Windows product test after OTA; do necessary
+development acceptance ourselves. Owner asks to resend existing admin subscription
+when Windows is ready. Do not persist bearer link here. Same account/subscription
+should cover Android+Windows via distinct per-install keys; existing static Core
+profile copied to PC is NOT concurrent-safe (new auth replaces same-key session).
+Existing admin link device-aware compatibility remains unverified; no promise
+that copying today's link yields independent credentials. Preserve Android key.
+
 26Oct new private native journal lab e33e479d/40331361B from564e65b paired with
 actual Windows JNA: ABI1/caps13/process-pin/optionalconfigure_host verified.
 Two load/create/configure/status/stop/release/close cycles in one test passed11s,
