@@ -1,5 +1,14 @@
 # Veilark Windows current handoff
 
+26Oct new private native journal lab e33e479d/40331361B from564e65b paired with
+actual Windows JNA: ABI1/caps13/process-pin/optionalconfigure_host verified.
+Two load/create/configure/status/stop/release/close cycles in one test passed11s,
+0skip. Synthetic endpoint/GUID/LUID and nonexistent Wintun; no begin_auth/host.
+Actual consumer FULL_TUN gates rejected start; owner freed, no worker/resources.
+New memory pairing test frozen to explicit VEILARK_NATIVE_JOURNAL_TEST_DLL+pin.
+No real journal filesystem/crash recovery or host/traffic acceptance established.
+Artifact remains private lab; no product capability, installer or OTA changes.
+
 26Oct native terminal error precedence fixed: awaitPhase and health share
 Status.isActivePhase requiring expected phase + live worker + zero outcome.
 Previously matching phase/worker could hide terminal error, including journal35.
