@@ -26,6 +26,7 @@ internal class FairwayEngineController(
   private val loadLibrary: () -> FairwayNativeLibrary,
   private val prepareHost: suspend (endpointIpv4: String) -> FairwayHostInputs,
   private val productAccepted: () -> Boolean = { VpnEngine.VeilarkCore.availableInProduct },
+  private val elevatedCheck: () -> Boolean = { ElevationManager().isElevated() },
 ) : EngineController {
   override val engine = VpnEngine.VeilarkCore
   private val lifecycle = Mutex()
@@ -38,6 +39,10 @@ internal class FairwayEngineController(
   override suspend fun start(profile: Profile): EngineHealth = withContext(Dispatchers.IO) {
     require(profile.engine == engine) { "Профиль предназначен для другого ядра" }
     if (!productAccepted()) throw unavailable()
+    if (!elevatedCheck()) throw VpnStartException(
+      VpnStatusCode.ELEVATION_REQUIRED,
+      "Для Fairway нужны права администратора. Подтвердите запрос Windows.",
+    )
     lifecycle.withLock {
       check(!hasOwnedResources()) { "Fairway retains resources; stop before reconnecting" }
       starting = true

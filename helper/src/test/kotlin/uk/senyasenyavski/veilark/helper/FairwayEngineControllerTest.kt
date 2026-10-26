@@ -32,7 +32,7 @@ class FairwayEngineControllerTest {
     val controller = FairwayEngineController(
       loadLibrary = { FairwayNativeLibrary.load(Path.of(dll!!), NativeArtifactPin(32_646_791,
         "8fd89a1791b40feeeba06b852be8f686cf0b492d6dfb641ebbbd6139cb1d46dd")) },
-      prepareHost = { error("Must not prepare host") }, productAccepted = { true },
+      prepareHost = { error("Must not prepare host") }, productAccepted = { true }, elevatedCheck = { true },
     )
     try {
       val failure = assertFailsWith<VpnStartException> { controller.start(profile()) }
@@ -46,6 +46,18 @@ class FairwayEngineControllerTest {
       cancelled.cancelAndJoin()
       assertFalse(controller.hasOwnedResources())
     } finally { controller.stop() }
+    assertFalse(controller.hasOwnedResources())
+    controller.stop()
+  }
+
+  @Test fun `unelevated entrypoint fails before loading native code or preparing host`() = runBlocking {
+    val controller = FairwayEngineController(
+      loadLibrary = { error("Must not load") },
+      prepareHost = { error("Must not prepare host") },
+      productAccepted = { true }, elevatedCheck = { false },
+    )
+    val failure = assertFailsWith<VpnStartException> { controller.start(profile()) }
+    assertEquals(VpnStatusCode.ELEVATION_REQUIRED, failure.code)
     assertFalse(controller.hasOwnedResources())
     controller.stop()
   }

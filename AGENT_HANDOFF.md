@@ -367,3 +367,17 @@ docs/WINDOWS_INTERFACE_REBUILD_BRIEF.md; visual concept approval is pending.
 
 ## TrustTunnel incident inspection 2026-10-08
 Read docs/TRUST_INCIDENT_CLIENT_2026-10-08.md. Packaged native1.1.7; matchingtag170609c24ca source stores bufferevent failure return-1 asWinsockerror, obscuring realcause. Windows DNS bootstrap candidate0.3.24/324 is now implemented locally; no native/OTA/liveVPN change. Read docs/RELEASE_0.3.24.md for bounds and publication gates. Hypothesis anti_dpi=false→prefixfailure rejected by working storedcustomer HTTPS; no policyflip. Original routingtests10pass. Existing ownerfilespreserved. Actual device outage remains unknown; root owns live transport/server diagnosis.
+
+## 26 October: Windows elevation and server enrollment source
+- Controller now checks existing elevation policy before DLL/host preparation and
+  returns ELEVATION_REQUIRED; UI already preserves store and uses runas/--connect.
+- Focused controller/elevation tests and desktop compilation PASS58s; optional
+  AUTH-only DLL case skipped because explicit fixture environment was absent.
+- Private server snapshot v2 source committed6dd10ec in
+  C:/AI-Agent/veilark-core-server-snapshot-20261026;17Python+9portableRust+6Core cases,
+  Linux --tests crosscheck and6valid/7invalid producer/checker pairing passed.
+- Snapshot ACK disk error no longer stops packet driver; disable/expiry retire
+  membership/session/queued packets without permanent revocation tombstones.
+- Source only: durable antirollback and real Linux acceptance still open.
+- Vector notified. Native FULL_TUN, provider/delivery and isolated Windows traffic
+  acceptance still prevent enabling Fairway/OTA. Android/live server unchanged.
