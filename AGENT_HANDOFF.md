@@ -1,5 +1,15 @@
 # Veilark Windows current handoff
 
+26Oct native terminal error precedence fixed: awaitPhase and health share
+Status.isActivePhase requiring expected phase + live worker + zero outcome.
+Previously matching phase/worker could hide terminal error, including journal35.
+2 new status cases + default closed controller case PASS; explicit AUTH-DLL case
+skipped because fixture env absent in this run (earlier actual DLL evidence is
+separate). Desktopcompile PASS58s. Scoped source review no blocker. No host run.
+Vector current journal hooks WIP includes before-images for routes/address/MTU/
+DNS/dynamicWFP and retained custody on failed ack/cleanup; crash rollback executor,
+uncertain IO reconciliation and isolated host acceptance still open. No new DLL.
+
 26Oct legacy store rollback checkpoint implemented: before first Core save,
 create immutable encrypted profiles.dat.before-fairway.bak. Exact legacy bytes
 are reused only after strict raw v1-v6/two-engine decode; otherwise legacy-only

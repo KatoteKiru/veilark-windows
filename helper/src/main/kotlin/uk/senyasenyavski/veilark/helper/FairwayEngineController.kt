@@ -100,7 +100,7 @@ internal class FairwayEngineController(
 
   override suspend fun health(): EngineHealth = withContext(Dispatchers.IO) {
     val status = try { owner?.status() } catch (_: Exception) { null }
-    if (status == null || status.phase != RUNNING || !status.workerAlive) {
+    if (status == null || !status.isActivePhase(RUNNING)) {
       EngineHealth.Unhealthy("Veilark Core is not running", VpnStatusCode.CORE_EXITED,
         status?.terminalOutcome?.toString().orEmpty())
     } else {
@@ -117,7 +117,7 @@ internal class FairwayEngineController(
     while (true) {
       currentCoroutineContext().ensureActive()
       val status = owned.status()
-      if (status.phase == expected && status.workerAlive) return
+      if (status.isActivePhase(expected)) return
       if (status.terminalOutcome != 0 || !status.workerAlive || status.phase >= STOPPING) {
         throw VpnStartException(VpnStatusCode.CORE_START_FAILED,
           "Veilark Core stopped (phase=${status.phase}, outcome=${status.terminalOutcome}, os=${status.nativeError})")

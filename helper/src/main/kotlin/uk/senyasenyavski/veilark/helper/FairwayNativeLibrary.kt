@@ -205,6 +205,7 @@ internal class FairwayNativeLibrary private constructor(
   ) {
     private val ipv4 = internalIpv4.copyOf()
     fun internalIpv4(): ByteArray = ipv4.copyOf()
+    fun isActivePhase(expected: Int): Boolean = phase == expected && workerAlive && terminalOutcome == 0
     // AUTHENTICATED is never RUNNING and capability alone is not traffic acceptance.
     override fun toString() = "FairwayNativeStatus(phase=$phase,outcome=$terminalOutcome,worker=$workerAlive,owner=$ownerAlive)"
   }
