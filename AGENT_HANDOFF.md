@@ -389,3 +389,11 @@ Read docs/TRUST_INCIDENT_CLIENT_2026-10-08.md. Packaged native1.1.7; matchingtag
   ABI1/caps13/process-pin/configure_host/Stop/Release compatible; FULL_TUN rejected.
 - No auth/host/journal OS execution; real crash recovery and forwarding not accepted.
 - Existing journal fixture retained independently. No runtime product pin/OTA changes.
+
+26Oct Vector integrated private server snapshot source at47efbe3 on
+codex/windows-core-enrollment-20261025, preserving native Windows handoffs.
+Combined Windows/Core compile PASS25.05s after integration. Frozen lab artifact
+remains16df365/a8e29e, not rebuilt from47efbe3; actual JNA memory pairing belongs
+only to that frozen artifact. Open: OS-visible ownership/run manifest for present
+crash leftovers, real filesystem/traffic acceptance, trusted provider delivery.
+No release/OTA or account/server mutation occurred.
