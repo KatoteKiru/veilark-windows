@@ -13,9 +13,11 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
 - Actual helperJAR asset verified;5targetedchecks0skip+desktopcompilePASS99s.
 - App imports/model/DPAPI/controller/separateFairwaybutton/releasefactory prepared.
   FairwayRelease.accepted=false; no accepted nativepin, newversion or OTA.
--27Oct: existing import/product/DPAPI checks now follow immutable release metadata
+- 27Oct: existing import/product/DPAPI checks now follow immutable release metadata
   instead of hardcoding false; six focused cases PASS17s, no tunnel/network action.
   Current release decision remains false until matching native artifact/delivery.
+- Prepared next release source version0.3.25/code325; live public OTA read-only
+  confirmed0.3.24/code324. No new installer/manifest publication yet.
 - Speculative larger startup timeout was fully reverted, never compiled/released.
 - Critical correction: Android already uses veilark-fairway-dispatch/DirectPolicy.
   Previous Windows native host_actor created bulk OSdirectroutes instead. Vector
