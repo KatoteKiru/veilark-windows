@@ -12,9 +12,18 @@ class CoreProfileIntegrationTest {
     return """{"schema":"veilark-argon-profile-v1","engine":"argon-v1","beta":true,"name":"Fairway test","endpoint":{"ipv4":"192.0.2.1","port":443},"identity":{"client_static_private_base64":"$key","server_static_public_base64":"$pin"},"network":{"mtu":1360,"dns_ipv4":["1.1.1.1"]}}"""
   }
 
-  @Test fun `Core import defaults closed but explicit preparation yields its own engine`() {
-    assertFalse(VpnEngine.VeilarkCore.availableInProduct)
-    assertIs<ImportResult.Failure>(ProfileImporter().fromText(document()))
+  @Test fun `Core import follows compiled release decision and explicit preparation yields its own engine`() {
+    assertEquals(FairwayRelease.accepted, VpnEngine.VeilarkCore.availableInProduct)
+    val defaultImport = ProfileImporter().fromText(document())
+    if (FairwayRelease.accepted) {
+      assertEquals(VpnEngine.VeilarkCore, assertIs<ImportResult.Success>(defaultImport).profile.engine)
+      assertTrue(FairwayRelease.nativeSize > 0)
+      assertTrue(FairwayRelease.nativeSha256.matches(Regex("[0-9a-f]{64}")))
+    } else {
+      assertIs<ImportResult.Failure>(defaultImport)
+      assertEquals(0L, FairwayRelease.nativeSize)
+      assertEquals("", FairwayRelease.nativeSha256)
+    }
     val profile = assertIs<ImportResult.Success>(ProfileImporter(allowCoreProfiles = true).fromText(document())).profile
     assertEquals(VpnEngine.VeilarkCore, profile.engine)
     assertEquals("Fairway test", profile.name)

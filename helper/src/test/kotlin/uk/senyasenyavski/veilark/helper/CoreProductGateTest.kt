@@ -11,20 +11,27 @@ class CoreProductGateTest {
   private fun core() = Profile("core", "Fairway", VpnEngine.VeilarkCore, "synthetic Core secret",
     listOf(Node("core-node", "Fairway", "Fairway")), "test")
 
-  @Test fun `stored Core is retained but never materialized or selected before product gate`() {
+  @Test fun `stored Core selection follows the compiled product decision`() {
     val record = SubscriptionRecord.user(listOf(core()))
     val result = SubscriptionCatalog.put(StoredProfiles(), record)
     assertEquals(record, result.subscriptions.single())
-    assertTrue(result.profiles.isEmpty())
-    assertFalse(result.selectedSubscriptionIds.containsKey(VpnEngine.VeilarkCore))
-    assertEquals(VpnEngine.SingBox, result.selectedEngine)
-    assertFailsWith<IllegalArgumentException> { SubscriptionCatalog.select(result, VpnEngine.VeilarkCore, record.id) }
+    if (FairwayRelease.accepted) {
+      assertEquals(listOf(core()), result.profiles)
+      assertEquals(record.id, result.selectedSubscriptionIds[VpnEngine.VeilarkCore])
+      assertEquals(VpnEngine.VeilarkCore,
+        SubscriptionCatalog.select(result, VpnEngine.VeilarkCore, record.id).selectedEngine)
+    } else {
+      assertTrue(result.profiles.isEmpty())
+      assertFalse(result.selectedSubscriptionIds.containsKey(VpnEngine.VeilarkCore))
+      assertEquals(VpnEngine.SingBox, result.selectedEngine)
+      assertFailsWith<IllegalArgumentException> { SubscriptionCatalog.select(result, VpnEngine.VeilarkCore, record.id) }
+    }
     val restored = SubscriptionCatalog.normalize(result.copy(selectedEngine = VpnEngine.VeilarkCore,
       profiles = listOf(core()), selectedSubscriptionIds = mapOf(VpnEngine.VeilarkCore to record.id)))
-    assertEquals(result, restored)
+    assertEquals(if (FairwayRelease.accepted) result.copy(selectedEngine = VpnEngine.VeilarkCore) else result, restored)
   }
 
-  @Test fun `Core subscription roundtrips real DPAPI without enabling runtime`() {
+  @Test fun `Core subscription roundtrips real DPAPI without starting runtime`() {
     assumeTrue(Platform.isWindows())
     val directory = Files.createTempDirectory("veilark-core-store-")
     try {
@@ -34,8 +41,8 @@ class CoreProductGateTest {
       store.save(StoredProfiles(subscriptions = listOf(record), selectedEngine = VpnEngine.VeilarkCore))
       val restored = store.load()
       assertEquals(record, restored.subscriptions.single())
-      assertTrue(restored.profiles.isEmpty())
-      assertEquals(VpnEngine.SingBox, restored.selectedEngine)
+      assertEquals(if (FairwayRelease.accepted) listOf(core()) else emptyList(), restored.profiles)
+      assertEquals(if (FairwayRelease.accepted) VpnEngine.VeilarkCore else VpnEngine.SingBox, restored.selectedEngine)
       assertFalse(Files.readAllBytes(path).toString(Charsets.UTF_8).contains("synthetic Core secret"))
     } finally {
       Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.delete(it) } }
