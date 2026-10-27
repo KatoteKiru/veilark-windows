@@ -79,6 +79,12 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
    Vector prepares custody-safe live daemon rollout; Atlas prepares backend deploy.
    Read-only FI has real admin entitlements/free slots but no core_* migrations;
    original staticAndroid lineage is not yet proven, never guess entitlement.
+9. FI backend deployed source7a7a0fd + 13 newCore tables via SQLite backup and
+   journaled one-shot; PID1462340 health PASS. Public managed/trust opt-in GET and
+   POST now return503 no-store while runtime remains disabled. Existing managed
+   subscription is valid authority for distinct Windows key; legacy static Android
+   remains unchanged. Await NL daemon transaction, runtime bootstrap and actual
+   managed claim/driverACK before pinning DLL and publishing OTA.
 
 ## Authority and evidence boundaries
 Owner explicitly chose testing real Windows AFTER release: do not ask again for
