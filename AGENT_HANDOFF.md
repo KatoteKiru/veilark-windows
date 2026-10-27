@@ -60,11 +60,16 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
    never copy Android staticprivate key or promise oldstaticlink concurrent-safe.
 5. Match productmetadata, nativepin, resources/installer/OTA signature/rollback.
 6. Vector owns backend actualaccount bridge in botlogiccheckout; GETclaim/POST
-   publickey contract locked and app side implemented. Backend source WIP, NOT
-   deployed/configured end-to-end. Reject JWE/allowlist possession as authority
+   publickey contract locked and app side implemented. Backend claims/protected
+   grant committede9fc221; publisher/runtime composition3b5e6d9 implemented,
+   NOT deployed/configured end-to-end. Reject JWE/allowlist possession as authority
    over owner/slots. Need effective all-target receipt before a usable profile.
    Atlas owns Windows DPAPIkey/claimconsumer/OTA. Newoperatoradapter83e8e6d source
    exists in isolatedsnapshotcheckout, not deployed; 5purechecks+reviewfix complete.
+7. Linuxv2 pre-anchorELF source4524403 built/staged privately; CLI golden accepted/
+   malformed rejected in isolatednetns, no activeunit changes. Vector adding
+   independent durable anchor +verified previous-snapshot boot recovery, then
+   matched rebuild/real isolated driver+SSH receipt/controlled rollout still due.
 
 ## Authority and evidence boundaries
 Owner explicitly chose testing real Windows AFTER release: do not ask again for
