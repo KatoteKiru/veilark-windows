@@ -13,7 +13,7 @@ import java.util.concurrent.Flow
  * memory. BodyHandlers.ofByteArray() applies no such bound and can exhaust the
  * desktop JVM before callers get a chance to validate ByteArray.size.
  */
-internal fun boundedByteArrayHandler(
+fun boundedByteArrayHandler(
   maximumBytes: Int,
   tooLargeMessage: String,
 ): HttpResponse.BodyHandler<ByteArray> {

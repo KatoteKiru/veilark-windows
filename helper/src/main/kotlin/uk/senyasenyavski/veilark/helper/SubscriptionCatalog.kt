@@ -71,7 +71,21 @@ object SubscriptionCatalog {
   fun fromImportedProfiles(
     stored: StoredProfiles,
     profiles: List<Profile>,
-  ): StoredProfiles = put(stored, SubscriptionRecord.user(profiles), select = false)
+  ): StoredProfiles {
+    val incoming = SubscriptionRecord.user(profiles)
+    val previous = stored.subscriptions.firstOrNull { it.id == incoming.id }
+    val record = if (previous != null && incoming.sourceUrl != null && previous.sourceUrl == incoming.sourceUrl) {
+      incoming.copy(profiles = mergeEngineProfiles(previous.profiles, incoming.profiles))
+    } else incoming
+    return put(stored, record, select = false)
+  }
+
+  /** Core enrollment and the legacy subscription are separate responses for one source. */
+  fun mergeEngineProfiles(previous: List<Profile>, incoming: List<Profile>): List<Profile> = when {
+    incoming.all { it.engine == VpnEngine.VeilarkCore } -> previous.filter { it.engine != VpnEngine.VeilarkCore } + incoming
+    incoming.none { it.engine == VpnEngine.VeilarkCore } -> previous.filter { it.engine == VpnEngine.VeilarkCore } + incoming
+    else -> incoming
+  }
 
   fun put(
     stored: StoredProfiles,

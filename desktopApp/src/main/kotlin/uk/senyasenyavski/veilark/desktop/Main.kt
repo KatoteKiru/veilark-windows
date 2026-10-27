@@ -154,6 +154,7 @@ import uk.senyasenyavski.veilark.helper.ActiveTunnelConflict
 import uk.senyasenyavski.veilark.helper.ElevationManager
 import uk.senyasenyavski.veilark.helper.GeoRoutingPreflight
 import uk.senyasenyavski.veilark.helper.ProfileStore
+import uk.senyasenyavski.veilark.helper.FairwayDeviceEnrollment
 import uk.senyasenyavski.veilark.helper.ProfileLoadResult
 import uk.senyasenyavski.veilark.helper.ProfileLifecycle
 import uk.senyasenyavski.veilark.helper.ProfileRemovalResult
@@ -556,6 +557,8 @@ private fun VeilarkApp(
   val preparing by preparation.busy.collectAsState()
   desktopActions.preparing = preparing
   val importer = remember { ProfileImporter() }
+  val fairwayImporter = remember { FairwayDeviceEnrollment.importer() }
+  var importEngineHint by remember { mutableStateOf<VpnEngine?>(null) }
   val profileStore = remember { ProfileStore() }
   val geoPreflight = remember { lazy(LazyThreadSafetyMode.NONE) { GeoRoutingPreflight() } }
   val updateState by updates.state.collectAsState()
@@ -840,7 +843,7 @@ private fun VeilarkApp(
           SubscriptionCatalog.put(
             currentStored(),
             refreshedSubscription.copy(
-              profiles = result.profiles,
+              profiles = SubscriptionCatalog.mergeEngineProfiles(refreshedSubscription.profiles, result.profiles),
               sourceLabel = result.profiles.first().sourceLabel,
               sourceUrl = result.profiles.mapNotNull(Profile::sourceUrl)
                 .distinct()
@@ -860,6 +863,7 @@ private fun VeilarkApp(
         nodeLatencies = nodeLatencies - invalidatedProfiles
         if (!refreshed) destination = Destination.Home
         importDialog = false
+        importEngineHint = null
         val importedNodeSummary = result.profiles.joinToString(" · ") {
           "${it.engine.displayName}: ${it.nodes.size}"
         }
@@ -909,7 +913,10 @@ private fun VeilarkApp(
     refreshing = true
     scope.launch {
       try {
-        val result = withContext(Dispatchers.IO) { importer.fromHttps(sourceUrl) }
+        val coreSource = subscription.profile(VpnEngine.VeilarkCore) != null &&
+          (selectedEngine == VpnEngine.VeilarkCore || subscription.profiles.all { it.engine == VpnEngine.VeilarkCore })
+        val sourceImporter = if (coreSource) fairwayImporter else importer
+        val result = withContext(Dispatchers.IO) { sourceImporter.fromHttps(sourceUrl) }
         if (
           expectedRevision != catalogRevision ||
           subscriptions.none { it.id == subscription.id }
@@ -1100,6 +1107,7 @@ private fun VeilarkApp(
               } else if (profiles.containsKey(engine)) {
                 selectedEngine = engine
               } else {
+                importEngineHint = engine
                 importDialog = true
               }
             },
@@ -1177,11 +1185,12 @@ private fun VeilarkApp(
                 return@ProfilesScreen
               }
               importing = true
+              val sourceImporter = if (selectedEngine == VpnEngine.VeilarkCore) fairwayImporter else importer
               scope.launch {
                 val result = withContext(Dispatchers.IO) {
                   runCatching {
                     val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-                    importer.fromText(
+                    sourceImporter.fromText(
                       clipboard.getData(DataFlavor.stringFlavor) as String,
                       language.text("Буфер обмена", "Clipboard"),
                     )
@@ -1281,16 +1290,18 @@ private fun VeilarkApp(
         if (!importing) {
           importDialog = false
           importDraft = ""
+          importEngineHint = null
         }
       },
       onImport = { value ->
         importing = true
+        val sourceImporter = if ((importEngineHint ?: selectedEngine) == VpnEngine.VeilarkCore) fairwayImporter else importer
         scope.launch {
           val result = withContext(Dispatchers.IO) {
             if (value.trim().startsWith("https://", ignoreCase = true)) {
-              importer.fromHttps(value)
+              sourceImporter.fromHttps(value)
             } else {
-              importer.fromText(value, language.text("Вставка", "Paste"))
+              sourceImporter.fromText(value, language.text("Вставка", "Paste"))
             }
           }
           importing = false

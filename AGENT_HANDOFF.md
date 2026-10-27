@@ -28,6 +28,17 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
   HTTPS import; shell/IPC retains opaque form, nested envelopes rejected.15focused
   import checks0fail/0skip+desktopcompilePASS32s. This is legacy encoding parity,
   NOT signed enrollment-v2 or account/device enrollment.
+- Account enrollment client/codec now implemented and wired to explicit Fairway
+  button/dialog/clipboard and Core-source refresh. Same /managed|trust URL,
+  opt-in GET→canonical32char scope; POST only publickey/scope/stable requestid;
+  strict response checked before local DPAPI private key merge. No redirects,
+  bounded64KiB body+HTTPdeadline, no-store success required, fixed UI errors.
+- Existing TrustTunnel/sing-box profiles preserved during Core-only response;
+  legacy refresh preserves existing Core entry under the same subscription URL.
+  Seven focused DPAPI/mockHTTP/catalog cases PASS35s0skip; final import4cases+
+  desktopcompilePASS25s after HTTPS-paste routing and UIretry fix. No live HTTP.
+- Independent client/UI review caught pending202/503 retry dropping Core hint;
+  fixed: clear hint only on successful import or dismissal, no legacy fallback.
 - Speculative larger startup timeout was fully reverted, never compiled/released.
 - Critical correction: Android already uses veilark-fairway-dispatch/DirectPolicy.
   Previous Windows native host_actor created bulk OSdirectroutes instead. Vector
@@ -48,8 +59,10 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
 4. One entitlement must support Android+Windows with distinct per-install keys;
    never copy Android staticprivate key or promise oldstaticlink concurrent-safe.
 5. Match productmetadata, nativepin, resources/installer/OTA signature/rollback.
-6. Vector now owns backend actualaccount bridge in botlogiccheckout; proposed
-   contract pending. Reject JWE/allowlist possession as authority over owner/slots.
+6. Vector owns backend actualaccount bridge in botlogiccheckout; GETclaim/POST
+   publickey contract locked and app side implemented. Backend source WIP, NOT
+   deployed/configured end-to-end. Reject JWE/allowlist possession as authority
+   over owner/slots. Need effective all-target receipt before a usable profile.
    Atlas owns Windows DPAPIkey/claimconsumer/OTA. Newoperatoradapter83e8e6d source
    exists in isolatedsnapshotcheckout, not deployed; 5purechecks+reviewfix complete.
 

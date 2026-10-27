@@ -24,6 +24,7 @@ class ProfileImporter(
 ) {
   fun fromText(text: String, sourceLabel: String = "Вставка"): ImportResult {
     val value = text.trim()
+    if (value.startsWith("https://", ignoreCase = true)) return fromHttps(value)
     if (ImportDeepLink.looksLikeEnvelope(value)) {
       val target = ImportDeepLink.parseUri(value)
         ?: return ImportResult.Failure("Адрес подписки некорректен")
