@@ -427,3 +427,16 @@ source/runtime completion and packaging; never promote missing implementation or
 lab-only capability as working product. No current-PC network permission inferred.
 Vector prepares explicit implemented host-beta capability artifact separately;
 Atlas still must finish enrollment/delivery and matched release composition.
+
+27Oct Atlas sourcee0fa226: all-target removalreceipt proof +atomic Coremanual
+queue/fence/operation/device intent; device+queue+request completion before slotreuse.
+Stale oldworker/request cannotrevoke replacement (actual tempDB concurrencytest).
+11publication+7reader casesPASS; commercial9pass/1fixturefailed thenfixedcase-only
+rerunPASS12.817s (no invented fullgreen rerun). No livechanges.
+NextCRITICAL actualissuer/claim/delivery, notdormantcommercialflag: Vectorfound
+existingbetaissuance manualreports/core-fairway-20261016/generate-and-enroll-kowalski.py
+(appendsargon.conf+restart) and restore-kowalski.py(hardcoded6+restart). NEVERrerun
+restore/oldissuer againstcurrentconfig. Source24Octevidence is NOTcurrenthoststate.
+Originalpackaging/private-service/enrollment.py iswrongprotocolforArgonbeta.
+Vector ownsimplementedhost-beta artifact; owneraccepts Windowshardwaretest after
+release, no furtherVM/Billingrequest. StillnoOTA/liveaccount/servermutation.
