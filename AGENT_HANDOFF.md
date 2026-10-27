@@ -453,3 +453,15 @@ Vector notified with precise files and shared HostPort/HostControl boundaries.
 Next: reuse existing Fairway decision/flow logic with Windows socket/TUN adapter;
 no new protocol/stack, no speculative longer timeout, Android unchanged. Preserve
 Vector WIP and retain beta artifact only as pre-parity candidate, not ready OTA.
+
+## 27 October: Windows app now consumes actual Android Fairway Geo
+Core RU now uses bundled fairway/ru-ipv4-20261013.txt exact Android SHAfd0fdb39...,
+135358B/8662prefixes/45223232IPs and unchanged Android policyparser body. No
+TrustTunnel/SRS materialization/preflight is required for Core; legacyengine
+preflight/data unchanged. Bundled resource and cache digest rejection checked.
+Source/test checks5casesPASS0skip +desktopcompilePASS99s; known Compose warnings.
+Built helperJAR asset bytes/hash verified; installer verifier now requires exactly
+one correct policyresource in applicationJARs. .gitattributes preserves rawbytes.
+ActualWindowsnative still needs existing sharedfairway-dispatch adapter. OSbulk
+Geo route candidate is NOTparity/OTAready; no runtimepolicy, DLLpin or flagenabled.
+Speculative longtimeoutpatch was fullyreverted; original90sbaseline unchanged.

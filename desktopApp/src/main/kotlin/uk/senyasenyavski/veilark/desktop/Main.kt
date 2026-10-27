@@ -687,8 +687,9 @@ private fun VeilarkApp(
     val nodeSnapshot = selectedNodeTags[selected.engine] ?: ProfileSelection.AUTOMATIC_TAG
     return try { Result.success(run {
       val geoAssets = if (
-        routingSnapshot.mode == RoutingMode.RussiaDirect ||
-        routingSnapshot.mode == RoutingMode.RussiaVpn
+        selected.engine != VpnEngine.VeilarkCore &&
+        (routingSnapshot.mode == RoutingMode.RussiaDirect ||
+        routingSnapshot.mode == RoutingMode.RussiaVpn)
       ) {
         withContext(Dispatchers.IO) {
           geoPreflight.value.requirePrepared(routingSnapshot)

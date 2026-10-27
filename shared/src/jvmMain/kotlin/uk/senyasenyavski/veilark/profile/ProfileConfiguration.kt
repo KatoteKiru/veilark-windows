@@ -26,10 +26,9 @@ object ProfileConfiguration {
       require(!routing.tlsFragment && routing.mode in setOf(RoutingMode.All, RoutingMode.RussiaDirect)) {
         "Этот режим маршрутизации Fairway пока недоступен"
       }
-      require(routing.mode != RoutingMode.RussiaDirect || geoRoutingAssets != null) {
-        "Геоданные маршрутизации не готовы. Обновите их и повторите подключение."
-      }
-      return profile.copy(appliedRouting = routing, geoRoutingAssets = geoRoutingAssets)
+      // Core uses the same pinned bundled Fairway policy as Android. Legacy SRS
+      // assets are neither a prerequisite nor an input to its runtime policy.
+      return profile.copy(appliedRouting = routing, geoRoutingAssets = null)
     }
     if (routing.mode == RoutingMode.RussiaDirect || routing.mode == RoutingMode.RussiaVpn) {
       require(geoRoutingAssets != null) {

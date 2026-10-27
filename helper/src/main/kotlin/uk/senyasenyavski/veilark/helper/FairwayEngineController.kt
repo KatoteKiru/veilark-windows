@@ -52,7 +52,7 @@ internal class FairwayEngineController(
           "Unsupported Fairway routing mode"
         }
         val prefixes = if (routing.mode == RoutingMode.RussiaDirect) {
-          FairwayIpv4Routes.fromGeoAssets(requireNotNull(profile.geoRoutingAssets) { "Fairway Geo assets required" })
+          CoreFairwayRuPolicy.bundledPrefixes()
         } else emptyList()
         val loaded = loadLibrary().also { library = it }
         if (!loaded.supportsFullTunnel || !loaded.supportsHostConfiguration) throw unavailable()

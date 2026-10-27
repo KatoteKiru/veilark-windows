@@ -1,0 +1,2 @@
+# Preserve the Android Fairway policy byte-for-byte for its pinned digest.
+helper/src/main/resources/fairway/ru-ipv4-20261013.txt -text

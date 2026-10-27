@@ -38,9 +38,10 @@ class CoreProfileIntegrationTest {
     val result = ProfileConfiguration.apply(original, RoutingSettings(RoutingMode.RussiaDirect), geoRoutingAssets = geo)
     assertEquals(document(), result.config)
     assertEquals(RoutingMode.RussiaDirect, result.appliedRouting.mode)
-    assertEquals(geo, result.geoRoutingAssets)
+    assertNull(result.geoRoutingAssets) // Fairway never consumes TrustTunnel/SRS payloads.
     assertFalse(result.config.contains("inbounds"))
-    assertFailsWith<IllegalArgumentException> { ProfileConfiguration.apply(original, RoutingSettings(RoutingMode.RussiaDirect)) }
+    val withoutLegacyGeo = ProfileConfiguration.apply(original, RoutingSettings(RoutingMode.RussiaDirect))
+    assertEquals(result, withoutLegacyGeo)
     assertFailsWith<IllegalArgumentException> { ProfileConfiguration.apply(original, RoutingSettings(RoutingMode.Manual)) }
     assertFailsWith<IllegalArgumentException> { ProfileConfiguration.apply(original, RoutingSettings(tlsFragment = true)) }
   }

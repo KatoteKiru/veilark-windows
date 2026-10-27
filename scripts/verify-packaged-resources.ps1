@@ -62,6 +62,28 @@ if ($acceptedMatch.Groups[1].Value -eq 'true') {
 }
 
 $launcherConfig = Join-Path $image 'app\Veilark.cfg'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$policyEntryName = 'fairway/ru-ipv4-20261013.txt'
+$policyCopies = 0
+foreach ($jarFile in Get-ChildItem -LiteralPath (Join-Path $image 'app') -Filter '*.jar' -File) {
+  $archive = [IO.Compression.ZipFile]::OpenRead($jarFile.FullName)
+  try {
+    $entry = $archive.GetEntry($policyEntryName)
+    if ($null -ne $entry) {
+      if ($entry.Length -ne 135358) { throw 'Packaged Fairway policy size differs from Android' }
+      $policyCopies++
+      $stream = $entry.Open()
+      $digest = [Security.Cryptography.SHA256]::Create()
+      try {
+        $policyHash = [BitConverter]::ToString($digest.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        if ($policyHash -ne 'fd0fdb390680c4a6a18a02542205b766e345b6caa34de717a2d9c776dd063cd5') {
+          throw 'Packaged Fairway policy differs from Android'
+        }
+      } finally { $digest.Dispose(); $stream.Dispose() }
+    }
+  } finally { $archive.Dispose() }
+}
+if ($policyCopies -ne 1) { throw 'Packaged Fairway policy must exist in exactly one application JAR' }
 if (-not (Test-Path -LiteralPath $launcherConfig -PathType Leaf)) {
   throw 'Packaged launcher configuration is missing'
 }
