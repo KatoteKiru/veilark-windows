@@ -5,6 +5,7 @@ import com.example.veilark.profile.SubscriptionFetcher
 import com.example.veilark.profile.CoreProfileJson
 import com.example.veilark.profile.CoreArgonProfile
 import com.example.veilark.profile.CoreArgonHandshakeProfile
+import com.example.veilark.profile.ImportDeepLink
 import uk.senyasenyavski.veilark.model.ImportResult
 import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.Profile
@@ -21,8 +22,16 @@ class ProfileImporter(
   private val fetchSubscription: (String) -> ByteArray = { SubscriptionFetcher.fetchBlocking(it) },
   private val allowCoreProfiles: Boolean = VpnEngine.VeilarkCore.availableInProduct,
 ) {
-  fun fromText(text: String, sourceLabel: String = "Вставка"): ImportResult =
-    compile(text.toByteArray(Charsets.UTF_8), sourceLabel)
+  fun fromText(text: String, sourceLabel: String = "Вставка"): ImportResult {
+    val value = text.trim()
+    if (ImportDeepLink.looksLikeEnvelope(value)) {
+      val target = ImportDeepLink.parseUri(value)
+        ?: return ImportResult.Failure("Адрес подписки некорректен")
+      return if (target.startsWith("https://", ignoreCase = true)) fromHttps(target)
+        else compile(target.toByteArray(Charsets.UTF_8), sourceLabel)
+    }
+    return compile(text.toByteArray(Charsets.UTF_8), sourceLabel)
+  }
 
   fun fromFile(path: Path): ImportResult = runCatching {
     require(Files.size(path) <= MAX_BYTES) { "Файл профиля больше 4 МБ" }

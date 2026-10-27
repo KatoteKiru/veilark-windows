@@ -41,6 +41,21 @@ class CoreProfileIntegrationTest {
     )) assertIs<ImportResult.Failure>(importer.fromText(invalid))
   }
 
+  @Test fun `existing compact Android link imports through HTTPS without changing its wire document`() {
+    val token = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { 7 })
+    val expected = "https://nl2.senyasenyavski.uk:2096/veilark/" + "07".repeat(32) + ".json"
+    var fetched: String? = null
+    val importer = ProfileImporter(fetchSubscription = { source ->
+      fetched = source
+      document().toByteArray()
+    }, allowCoreProfiles = true)
+    val result = assertIs<ImportResult.Success>(importer.fromText("veilark://import?t=$token"))
+    assertEquals(expected, fetched)
+    assertEquals(expected, result.profile.sourceUrl)
+    assertEquals(document(), result.profile.config)
+    assertEquals(VpnEngine.VeilarkCore, result.profile.engine)
+  }
+
   @Test fun `Core routing retains exact credential envelope and never writes sing box fields`() {
     val original = assertIs<ImportResult.Success>(ProfileImporter(allowCoreProfiles = true).fromText(document())).profile
     val geo = GeoRoutingAssets("unused", "unused", listOf("5.8.0.0/24", "ozon.ru"))

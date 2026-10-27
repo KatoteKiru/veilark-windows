@@ -7,6 +7,21 @@ import org.junit.Test
 import java.net.URLEncoder
 
 class ImportDeepLinkTest {
+  @Test fun opaqueAndroidLinksRemainOpaqueAcrossShellAndInstanceValidation() {
+    val token = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { 7 })
+    val link = "veilark://import?t=$token"
+    assertEquals("https://nl2.senyasenyavski.uk:2096/veilark/" + "07".repeat(32) + ".json",
+      ImportDeepLink.parseUri(link))
+    assertEquals(link, ImportDeepLink.fromArguments(listOf(link)))
+    assertEquals(link, ImportDeepLink.validatePayload(link))
+    val code = java.util.Base64.getUrlEncoder().withoutPadding()
+      .encodeToString("https://provider.example/sub".toByteArray())
+    assertEquals("https://provider.example/sub", ImportDeepLink.parseUri("veilark://import?code=$code"))
+    assertNull(ImportDeepLink.parseUri("$link&extra=1"))
+    assertNull(ImportDeepLink.parseUri("veilark://import?t=$token="))
+    val nested = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(link.toByteArray())
+    assertNull(ImportDeepLink.parseUri("veilark://import?code=$nested"))
+  }
   @Test
   fun acceptsHttpsSubscription() {
     assertEquals(
