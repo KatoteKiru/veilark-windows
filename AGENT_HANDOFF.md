@@ -440,3 +440,16 @@ restore/oldissuer againstcurrentconfig. Source24Octevidence is NOTcurrenthoststa
 Originalpackaging/private-service/enrollment.py iswrongprotocolforArgonbeta.
 Vector ownsimplementedhost-beta artifact; owneraccepts Windowshardwaretest after
 release, no furtherVM/Billingrequest. StillnoOTA/liveaccount/servermutation.
+
+## 27 October owner correction: reuse existing Fairway Geo solution
+Owner explicitly challenged the large-GEO/timeout claim: Android solved large Geo
+already; do not invent new Fairway. Atlas uncommitted startup-budget changes were
+FULLY restored; FairwayStartupBudget.kt deleted, no build/release used the patch.
+Source comparison: Androidruntime depends on veilark-fairway-dispatch and supplies
+protected direct sockets through HostControl. Current Windowsruntime/native has
+no dispatcher dependency and host_actor applies Geo as OwnedDirectRoutes OS rows.
+This is a Windows integration divergence, not evidence Android large Geo regressed.
+Vector notified with precise files and shared HostPort/HostControl boundaries.
+Next: reuse existing Fairway decision/flow logic with Windows socket/TUN adapter;
+no new protocol/stack, no speculative longer timeout, Android unchanged. Preserve
+Vector WIP and retain beta artifact only as pre-parity candidate, not ready OTA.
