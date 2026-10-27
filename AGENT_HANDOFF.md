@@ -70,6 +70,15 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
    malformed rejected in isolatednetns, no activeunit changes. Vector adding
    independent durable anchor +verified previous-snapshot boot recovery, then
    matched rebuild/real isolated driver+SSH receipt/controlled rollout still due.
+8. 27Oct continuation: final anchored Linux source863c750/2370808B/SHA7fac12c2
+   frozen in reports/core-server-snapshot-20261027/frozen-863c750f. Actual isolated
+   Linux TUN + EXACT remote publisher helper: initialACK1, addACK2, revokeACK3,
+   daemon restart with pending4/anchor3 boots confirmed3, retry givesACK4/anchor4.
+   Owned TUN cleanup PASS; CLI missinganchor/corruptprevious/rollback rejected.
+   No production service/config/customer key changes, no Windows forwarding test.
+   Vector prepares custody-safe live daemon rollout; Atlas prepares backend deploy.
+   Read-only FI has real admin entitlements/free slots but no core_* migrations;
+   original staticAndroid lineage is not yet proven, never guess entitlement.
 
 ## Authority and evidence boundaries
 Owner explicitly chose testing real Windows AFTER release: do not ask again for
