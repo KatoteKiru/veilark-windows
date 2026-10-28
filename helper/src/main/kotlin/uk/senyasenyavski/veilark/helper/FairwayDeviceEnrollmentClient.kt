@@ -2,6 +2,8 @@ package uk.senyasenyavski.veilark.helper
 
 import com.example.veilark.profile.ClientInstallationIdentity
 import com.example.veilark.profile.FairwayDeviceEnrollmentCodec
+import com.example.veilark.profile.SubscriptionFetcher
+import kotlinx.coroutines.runBlocking
 import uk.senyasenyavski.veilark.importer.ProfileImporter
 import java.net.URI
 import java.net.http.HttpClient
@@ -14,7 +16,16 @@ import uk.senyasenyavski.veilark.net.boundedByteArrayHandler
 
 /** Explicit Fairway import path; ordinary TrustTunnel/sing-box imports keep their fetcher. */
 object FairwayDeviceEnrollment {
-  fun importer(): ProfileImporter = ProfileImporter(fetchSubscription = FairwayDeviceEnrollmentClient()::fetch)
+  fun importer(): ProfileImporter = importer(
+    managed = FairwayDeviceEnrollmentClient()::fetch,
+    standard = { source -> runBlocking { SubscriptionFetcher.fetch(source) } },
+  )
+
+  internal fun importer(managed: (String) -> ByteArray, standard: (String) -> ByteArray): ProfileImporter =
+    ProfileImporter(fetchSubscription = { source ->
+      val uri = URI(source)
+      if (FairwayDeviceEnrollmentClient.isControlled(uri)) managed(source) else standard(source)
+    })
 }
 
 /** Account issuer consumer. No native/host/network-policy effects or legacy-key fallback. */

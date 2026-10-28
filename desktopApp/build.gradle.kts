@@ -43,7 +43,7 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Msi, TargetFormat.Exe)
       packageName = "Veilark"
-      packageVersion = "0.3.25"
+      packageVersion = "0.3.26"
       description = "Veilark VPN for Windows"
       vendor = "Veilark"
       // jdk.unsupported: ExtendedOpenOption share-mode lock for core configs

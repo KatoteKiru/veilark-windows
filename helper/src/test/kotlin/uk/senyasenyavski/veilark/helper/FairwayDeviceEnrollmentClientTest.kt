@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.*
 import org.json.JSONObject
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import uk.senyasenyavski.veilark.model.ImportResult
+import uk.senyasenyavski.veilark.model.VpnEngine
 
 class FairwayDeviceEnrollmentClientTest {
   private val scope = "s".repeat(32)
@@ -27,6 +29,24 @@ class FairwayDeviceEnrollmentClientTest {
     val profile = JSONObject("""{"schema":"veilark-argon-profile-v1","engine":"argon-v1","beta":true,"name":"Windows test","endpoint":{"ipv4":"192.0.2.1","port":443},"identity":{"server_static_public_base64":"$pin"},"network":{"mtu":1360,"dns_ipv4":["1.1.1.1"]}}""")
     return JSONObject().put("schema", "veilark-core-device-profile-v1").put("binding_scope", scope)
       .put("client_public_key_hex", public).put("profile", profile)
+  }
+
+  @Test fun `Fairway importer routes compact legacy profile to normal fetch and managed to enrollment`() {
+    val privateKey = Base64.getEncoder().encodeToString(ByteArray(32) { 1 })
+    val serverKey = Base64.getEncoder().encodeToString(ByteArray(32) { 2 })
+    val profile = """{"schema":"veilark-argon-profile-v1","engine":"argon-v1","beta":true,"name":"Fairway test","endpoint":{"ipv4":"192.0.2.1","port":443},"identity":{"client_static_private_base64":"$privateKey","server_static_public_base64":"$serverKey"},"network":{"mtu":1280,"dns_ipv4":["1.1.1.1"]}}""".toByteArray()
+    val calls = mutableListOf<String>()
+    val importer = FairwayDeviceEnrollment.importer(
+      managed = { calls += "managed"; profile },
+      standard = { calls += "standard"; profile },
+    )
+    val token = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { 7 })
+    val legacy = assertIs<ImportResult.Success>(importer.fromText("veilark://import?t=$token"))
+    assertEquals(VpnEngine.VeilarkCore, legacy.profile.engine)
+    assertEquals(listOf("standard"), calls)
+    val managed = assertIs<ImportResult.Success>(importer.fromHttps(source))
+    assertEquals(VpnEngine.VeilarkCore, managed.profile.engine)
+    assertEquals(listOf("standard", "managed"), calls)
   }
 
   @Test fun `alternate account links reuse one DPAPI key and public idempotency request`() = directory { path ->
