@@ -6,6 +6,13 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
  docs/RELEASE_0.3.21.md or ui-research/.
 
 ## Current state
+- 28Oct new server8d20bc9 ELF8a16e889 (2374888B) fixes missing deployed Legacy
+  proof; isolated Linux CLI accepts true/rejects invalid; actual TUN + exact
+  remotehelper add/revoke + interrupted-update restart/ACK PASS with proof enabled.
+  Receipts reports/core-server-snapshot-20261027/frozen-8d20bc93. FI runtime
+  operator scripts locally repinned 8a16; NOT activated. Vector sole NL operator.
+  Android managed Fairway source prepared separately commit3d35797, 4/4 focused
+  and compile PASS; no device/live API evidence or Android OTA yet.
 - 28Oct RELEASE GATE CLOSED: NL prepare refused real legacy_session_proof
   config: candidate863c750 lacks deployed Beta15 proof implementation. Vector
   integrating real semantics from1193f81, not disabling the setting. CORRECTION:
