@@ -17,6 +17,7 @@ class FairwayEngineControllerTest {
   @Test fun `product gate rejects before DLL or host preparation`() = runBlocking {
     val controller = FairwayEngineController(
       loadLibrary = { error("Must not load") }, prepareHost = { error("Must not prepare host") },
+      productAccepted = { false },
     )
     val failure = assertFailsWith<VpnStartException> { controller.start(profile()) }
     assertEquals(VpnStatusCode.CORE_NOT_READY, failure.code)

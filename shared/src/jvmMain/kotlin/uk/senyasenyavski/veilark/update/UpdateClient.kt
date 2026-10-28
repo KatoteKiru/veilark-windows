@@ -407,8 +407,8 @@ class UpdateClient(
   }
 
   companion object {
-    const val CURRENT_VERSION_CODE = 326
-    const val CURRENT_VERSION_NAME = "0.3.26"
+    const val CURRENT_VERSION_CODE = 327
+    const val CURRENT_VERSION_NAME = "0.3.27"
     val CURRENT_RELEASE_NOTES = """
       Обновлено в 0.3.24
       • Улучшено подключение TrustTunnel при временном отказе системного DNS.

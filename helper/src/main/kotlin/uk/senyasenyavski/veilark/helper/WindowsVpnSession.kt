@@ -101,54 +101,58 @@ class WindowsVpnSession(
   }
 
   override suspend fun disconnect() = disconnectMutex.withLock {
-    val (pending, controller) = mutex.withLock {
-      val pending = connectJob ?: pendingTeardownJob
-      connectJob = null
-      val controller = activeController
-      monitorJob?.cancel()
-      monitorJob = null
-      if (pending == null && controller == null) {
-        publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
-      } else {
-        // Give immediate feedback and make a second click harmless before any
-        // blocking probe or native process shutdown has completed.
-        publish(mutableState.value.copy(phase = VpnPhase.Stopping))
+    // Once teardown has been claimed, caller cancellation must not interrupt
+    // the final ownership/state transition after native cleanup completes.
+    withContext(NonCancellable) {
+      val (pending, controller) = mutex.withLock {
+        val pending = connectJob ?: pendingTeardownJob
+        connectJob = null
+        val controller = activeController
+        monitorJob?.cancel()
+        monitorJob = null
+        if (pending == null && controller == null) {
+          publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
+        } else {
+          // Give immediate feedback and make a second click harmless before any
+          // blocking probe or native process shutdown has completed.
+          publish(mutableState.value.copy(phase = VpnPhase.Stopping))
+        }
+        pending to controller
       }
-      pending to controller
-    }
-    pending?.cancel()
-    val pendingFinished = pending == null || withContext(NonCancellable) {
-      withTimeoutOrNull(disconnectJoinTimeoutMillis) {
-        pending.join()
-        true
-      } == true
-    }
-    val stopped = controller?.let { stopOwnedController(it, retainForPendingStartup = !pendingFinished) }
-      ?: Result.success(Unit)
-    val terminated = stopped.mapCatching {
-      check(pendingFinished) {
-        "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
+      pending?.cancel()
+      val pendingFinished = pending == null || withContext(NonCancellable) {
+        withTimeoutOrNull(disconnectJoinTimeoutMillis) {
+          pending.join()
+          true
+        } == true
       }
-      check(controller?.hasOwnedResources() != true) { "Ресурсы VPN-ядра ещё не освобождены" }
-    }
-    mutex.withLock {
-      pendingTeardownJob = if (pendingFinished) null else pending
-      if (terminated.isSuccess) {
-        publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
-      } else {
-        logger("Ошибка остановки: ${terminated.exceptionOrNull()?.message}")
-        publish(
-          mutableState.value.copy(
-            phase = VpnPhase.Error(
-              message = "Не удалось остановить VPN-ядро",
-              code = VpnStatusCode.STOP_FAILED,
-              stopRequired = true,
+      val stopped = controller?.let { stopOwnedController(it, retainForPendingStartup = !pendingFinished) }
+        ?: Result.success(Unit)
+      val terminated = stopped.mapCatching {
+        check(pendingFinished) {
+          "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
+        }
+        check(controller?.hasOwnedResources() != true) { "Ресурсы VPN-ядра ещё не освобождены" }
+      }
+      mutex.withLock {
+        pendingTeardownJob = if (pendingFinished) null else pending
+        if (terminated.isSuccess) {
+          publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
+        } else {
+          logger("Ошибка остановки: ${terminated.exceptionOrNull()?.message}")
+          publish(
+            mutableState.value.copy(
+              phase = VpnPhase.Error(
+                message = "Не удалось остановить VPN-ядро",
+                code = VpnStatusCode.STOP_FAILED,
+                stopRequired = true,
+              ),
             ),
-          ),
-        )
+          )
+        }
       }
+      terminated.getOrThrow()
     }
-    terminated.getOrThrow()
   }
 
   private suspend fun runConnect(controller: EngineController, profile: Profile) {

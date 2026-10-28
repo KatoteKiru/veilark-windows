@@ -114,13 +114,13 @@ internal data class ProbeFailure(val code: String, val message: String) {
 }
 
 internal object WindowsCurlInternetProbe {
-  suspend fun probe(): ProbeFailure? {
+  suspend fun probe(sourceIpv4: String? = null): ProbeFailure? {
     val curl = resolveCurl()
       ?: return ProbeFailure(ProbeFailure.FAILED, "в Windows не найден curl.exe")
     var lastFailure = ProbeFailure(ProbeFailure.FAILED, "нет ответа")
     for (target in TARGETS) {
       val result = try {
-        ProcessBuilder(command(curl, target))
+        ProcessBuilder(command(curl, target, sourceIpv4))
           .redirectErrorStream(true)
           .start()
           .captureCancellable(PROCESS_TIMEOUT_MILLIS, maximumOutputChars = 2_000)
@@ -137,7 +137,7 @@ internal object WindowsCurlInternetProbe {
     return lastFailure
   }
 
-  internal fun command(curl: Path, target: String): List<String> = listOf(
+  internal fun command(curl: Path, target: String, sourceIpv4: String? = null): List<String> = listOf(
     curl.toString(),
     "--noproxy",
     "*",
@@ -151,8 +151,12 @@ internal object WindowsCurlInternetProbe {
     "3",
     "--max-time",
     "6",
-    target,
-  )
+  ) + if (sourceIpv4 == null) listOf(target) else {
+    require(sourceIpv4.split('.').let { parts -> parts.size == 4 && parts.all {
+      it.matches(Regex("0|[1-9][0-9]{0,2}")) && it.toInt() in 0..255
+    } }) { "Invalid probe source IPv4" }
+    listOf("--ipv4", "--interface", sourceIpv4, target)
+  }
 
   /** Returns `null` only for a completed HTTP exchange. */
   internal fun failure(result: CapturedProcess): String? = classify(result)?.message

@@ -15,10 +15,11 @@
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('', 'singbox', 'trusttunnel')]
+  [ValidateSet('', 'singbox', 'trusttunnel', 'fairway')]
   [string]$Engine = '',
   [int]$HoldSeconds = 12,
-  [int]$Cycles = 1
+  [int]$Cycles = 1,
+  [string]$ProfileStore = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,7 +27,7 @@ $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $projectRoot
 try {
   Write-Host 'Compiling and exporting the runtime class path...'
-  & (Join-Path $projectRoot 'gradlew.bat') --offline :helper:exportRuntimeClasspath | Out-Null
+  & (Join-Path $projectRoot 'gradlew.bat') --offline :helper:classes :helper:exportRuntimeClasspath | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Gradle failed to prepare the class path (exit code $LASTEXITCODE)"
   }
@@ -55,11 +56,17 @@ try {
   if (Test-Path -LiteralPath $logFile) { Remove-Item -LiteralPath $logFile -Force }
 
   $arguments = @($Engine, $HoldSeconds, $Cycles) -join ' '
+  $profileOption = ''
+  if ($ProfileStore) {
+    $profilePath = (Resolve-Path -LiteralPath $ProfileStore).Path
+    if ($profilePath -match '[\r\n"&|<>^%]') { throw 'Unsafe diagnostic profile path' }
+    $profileOption = '-Dveilark.check.profileStore="' + $profilePath + '"'
+  }
   $script = @"
 @echo off
 chcp 65001 >nul
 cd /d "$projectRoot"
-"$java" -Dfile.encoding=UTF-8 -cp "$classpath" uk.senyasenyavski.veilark.helper.LiveTunnelCheck $arguments > "$logFile" 2>&1
+"$java" -Dfile.encoding=UTF-8 $profileOption -cp "$classpath" uk.senyasenyavski.veilark.helper.LiveTunnelCheck $arguments > "$logFile" 2>&1
 "@
   [System.IO.File]::WriteAllText($commandFile, $script, [System.Text.Encoding]::ASCII)
 
@@ -75,6 +82,7 @@ cd /d "$projectRoot"
   } else {
     Write-Warning 'No log was produced. The UAC prompt was most likely declined.'
   }
+  if ($process.ExitCode -ne 0) { throw "Tunnel check failed (exit code $($process.ExitCode))" }
 } finally {
   Pop-Location
 }

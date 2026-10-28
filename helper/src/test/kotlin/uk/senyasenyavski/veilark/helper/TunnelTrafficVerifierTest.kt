@@ -78,6 +78,18 @@ class TunnelTrafficVerifierTest {
     })
   }
 
+  @Test fun `explicit source probe binds IPv4 without permitting a hostname or argument injection`() {
+    val executable = Path.of("C:\\Windows\\System32\\curl.exe")
+    val command = WindowsCurlInternetProbe.command(executable, "https://example.test/health", "10.23.0.2")
+    assertTrue(command.contains("--ipv4"))
+    assertTrue(command.windowed(2).any { it == listOf("--interface", "10.23.0.2") })
+    for (invalid in listOf("example.test", "10.23.0.2 --insecure", "999.1.1.1")) {
+      kotlin.test.assertFailsWith<IllegalArgumentException> {
+        WindowsCurlInternetProbe.command(executable, "https://example.test/health", invalid)
+      }
+    }
+  }
+
   @Test
   fun `probe failures carry stable language-independent codes`() {
     fun code(exit: Int?, timedOut: Boolean = false) = WindowsCurlInternetProbe.classify(

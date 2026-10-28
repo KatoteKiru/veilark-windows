@@ -162,10 +162,10 @@ internal class FairwayNativeLibrary private constructor(
         teardown.withLock {
           if (released) return@withLock
           requestStop()
-          if (!join(timeoutMs)) throw NativeCallException("join", JOIN_TIMEOUT)
+          if (!join(timeoutMs)) throw NativeCallException("join", JOIN_TIMEOUT, status())
           val state = status()
           if (!state.canRelease || state.workerAlive || state.resourceMask != 0) {
-            throw NativeCallException("cleanup", CLEANUP_REQUIRED)
+            throw NativeCallException("cleanup", CLEANUP_REQUIRED, state)
           }
           release()
         }
@@ -330,5 +330,14 @@ internal class FairwayNativeLibrary private constructor(
   }
 }
 
-internal class NativeCallException(operation: String, val result: Int) :
-  IllegalStateException("Native $operation failed ($result)")
+internal class NativeCallException(
+  operation: String,
+  val result: Int,
+  state: FairwayNativeLibrary.Status? = null,
+) : IllegalStateException(buildString {
+  append("Native $operation failed ($result)")
+  state?.let {
+    append(" phase=${it.phase} outcome=${it.terminalOutcome} worker=${it.workerAlive}")
+    append(" resources=${it.resourceMask} releasable=${it.canRelease} os=${it.nativeError}")
+  }
+})

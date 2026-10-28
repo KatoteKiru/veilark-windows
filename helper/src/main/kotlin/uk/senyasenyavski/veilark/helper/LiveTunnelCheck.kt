@@ -8,6 +8,11 @@ import uk.senyasenyavski.veilark.model.VpnEngine
 import uk.senyasenyavski.veilark.model.VpnPhase
 import uk.senyasenyavski.veilark.profile.ProfileConfiguration
 import kotlin.system.exitProcess
+import java.nio.file.Path
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.NetworkInterface
+import java.net.URI
 
 /**
  * Headless connect/disconnect check for the stored profile.
@@ -16,7 +21,7 @@ import kotlin.system.exitProcess
  * verifies the whole engine path without a window. Creating a WinTUN adapter
  * requires administrator rights; without them the check reports why and stops.
  *
- * Usage: `LiveTunnelCheck [singbox|trusttunnel] [holdSeconds] [cycles]`
+ * Usage: `LiveTunnelCheck [singbox|trusttunnel|fairway] [holdSeconds] [cycles]`
  */
 object LiveTunnelCheck {
   @JvmStatic
@@ -24,28 +29,29 @@ object LiveTunnelCheck {
     val requestedEngine = args.getOrNull(0)?.lowercase()
     val holdSeconds = args.getOrNull(1)?.toIntOrNull() ?: 12
     val cycles = args.getOrNull(2)?.toIntOrNull() ?: 1
+    require(holdSeconds in 1..120 && cycles in 1..3) { "Invalid diagnostic bounds" }
 
     if (!ElevationManager().isElevated()) {
-      report("НЕ ХВАТАЕТ ПРАВ: запустите проверку в терминале от имени администратора")
-      return
+      error("НЕ ХВАТАЕТ ПРАВ: запустите проверку в терминале от имени администратора")
     }
 
-    val stored = ProfileStore().load()
+    val checkStore = System.getProperty("veilark.check.profileStore")?.let(Path::of)
+    val stored = (checkStore?.let { ProfileStore(it) } ?: ProfileStore()).load()
     if (stored.profiles.isEmpty()) {
-      report("НЕТ ПРОФИЛЕЙ: сначала импортируйте подписку в приложении")
-      return
+      error("НЕТ ПРОФИЛЕЙ: сначала импортируйте подписку в приложении")
     }
     val engine = when (requestedEngine) {
       "singbox", "sing-box" -> VpnEngine.SingBox
       "trusttunnel", "trust", "tt" -> VpnEngine.TrustTunnel
+      "fairway", "core" -> VpnEngine.VeilarkCore
       else -> stored.selectedEngine
     }
     val profile = stored.profiles.firstOrNull { it.engine == engine } ?: run {
-      report("НЕТ ПРОФИЛЯ для ядра $engine. Доступны: ${stored.profiles.map { it.engine }}")
-      return
+      error("НЕТ ПРОФИЛЯ для ядра $engine")
     }
 
-    report("Ядро: $engine, профиль «${profile.name}», узлов: ${profile.nodes.size}")
+    report("Ядро: $engine, узлов: ${profile.nodes.size}")
+    check(WindowsNetwork.tunnels().none { it.operational }) { "An active VPN must be stopped before this diagnostic" }
     reportAdapters("До подключения")
 
     val configured = ProfileConfiguration.apply(
@@ -69,6 +75,7 @@ object LiveTunnelCheck {
     holdSeconds: Int,
   ) = runBlocking {
     val session = WindowsVpnSession()
+    val previousLuids = WindowsNetwork.tunnels().map { it.luid }.toSet()
     val watcher = launch {
       var previous: VpnPhase? = null
       while (true) {
@@ -89,15 +96,30 @@ object LiveTunnelCheck {
       }
     }
 
-    val startedAt = System.currentTimeMillis()
-    session.connect(profile)
-    val elapsed = System.currentTimeMillis() - startedAt
-    report("подключение заняло ${elapsed} мс, итог: ${describe(session.state.value.phase)}")
-
-    if (session.state.value.phase is VpnPhase.Error) {
-      watcher.cancel()
-      return@runBlocking
-    }
+    try {
+      val startedAt = System.currentTimeMillis()
+      session.connect(profile)
+      val elapsed = System.currentTimeMillis() - startedAt
+      report("подключение заняло ${elapsed} мс, итог: ${describe(session.state.value.phase)}")
+      check(session.state.value.phase is VpnPhase.Connected) { "Tunnel did not reach Connected" }
+      val before = requireNotNull(session.state.value.traffic) { "Tunnel counters unavailable" }
+      val adapter = WindowsNetwork.adapters().single {
+        it.alias == before.adapter && it.luid !in previousLuids && it.operational && it.isTunnel
+      }
+      if (profile.engine == VpnEngine.VeilarkCore) {
+        check(FairwayAdapterIdentityStore().loadOrCreate().matchesWindowsGuid(adapter.interfaceGuid)) {
+          "Tunnel does not match the installation adapter identity"
+        }
+      }
+      val sourceIpv4 = requireNotNull(NetworkInterface.getByIndex(adapter.index)).inetAddresses.asSequence()
+        .filterIsInstance<Inet4Address>().filterNot { it.isLinkLocalAddress }.single().hostAddress
+      WindowsCurlInternetProbe.TARGETS.forEach { target ->
+        val addresses = InetAddress.getAllByName(URI(target).host).filterIsInstance<Inet4Address>()
+        check(addresses.isNotEmpty() && addresses.all { WindowsNetwork.bestIpv4InterfaceIndex(it.hostAddress) == adapter.index }) {
+          "Probe destination route bypasses the owned tunnel"
+        }
+      }
+      check(WindowsCurlInternetProbe.probe(sourceIpv4) == null) { "Bound Internet probe failed while connected" }
 
     delay(holdSeconds * 1_000L)
     val traffic = session.state.value.traffic
@@ -110,10 +132,19 @@ object LiveTunnelCheck {
       )
     }
 
-    session.disconnect()
+      check(traffic != null && traffic.bytesIn > before.bytesIn && traffic.bytesOut > before.bytesOut) {
+        "Bidirectional tunnel traffic was not observed"
+      }
+      check(session.state.value.phase is VpnPhase.Connected) { "Connection was lost during the hold interval" }
+      check(WindowsNetwork.refresh(adapter.luid)?.operational == true) { "Owned tunnel disappeared during the hold interval" }
+    } finally {
+      try { session.disconnect() } finally { watcher.cancel() }
+    }
+    check(session.state.value.phase is VpnPhase.Idle) { "Tunnel did not stop" }
     report("после отключения: ${describe(session.state.value.phase)}")
-    watcher.cancel()
     delay(1_500)
+    check(WindowsNetwork.tunnels().all { it.luid in previousLuids }) { "New tunnel adapter remains after Stop" }
+    check(WindowsCurlInternetProbe.probe() == null) { "Internet did not recover after Stop" }
   }
 
   private fun defaultTag(engine: VpnEngine, firstNode: String?): String =

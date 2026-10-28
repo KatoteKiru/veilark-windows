@@ -3,12 +3,14 @@ package uk.senyasenyavski.veilark.helper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import uk.senyasenyavski.veilark.model.Profile
+import uk.senyasenyavski.veilark.model.Node
 import uk.senyasenyavski.veilark.model.VpnEngine
 
 class SubscriptionCatalogImportTest {
   @Test fun coreEnrollmentAndLegacyRefreshKeepBothEngineProfilesForOneAccountSource() {
     val legacy = profile("legacy")
-    val core = legacy.copy(id = "core-one", engine = VpnEngine.VeilarkCore)
+    val core = legacy.copy(id = "core-one", engine = VpnEngine.VeilarkCore,
+      nodes = listOf(Node("core-one", "Fairway", "Fairway")))
     val first = SubscriptionCatalog.fromImportedProfiles(StoredProfiles(), listOf(legacy))
     val enrolled = SubscriptionCatalog.fromImportedProfiles(first, listOf(core))
     assertEquals(setOf(legacy, core), enrolled.subscriptions.single().profiles.toSet())
