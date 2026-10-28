@@ -100,10 +100,15 @@ class WindowsVpnSession(
     job.join()
   }
 
-  override suspend fun disconnect() = disconnectMutex.withLock {
+  override suspend fun disconnect() = disconnectOwned(expectedPending = null)
+
+  private suspend fun disconnectOwned(expectedPending: Job?): Unit = disconnectMutex.withLock {
     // Once teardown has been claimed, caller cancellation must not interrupt
     // the final ownership/state transition after native cleanup completes.
     withContext(NonCancellable) {
+      if (expectedPending != null && mutex.withLock { pendingTeardownJob !== expectedPending }) {
+        return@withContext
+      }
       val (pending, controller) = mutex.withLock {
         val pending = connectJob ?: pendingTeardownJob
         connectJob = null
@@ -126,15 +131,20 @@ class WindowsVpnSession(
           true
         } == true
       }
-      val stopped = controller?.let { stopOwnedController(it, retainForPendingStartup = !pendingFinished) }
-        ?: Result.success(Unit)
+      // A blocked startup may still hold the controller's lifecycle lock.
+      // Do not wait on that same lock after the startup deadline expired.
+      // Retain both the pending job and its controller for a later cleanup.
+      val stopped = if (!pendingFinished) {
+        Result.failure(IllegalStateException("Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"))
+      } else controller?.let { stopOwnedController(it) } ?: Result.success(Unit)
       val terminated = stopped.mapCatching {
         check(pendingFinished) {
           "Попытка подключения не остановилась за $disconnectJoinTimeoutMillis мс"
         }
         check(controller?.hasOwnedResources() != true) { "Ресурсы VPN-ядра ещё не освобождены" }
       }
-      mutex.withLock {
+      val resumeWhenStartupCompletes = mutex.withLock {
+        val resume = !pendingFinished && pendingTeardownJob !== pending
         pendingTeardownJob = if (pendingFinished) null else pending
         if (terminated.isSuccess) {
           publish(mutableState.value.copy(phase = VpnPhase.Idle, traffic = null))
@@ -149,6 +159,15 @@ class WindowsVpnSession(
               ),
             ),
           )
+        }
+        resume
+      }
+      if (resumeWhenStartupCompletes && pending != null) pending.invokeOnCompletion {
+        // One completion-driven cleanup, never a polling loop. The exact job
+        // guard prevents an old callback from stopping a newer connection.
+        scope.launch {
+          runCatching { disconnectOwned(expectedPending = pending) }
+            .onFailure { logger("Ошибка завершения отложенной остановки: ${it.message}") }
         }
       }
       terminated.getOrThrow()
@@ -242,7 +261,6 @@ class WindowsVpnSession(
    */
   private suspend fun stopOwnedController(
     controller: EngineController,
-    retainForPendingStartup: Boolean = false,
   ): Result<Unit> {
     val claimed = mutex.withLock {
       if (activeController !== controller) {
@@ -260,13 +278,13 @@ class WindowsVpnSession(
         check(!controller.hasOwnedResources()) { "Ресурсы VPN-ядра ещё не освобождены" }
       }
     }
-    if (!controller.hasOwnedResources() && !retainForPendingStartup) mutex.withLock {
+    if (!controller.hasOwnedResources()) mutex.withLock {
       activeGeoLease?.close()
       activeGeoLease = null
     }
     // Retain pending host-policy/native ownership even after its worker exits;
     // a subsequent Stop must retry instead of reporting a false Idle state.
-    if (retainForPendingStartup || (stopped.isFailure && controller.hasOwnedResources())) {
+    if (stopped.isFailure && controller.hasOwnedResources()) {
       mutex.withLock {
         if (activeController == null) activeController = controller
       }

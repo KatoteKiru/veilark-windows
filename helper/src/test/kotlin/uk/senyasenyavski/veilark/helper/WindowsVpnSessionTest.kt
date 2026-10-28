@@ -453,6 +453,51 @@ class WindowsVpnSessionTest {
     }
   }
 
+  @Test fun `expired startup shutdown never waits on the controller lifecycle lock`() = runBlocking {
+    val entered = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    val lifecycle = kotlinx.coroutines.sync.Mutex()
+    val owned = java.util.concurrent.atomic.AtomicBoolean(false)
+    val stops = AtomicInteger()
+    val controller = object : EngineController {
+      override val engine = VpnEngine.VeilarkCore
+      override suspend fun start(profile: Profile): EngineHealth {
+        lifecycle.lock()
+        try {
+          owned.set(true)
+          withContext(NonCancellable) { entered.complete(Unit); release.await() }
+          currentCoroutineContext().ensureActive()
+          return EngineHealth.Healthy
+        } finally { lifecycle.unlock() }
+      }
+      override suspend fun stop() {
+        lifecycle.lock()
+        try { stops.incrementAndGet(); owned.set(false) } finally { lifecycle.unlock() }
+      }
+      override fun isAlive() = owned.get()
+    }
+    val session = WindowsVpnSession(listOf(controller), disconnectJoinTimeoutMillis = 50, logger = {})
+    val connecting = launch { session.connect(profile(VpnEngine.VeilarkCore)) }
+    try {
+      withTimeout(2_000) { entered.await() }
+      withTimeout(1_000) { assertFailsWith<IllegalStateException> { session.disconnect() } }
+      assertEquals(0, stops.get())
+      assertTrue(session.state.value.phase.requiresStopRetry)
+      assertTrue(owned.get())
+      release.complete(Unit)
+      withTimeout(2_000) { connecting.join() }
+      withTimeout(2_000) {
+        while (session.state.value.phase !is VpnPhase.Idle) delay(10)
+      }
+      assertEquals(1, stops.get())
+      assertFalse(owned.get())
+      assertIs<VpnPhase.Idle>(session.state.value.phase)
+    } finally {
+      release.complete(Unit)
+      withTimeout(2_000) { connecting.join(); session.disconnect() }
+    }
+  }
+
   private fun fastSession(vararg controllers: EngineController) = WindowsVpnSession(
     controllers = controllers.toList(),
     statisticsIntervalMillis = 10,
