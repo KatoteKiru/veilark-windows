@@ -6,6 +6,27 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
  docs/RELEASE_0.3.21.md or ui-research/.
 
 ## Current state
+- 28Oct RELEASE GATE CLOSED: NL prepare refused real legacy_session_proof
+  config: candidate863c750 lacks deployed Beta15 proof implementation. Vector
+  integrating real semantics from1193f81, not disabling the setting. Also frozen
+  Windows DLL5f0e189 contains proof primitives but not client driver recovery;
+  Vector must integrate Windows host-compatible client recovery and rebuild DLL.
+  Previously built 0.3.25 candidate is NOT eligible for OTA; source flag reset false.
+  Ignored packaging DLL fa516 remains staged: verifier intentionally rejects it
+  while flag false. Preserve candidate as evidence, not a released product.
+  All FI runtime helper scripts with pinned old 7fac binary need updated after
+  Vector provides rebuilt artifact. Active NL service and Android85 unchanged.
+  Android single-managed-link enrollment missing in beta15; separate agent works
+  source-only on parity; old static Android subscription remains usable.
+- 27Oct historical private candidate BUILT with FairwayRelease=true at build time
+  and ignored packaging DLL fa516bfd (4567446B). It is superseded as noted above.
+  Do NOT publish/merge until matched recovery, NL daemon and real managed claim pass.
+  Existing public OTA remains0.3.24; physical Windows TUN deferred by owner.
+  Appimage/resources PASS, 12 focused cases0failure/0skip, actualDLL/JNA pairing,
+  EXE inner payload+bootstrap verify PASS, wrapper version0.3.25.0. Candidate
+  build/candidate/Veilark-0.3.25.exe 132689920B SHA256
+  47ba6c522ef99517111b98d05a9746edb59374229b6b94849349739e58343c84;
+  Authenticode NotSigned, matching existing unsigned channel; NOT published.
 - Latest app implementation e6cd4da: use exact Android pinned Fairway policy and
   unchanged parser, bundled135358B/8662prefixes/45223232IPv4, SHA256
   fd0fdb390680c4a6a18a02542205b766e345b6caa34de717a2d9c776dd063cd5.
