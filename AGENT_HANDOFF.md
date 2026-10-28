@@ -1,5 +1,13 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct FINAL PRIVATE327 REPLACES OLD327 BELOW: Windows b5e8de6, native7ea7989.
+Fixes pending-start Stop deadlock and failed-create adapter intent cleanup.
+Candidate132726784B SHA125a509eed4da022511017cde7dcb8770b891f3bbbae7f2cb31c09f38287d7f5.
+Native4500480B SHA699c6fad51ffe6341cacb76f378d3af0a019f155edca4a8d8573443a0048c308.
+Session21+real JNA1 checks PASS, package/native/payload verified. Fullhost NOT RUN;
+OTA24 unchanged. Owner asks self-diagnosis; no repeated request for logs.
+See final section reports/windows-stop-20261028/ATLAS_RESULT.md.
+
 28Oct LATEST INCIDENT OVERRIDES HISTORICAL RELEASE NOTES BELOW: public Windows
 OTA restored to signed0.3.24; installed25/26 not downgraded. Private0.3.27 built
 from96e5ea3 (pushed), native ec91c71/2af7d100/4501504B. Candidate132730880B SHA
