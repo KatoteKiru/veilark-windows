@@ -1,5 +1,16 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct Windows OTA 0.3.26/code326 RELEASED: fixes Fairway-selected import of
+legacy compact veilark://import?t= links by routing non-managed sources through
+the standard fetcher. Real owner static profile imported through actual corrected
+Windows importer; focused managed/legacy tests passed. Android Beta15 parser and
+UI source supports same link; 16 parser tests pass, physical import NOT tested.
+Source commit d42ecee. OTA SHA256 a3dc7fae910747ebc701c69fcc3b6fe2a8544f75522533f1bdb3c98b035c70e5,
+132689920 bytes, signed manifest, Authenticode NotSigned. Native DLL extracted
+from actual inner installer matches fa516b... pin; wrapper extraction PASS.
+Same legacy static identity on two devices can evict itself; per-device Android
+managed enrollment remains unreleased. No live Windows tunnel acceptance.
+
 28Oct RELEASED Windows 0.3.25/code325 OTA. Public manifest verified, installer
 SHA256 47ba6c522ef99517111b98d05a9746edb59374229b6b94849349739e58343c84,
 132689920 bytes; previous manifest backed up on server. Authenticode NotSigned,
