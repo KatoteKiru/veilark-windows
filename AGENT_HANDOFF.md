@@ -23,8 +23,8 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
   Previously built 0.3.25 candidate is NOT eligible for OTA; source flag reset false.
   Ignored packaging DLL fa516 remains staged: verifier intentionally rejects it
   while flag false. Preserve candidate as evidence, not a released product.
-  All FI runtime helper scripts with pinned old 7fac binary need updated after
-  Vector provides rebuilt artifact. Active NL service and Android85 unchanged.
+  FI runtime helper scripts previously pinned old7fac; repinned8a16 as above.
+  Active NL service and Android85 unchanged until an actual rollout confirms it.
   Android single-managed-link enrollment missing in beta15; separate agent works
   source-only on parity; old static Android subscription remains usable.
 - 27Oct historical private candidate BUILT with FairwayRelease=true at build time
