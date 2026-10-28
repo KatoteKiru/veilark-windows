@@ -8,9 +8,11 @@ Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
 ## Current state
 - 28Oct RELEASE GATE CLOSED: NL prepare refused real legacy_session_proof
   config: candidate863c750 lacks deployed Beta15 proof implementation. Vector
-  integrating real semantics from1193f81, not disabling the setting. Also frozen
-  Windows DLL5f0e189 contains proof primitives but not client driver recovery;
-  Vector must integrate Windows host-compatible client recovery and rebuild DLL.
+  integrating real semantics from1193f81, not disabling the setting. CORRECTION:
+  Windows DLL5f0e189 uses separate veilark-windows-runtime: authenticate retains
+  legacy renewal credentials and the packet pump calls LegacyMaintenance with
+  Fairway. Earlier claim that Windows recovery was not wired was incorrect;
+  verify compatibility with fixed server, rebuild DLL only for a concrete defect.
   Previously built 0.3.25 candidate is NOT eligible for OTA; source flag reset false.
   Ignored packaging DLL fa516 remains staged: verifier intentionally rejects it
   while flag false. Preserve candidate as evidence, not a released product.
