@@ -1,5 +1,15 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct RELEASED Windows 0.3.25/code325 OTA. Public manifest verified, installer
+SHA256 47ba6c522ef99517111b98d05a9746edb59374229b6b94849349739e58343c84,
+132689920 bytes; previous manifest backed up on server. Authenticode NotSigned,
+Ed25519 OTA manifest signed. Source metadata commit 2a016d5. FI Core issuance
+enabled after readiness race repaired; real Windows admin managed claim and
+idempotent retry PASS without VPN. NL snapshot revision2/ACK2, six legacy
+identities retained, one active managed binding. Windows real tunnel/device test
+deferred to owner. Android managed Fairway parity source 3d35797 not released;
+do not claim same managed URL is verified for both platforms yet.
+
 Atlas owns Windows app/import/store/JNA/UI/packaging/sole OTA. Vector owns private
 Core/server/native code in C:/AI-Agent/veilark-fairway-passage-integration-20261024.
 Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
