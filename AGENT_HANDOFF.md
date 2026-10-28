@@ -1,5 +1,18 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct STARTUP ROOT CAUSE FIX79d162e (CI fixture54d6f8d): native Wintun type
+Veilark yields Veilark Tunnel; old description heuristic rejected actual adapter
+after native RUNNING, triggering TUN_NOT_CREATED+cleanup. Now exact-ownedGUID
+lookup/health and LiveCheck do not depend on cosmetic descriptions.
+Replacement327132726784B SHA315b3295e0fc07e405b2891d3d78790e3781a99b6b18d15869dc02ae56b074fb.
+Native remains7ea7989/699c6fad. Public OTA24. User DENIED hostnetwork/UAC:
+no stop of activeTrustTunnel, no localhost TUN test. PublicWindowsCI is AVAILABLE
+(run40759391327), privatecorebilling restriction does not block publicWindowsrunner.
+Independent actualWintun leaf job being added; still NOT fullFairwayInternet.
+Android explicitmanagedimport/refresh separateencryptedidentity being committed
+by subscription_two_devices in android-managed worktree. One subscription intended
+Windows+Android with per-install keys, not shared static credentials.
+
 28Oct FINAL PRIVATE327 REPLACES OLD327 BELOW: Windows b5e8de6, native7ea7989.
 Fixes pending-start Stop deadlock and failed-create adapter intent cleanup.
 Candidate132726784B SHA125a509eed4da022511017cde7dcb8770b891f3bbbae7f2cb31c09f38287d7f5.
