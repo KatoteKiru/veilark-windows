@@ -1,5 +1,21 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct LATEST INCIDENT OVERRIDES HISTORICAL RELEASE NOTES BELOW: public Windows
+OTA restored to signed0.3.24; installed25/26 not downgraded. Private0.3.27 built
+from96e5ea3 (pushed), native ec91c71/2af7d100/4501504B. Candidate132730880B SHA
+2f26262277e4e4e97a0b90bec66b4932249688dcb924c246dca395e1452bb955.
+Bounded native cleanup retry, noncancellable session completion and safe native
+diagnostics fixed. Full helper+desktop tests PASS (optionalOS cases skipped),
+actual newDLL JNA memory/policy8662+Stop PASS; package/native/payload hashes PASS.
+No actual Wintun/Internet acceptance: both RunAs attempts returned cancellation.
+Manual admin launcher reports/windows-stop-20261028/run-wintun-probe-admin.ps1
+ready but NOT RUN; do not auto-repeat UAC. Full Fairway harness prepared, NOT RUN.
+Owner's failing OS stage UNKNOWN; requested actual failing log lines. Do not
+publish327 from current evidence. Read reports/windows-stop-20261028/ATLAS_RESULT.md.
+Cleanup completed PC679306766B and NL about4971975754 unique logical bytes;
+current/rollback artifacts retained; rc34 archive preserved after auto-review
+rejection. Android85 and FI issuer active/health200 unchanged.
+
 28Oct Windows OTA 0.3.26/code326 RELEASED: fixes Fairway-selected import of
 legacy compact veilark://import?t= links by routing non-managed sources through
 the standard fetcher. Real owner static profile imported through actual corrected
