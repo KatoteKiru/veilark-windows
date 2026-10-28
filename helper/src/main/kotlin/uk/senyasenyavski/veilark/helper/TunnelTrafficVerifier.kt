@@ -114,11 +114,11 @@ internal data class ProbeFailure(val code: String, val message: String) {
 }
 
 internal object WindowsCurlInternetProbe {
-  suspend fun probe(sourceIpv4: String? = null): ProbeFailure? {
+  suspend fun probe(sourceIpv4: String? = null, targets: List<String> = TARGETS): ProbeFailure? {
     val curl = resolveCurl()
       ?: return ProbeFailure(ProbeFailure.FAILED, "в Windows не найден curl.exe")
     var lastFailure = ProbeFailure(ProbeFailure.FAILED, "нет ответа")
-    for (target in TARGETS) {
+    for (target in targets) {
       val result = try {
         ProcessBuilder(command(curl, target, sourceIpv4))
           .redirectErrorStream(true)

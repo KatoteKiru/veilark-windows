@@ -22,9 +22,14 @@ on:
         description: Build versioned Windows OTA package
         type: boolean
         default: false
+      fairway_full_tun:
+        description: Run isolated Fairway full TUN against the prepared lab peer
+        type: boolean
+        default: false
 
 jobs:
   fairway-wintun-leaf:
+    if: github.event_name != 'workflow_dispatch' || !inputs.fairway_full_tun
     name: Actual Wintun leaf lifecycle (not full Fairway Internet)
     runs-on: windows-2022
     timeout-minutes: 15
@@ -61,6 +66,7 @@ jobs:
             helper/build/reports/tests/test/
           if-no-files-found: warn
   test:
+    if: github.event_name != 'workflow_dispatch' || !inputs.fairway_full_tun
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -169,3 +175,65 @@ jobs:
             desktopApp/build/test-results/test/*.xml
             helper/build/test-results/test/*.xml
             shared/build/test-results/jvmTest/*.xml
+  isolated-full-tun:
+    if: github.event_name == 'workflow_dispatch' && inputs.fairway_full_tun && github.ref == 'refs/heads/local/windows-fairway-20261025'
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Publish safe runner preflight before waiting for lab peer
+        shell: powershell
+        run: |
+          if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'Disposable runner required' }
+          $trace = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri 'https://1.1.1.1/cdn-cgi/trace').Content
+          $publicIp = [regex]::Match($trace, '(?m)^ip=([0-9.]+)\r?$').Groups[1].Value
+          $parsed = $null
+          if (-not [Net.IPAddress]::TryParse($publicIp, [ref]$parsed) -or $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork) { throw 'No valid runner IPv4' }
+          @{ run_id = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT; sha = $env:GITHUB_SHA; public_ipv4 = $publicIp } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $env:RUNNER_TEMP 'fairway-runner-preflight.json')
+      - name: Preserve runner preflight for isolated peer firewall
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: isolated-fairway-runner-preflight
+          path: ${{ runner.temp }}/fairway-runner-preflight.json
+          if-no-files-found: error
+      - shell: powershell
+        run: .\scripts\bootstrap-runtime.ps1
+      - name: Compile the real product session path
+        shell: powershell
+        run: |
+          .\gradlew.bat :helper:classes :helper:exportRuntimeClasspath --max-workers=2
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }
+      - name: Isolated peer full TUN acceptance (two cycles, no UAC)
+        shell: powershell
+        env:
+          FAIRWAY_CI_BUNDLE_URL: ${{ secrets.FAIRWAY_CI_BUNDLE_URL }}
+          FAIRWAY_CI_BUNDLE_KEY: ${{ secrets.FAIRWAY_CI_BUNDLE_KEY }}
+        run: |
+          if (-not $env:FAIRWAY_CI_BUNDLE_URL -or -not $env:FAIRWAY_CI_BUNDLE_KEY) { throw 'Missing isolated-peer bundle secrets; no test was run' }
+          $env:VEILARK_TEST_FAIRWAY_FULL_TUN = '1'
+          $env:VEILARK_CI_RECEIPT = Join-Path $env:RUNNER_TEMP 'fairway-full-tun-receipt.json'
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'veilark-isolated-appdata'
+          $classpath = (Get-Content helper\build\runtime-classpath.txt -Raw).Trim()
+          & "$env:JAVA_HOME\bin\java.exe" -Dfile.encoding=UTF-8 -cp $classpath uk.senyasenyavski.veilark.helper.FairwayCiTunnelCheck
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated full TUN did not pass; inspect the safe receipt' }
+          $receipt = Get-Content -LiteralPath $env:VEILARK_CI_RECEIPT -Raw | ConvertFrom-Json
+          if (-not $receipt.passed -or -not $receipt.cleanup -or @($receipt.cycles).Count -ne 2) { throw 'Incomplete full TUN receipt' }
+      - name: Remove isolated app metadata
+        if: always()
+        shell: powershell
+        run: |
+          $target = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'veilark-isolated-appdata'))
+          $root = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\'
+          if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected cleanup target' }
+          if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+      - name: Preserve safe full TUN receipt only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: isolated-fairway-full-tun-receipt
+          path: ${{ runner.temp }}/fairway-full-tun-receipt.json
+          if-no-files-found: warn
