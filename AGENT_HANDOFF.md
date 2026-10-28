@@ -1,5 +1,17 @@
 # Windows Fairway continuation — 27 October 2026
 
+28Oct ACTUAL ISOLATED DRIVER ACCEPTANCE: public WindowsCI40759834482,
+job Actual Wintun leaf lifecycle SUCCESS (1executed/0skip/0failure). Real custom
+Veilark Tunnel adapter accepted via exactGUID, StartSession/OSstate/counters,
+EndSession/CloseAdapter and GUID/LUIDabsence verified. NoIP/routes/DNS/Coreauth.
+This supersedes prior Wintun-leaf NOT RUN status only, NOT fullFairwayInternet.
+Source4fbb978 adds independent CIjob; downloadedXML under
+reports/windows-stop-20261028/ci-wintun-leaf-40759834482.
+Android one-managed-subscription Windows+Android sourceac7a48e pushed separately,
+15checksPASS, actualsimultaneousNOTRUN. Defaultcommercialslots3; don't changegrants.
+Vector investigating cross-device refresh after source-device revoke and preparing
+separate synthetic Linuxpeer plan. User DENIED hostPC interruption/UAC; preserveTT.
+
 28Oct STARTUP ROOT CAUSE FIX79d162e (CI fixture54d6f8d): native Wintun type
 Veilark yields Veilark Tunnel; old description heuristic rejected actual adapter
 after native RUNNING, triggering TUN_NOT_CREATED+cleanup. Now exact-ownedGUID
