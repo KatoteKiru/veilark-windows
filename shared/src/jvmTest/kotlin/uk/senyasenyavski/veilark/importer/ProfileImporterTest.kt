@@ -49,11 +49,16 @@ class ProfileImporterTest {
 
   @Test
   fun `reserved Core profile cannot become sing-box even with proxy outbounds`() {
-    val result = assertIs<ImportResult.Failure>(ProfileImporter().fromText(
-      """{"schema":"veilark-argon-profile-v1","identity":{"client_static_private_base64":"synthetic-secret"},"outbounds":[{"type":"vless","tag":"wrong-engine","server":"example.invalid","server_port":443,"uuid":"00000000-0000-0000-0000-000000000001"}]}""",
-    ))
-    assertTrue(result.safeMessage.contains("Fairway"))
-    assertFalse(result.safeMessage.contains("synthetic-secret"))
+    val malformedCore = """{"schema":"veilark-argon-profile-v1","identity":{"client_static_private_base64":"synthetic-secret"},"outbounds":[{"type":"vless","tag":"wrong-engine","server":"example.invalid","server_port":443,"uuid":"00000000-0000-0000-0000-000000000001"}]}"""
+    for (allowCore in listOf(false, true)) {
+      val result = assertIs<ImportResult.Failure>(
+        ProfileImporter(allowCoreProfiles = allowCore).fromText(malformedCore),
+        "Reserved Core documents must not fall back to sing-box (allowCore=$allowCore)",
+      )
+      if (!allowCore) assertTrue(result.safeMessage.contains("Fairway"))
+      assertFalse(result.safeMessage.contains("synthetic-secret"))
+      assertFalse(result.safeMessage.contains("example.invalid"))
+    }
   }
 
   @Test
