@@ -103,8 +103,12 @@ object LiveTunnelCheck {
       report("подключение заняло ${elapsed} мс, итог: ${describe(session.state.value.phase)}")
       check(session.state.value.phase is VpnPhase.Connected) { "Tunnel did not reach Connected" }
       val before = requireNotNull(session.state.value.traffic) { "Tunnel counters unavailable" }
+      val fairwayIdentity = if (profile.engine == VpnEngine.VeilarkCore) {
+        FairwayAdapterIdentityStore().loadOrCreate()
+      } else null
       val adapter = WindowsNetwork.adapters().single {
-        it.alias == before.adapter && it.luid !in previousLuids && it.operational && it.isTunnel
+        it.alias == before.adapter && it.luid !in previousLuids &&
+          if (fairwayIdentity != null) it.isOwnedFairway(fairwayIdentity) else it.operational && it.isTunnel
       }
       if (profile.engine == VpnEngine.VeilarkCore) {
         check(FairwayAdapterIdentityStore().loadOrCreate().matchesWindowsGuid(adapter.interfaceGuid)) {

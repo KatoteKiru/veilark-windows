@@ -32,7 +32,16 @@ internal data class NetworkAdapter(
   val eligibleCoreUplink: Boolean = false,
 ) {
   val isTunnel: Boolean
-    get() = TUNNEL_DESCRIPTIONS.any { description.contains(it, ignoreCase = true) }
+    get() = description.equals("Veilark Tunnel", ignoreCase = true) ||
+      TUNNEL_DESCRIPTIONS.any { description.contains(it, ignoreCase = true) }
+
+  /** Native ownership is the installation GUID, not a driver display string.
+   * WintunCreateAdapter uses the caller's TunnelType for that string, so our
+   * "Veilark" type is reported as "Veilark Tunnel", not "Wintun".
+   */
+  fun isOwnedFairway(identity: FairwayAdapterIdentity): Boolean =
+    identity.matchesWindowsGuid(interfaceGuid) && operational && index > 0 &&
+      luid != 0L && !eligibleCoreUplink
 
   internal companion object {
     val TUNNEL_DESCRIPTIONS = listOf("wintun", "sing-tun", "wireguard")

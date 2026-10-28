@@ -76,7 +76,7 @@ internal class FairwayEngineController(
         awaitPhase(owned, RUNNING)
         val identity = checkNotNull(adapterIdentity)
         val adapter = WindowsNetwork.adapters().singleOrNull {
-          identity.matchesWindowsGuid(it.interfaceGuid) && it.operational && it.isTunnel
+          it.isOwnedFairway(identity)
         } ?: throw VpnStartException(VpnStatusCode.TUN_NOT_CREATED, "Owned Fairway adapter is unavailable")
         readyTunnel = ReadyTunnel(adapter.index, adapter.luid, adapter.alias, adapter.description)
         EngineHealth.Healthy
@@ -110,7 +110,7 @@ internal class FairwayEngineController(
         status?.terminalOutcome?.toString().orEmpty())
     } else {
       val adapter = readyTunnel?.let { WindowsNetwork.refresh(it.luid) }
-      if (adapter?.operational == true && adapterIdentity?.matchesWindowsGuid(adapter.interfaceGuid) == true) EngineHealth.Healthy
+      if (adapter != null && adapterIdentity?.let(adapter::isOwnedFairway) == true) EngineHealth.Healthy
       else EngineHealth.Unhealthy("Owned Fairway adapter is unavailable", VpnStatusCode.ADAPTER_LOST)
     }
   }
