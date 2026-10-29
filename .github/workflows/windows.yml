@@ -218,7 +218,7 @@ jobs:
           $env:VEILARK_CI_RECEIPT = Join-Path $env:RUNNER_TEMP 'fairway-full-tun-receipt.json'
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'veilark-isolated-appdata'
           $classpath = (Get-Content helper\build\runtime-classpath.txt -Raw).Trim()
-          & "$env:JAVA_HOME\bin\java.exe" -Dfile.encoding=UTF-8 -cp $classpath uk.senyasenyavski.veilark.helper.FairwayCiTunnelCheck
+          & "$env:JAVA_HOME\bin\java.exe" '-Dfile.encoding=UTF-8' -cp $classpath uk.senyasenyavski.veilark.helper.FairwayCiTunnelCheck
           $javaExit = $LASTEXITCODE
           if (Test-Path -LiteralPath $env:VEILARK_CI_RECEIPT) {
             $receipt = Get-Content -LiteralPath $env:VEILARK_CI_RECEIPT -Raw | ConvertFrom-Json
