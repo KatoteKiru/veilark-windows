@@ -106,10 +106,10 @@ object LiveTunnelCheck {
       receipt.put("connectionPhase", name)
       if (phase is VpnPhase.Error) {
         if (phase.code.matches(Regex("[A-Z0-9_-]{1,80}"))) receipt.put("connectionCode", phase.code)
-        val status = Regex("^Veilark Core stopped \\(phase=(-?[0-9]{1,10}), outcome=(-?[0-9]{1,10}), os=([0-9]{1,10})\\)$")
+        val status = Regex("^Veilark Core stopped \\(phase=(-?[0-9]{1,10}), outcome=(-?[0-9]{1,10}), os=([0-9]{1,10})(?:, hostStage=([0-9]{1,10}), failedStage=([0-9]{1,10}))?\\)$")
           .matchEntire(phase.message)
         status?.let {
-          listOf("nativePhase", "nativeOutcome", "nativeOs").forEachIndexed { index, key ->
+          listOf("nativePhase", "nativeOutcome", "nativeOs", "hostStage", "failedHostStage").forEachIndexed { index, key ->
             it.groupValues[index + 1].toLongOrNull()?.let { number -> receipt.put(key, number) }
           }
         }

@@ -124,8 +124,10 @@ internal class FairwayEngineController(
       val status = owned.status()
       if (status.isActivePhase(expected)) return
       if (status.terminalOutcome != 0 || !status.workerAlive || status.phase >= STOPPING) {
+        val hostStage = if (status.hostStage == null) "" else
+          ", hostStage=${status.hostStage}, failedStage=${status.failedHostStage}"
         throw VpnStartException(VpnStatusCode.CORE_START_FAILED,
-          "Veilark Core stopped (phase=${status.phase}, outcome=${status.terminalOutcome}, os=${status.nativeError})")
+          "Veilark Core stopped (phase=${status.phase}, outcome=${status.terminalOutcome}, os=${status.nativeError}$hostStage)")
       }
       delay(100) // Startup only; WindowsVpnSession owns the overall 90-second deadline.
     }

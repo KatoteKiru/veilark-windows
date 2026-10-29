@@ -129,11 +129,14 @@ internal class FairwayNativeLibrary private constructor(
         output.setInt(4, ABI)
         requireOk("status", int("status", id, output))
         check(output.getInt(0) == STATUS_SIZE.toInt() && output.getInt(4) == ABI && output.getInt(60) == 0)
+        // Additive numeric diagnostics: older ABI1 libraries remain supported.
+        val hostStage = functions["host_stage"]?.invokeLong(arrayOf(id))
         Status(
           output.getInt(8), output.getInt(12), output.getInt(16) != 0,
           output.getInt(20) != 0, output.getInt(24), output.getInt(28) != 0,
           output.getByteArray(32, 4), output.getInt(36), output.getLong(40),
           output.getLong(48), output.getInt(56).toLong() and 0xffff_ffffL,
+          hostStage?.and(0xffff_ffffL), hostStage?.ushr(32),
         )
       }
     }
@@ -202,6 +205,7 @@ internal class FairwayNativeLibrary private constructor(
     val ownerAlive: Boolean, val resourceMask: Int, val canRelease: Boolean,
     internalIpv4: ByteArray, val mtu: Int, val txBytes: Long, val rxBytes: Long,
     val nativeError: Long,
+    val hostStage: Long? = null, val failedHostStage: Long? = null,
   ) {
     private val ipv4 = internalIpv4.copyOf()
     fun internalIpv4(): ByteArray = ipv4.copyOf()
@@ -307,6 +311,9 @@ internal class FairwayNativeLibrary private constructor(
         symbols.GetProcAddress(module, "vwc_configure_host")?.let { address ->
           functions["configure_host"] = Function.getFunction(address, Function.C_CONVENTION)
         }
+        symbols.GetProcAddress(module, "vwc_host_stage")?.let { address ->
+          functions["host_stage"] = Function.getFunction(address, Function.C_CONVENTION)
+        }
         check(functions.getValue("abi_version").invokeInt(emptyArray()) == ABI) { "Native ABI mismatch" }
         val capabilities = functions.getValue("capabilities").invokeLong(emptyArray())
         processPinned = capabilities and CAP_PROCESS_PIN != 0L
@@ -339,5 +346,6 @@ internal class NativeCallException(
   state?.let {
     append(" phase=${it.phase} outcome=${it.terminalOutcome} worker=${it.workerAlive}")
     append(" resources=${it.resourceMask} releasable=${it.canRelease} os=${it.nativeError}")
+    if (it.hostStage != null) append(" hostStage=${it.hostStage} failedHostStage=${it.failedHostStage}")
   }
 })
