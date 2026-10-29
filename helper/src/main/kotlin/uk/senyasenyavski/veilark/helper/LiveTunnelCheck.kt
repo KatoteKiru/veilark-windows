@@ -167,13 +167,20 @@ object LiveTunnelCheck {
       }
       val sourceIpv4 = requireNotNull(NetworkInterface.getByIndex(adapter.index)).inetAddresses.asSequence()
         .filterIsInstance<Inet4Address>().filterNot { it.isLinkLocalAddress }.single().hostAddress
+      mark("probeSource")
       targets.forEach { target ->
         val addresses = InetAddress.getAllByName(URI(target).host).filterIsInstance<Inet4Address>()
         check(addresses.isNotEmpty() && addresses.all { WindowsNetwork.bestIpv4InterfaceIndex(it.hostAddress) == adapter.index }) {
           "Probe destination route bypasses the owned tunnel"
         }
       }
-      check(WindowsCurlInternetProbe.probe(sourceIpv4, targets) == null) { "Bound Internet probe failed while connected" }
+      mark("probeRoute")
+      val probeFailure = WindowsCurlInternetProbe.probe(sourceIpv4, targets)
+      if (probeFailure != null) {
+        receipt.put("probeFailure", probeFailure.code)
+        onCycleReceipt(cycle, JSONObject(receipt.toString()))
+      }
+      check(probeFailure == null) { "Bound Internet probe failed while connected" }
       mark("boundInternet")
       if (System.getProperty("veilark.check.ci") == "true") {
         probeBoundDns(sourceIpv4)

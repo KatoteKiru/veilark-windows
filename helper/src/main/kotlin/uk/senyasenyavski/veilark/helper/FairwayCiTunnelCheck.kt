@@ -72,6 +72,17 @@ object FairwayCiTunnelCheck {
       System.setProperty("compose.application.resources.dir", resources.toString())
       System.setProperty("veilark.check.profileStore", store.toString())
       System.setProperty("veilark.check.ci", "true")
+      // Validate the runner's strict Schannel path before the lab restricts
+      // egress to 1.1.1.1. This also primes normal CA/revocation caches without
+      // disabling certificate or revocation checks on either probe.
+      stage = "baselineInternet"
+      val baselineFailure = kotlinx.coroutines.runBlocking {
+        WindowsCurlInternetProbe.probe(targets = listOf("https://1.1.1.1/cdn-cgi/trace"))
+      }
+      receipt.put("baselineInternet", baselineFailure == null)
+      baselineFailure?.let { receipt.put("baselineProbeFailure", it.code) }
+      Files.writeString(receiptPath, receipt.toString(2))
+      check(baselineFailure == null) { "Runner baseline Internet probe failed" }
       stage = "tunnel"
       LiveTunnelCheck.execute(arrayOf("fairway", "12", "2")) { cycle, detail ->
         cycles[cycle] = detail
