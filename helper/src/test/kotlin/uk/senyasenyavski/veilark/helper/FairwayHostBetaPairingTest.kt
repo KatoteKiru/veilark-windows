@@ -12,7 +12,7 @@ class FairwayHostBetaPairingTest {
     val dll = System.getenv("VEILARK_NATIVE_HOST_BETA_TEST_DLL")
     assumeTrue(Platform.isWindows() && !dll.isNullOrBlank(), "Explicit private host beta DLL required")
     val path = Path.of(dll!!)
-    val pin = NativeArtifactPin(4_604_148, "8363d72f8f76c9b660f05a527b52ad15e1c70751013a07f3f108689a647a9041")
+    val pin = NativeArtifactPin(4_605_525, "c3a748ae6b98ca779d26770e81b6019d80161e0f3cbed051b4d9ffde86004623")
     FairwayNativeLibrary.load(path, pin).use { library ->
       assertEquals(11L, library.capabilities)
       assertTrue(library.supportsFullTunnel)
