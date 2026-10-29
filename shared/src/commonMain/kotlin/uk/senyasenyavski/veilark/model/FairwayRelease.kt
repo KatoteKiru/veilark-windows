@@ -6,6 +6,6 @@ package uk.senyasenyavski.veilark.model
  */
 object FairwayRelease {
   const val accepted = true
-  const val nativeSize = 4500480L
-  const val nativeSha256 = "699c6fad51ffe6341cacb76f378d3af0a019f155edca4a8d8573443a0048c308"
+  const val nativeSize = 4590113L
+  const val nativeSha256 = "a77e09e4588b246be5fc1ae1366f9b12954030789d448b2fb4ff76730a49013a"
 }
