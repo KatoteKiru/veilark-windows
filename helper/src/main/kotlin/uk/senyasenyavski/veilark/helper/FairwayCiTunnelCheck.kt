@@ -79,7 +79,7 @@ object FairwayCiTunnelCheck {
         Files.writeString(receiptPath, receipt.toString(2))
       }
       check(cycles.size == 2 && cycles.values.all { it.optBoolean("passed") &&
-        listOf("connected", "ownedAdapter", "boundInternet", "bidirectionalTraffic", "stopped", "adapterAbsent", "internetRecovered")
+        listOf("connected", "ownedAdapter", "boundInternet", "boundUdpDns", "bidirectionalTraffic", "stopped", "adapterAbsent", "internetRecovered")
           .all(it::optBoolean) })
       passed = true
       stage = "complete"

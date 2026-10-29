@@ -13,6 +13,10 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.URI
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetSocketAddress
+import java.security.SecureRandom
 import com.sun.jna.platform.win32.IPHlpAPI
 import org.json.JSONObject
 
@@ -171,6 +175,10 @@ object LiveTunnelCheck {
       }
       check(WindowsCurlInternetProbe.probe(sourceIpv4, targets) == null) { "Bound Internet probe failed while connected" }
       mark("boundInternet")
+      if (System.getProperty("veilark.check.ci") == "true") {
+        probeBoundDns(sourceIpv4)
+        mark("boundUdpDns")
+      }
 
     delay(holdSeconds * 1_000L)
     val traffic = session.state.value.traffic
@@ -211,6 +219,30 @@ object LiveTunnelCheck {
       }
     }
     mark("passed")
+  }
+
+  /** One bounded real UDP transaction, bound to the owned TUN source address. */
+  private fun probeBoundDns(sourceIpv4: String) {
+    val id = SecureRandom().nextInt(65536)
+    val question = byteArrayOf(
+      (id ushr 8).toByte(), id.toByte(), 1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+      3, 111, 110, 101, 3, 111, 110, 101, 3, 111, 110, 101, 3, 111, 110, 101,
+      0, 0, 1, 0, 1,
+    )
+    DatagramSocket(null).use { socket ->
+      socket.bind(InetSocketAddress(sourceIpv4, 0))
+      socket.connect(InetSocketAddress("1.1.1.1", 53))
+      socket.soTimeout = 5_000
+      socket.send(DatagramPacket(question, question.size))
+      val response = DatagramPacket(ByteArray(4096), 4096)
+      socket.receive(response)
+      val data = response.data
+      fun word(offset: Int) = ((data[offset].toInt() and 255) shl 8) or (data[offset + 1].toInt() and 255)
+      check(response.length >= 12 && word(0) == id &&
+        word(2) and 0xFA0F == 0x8000 && word(4) == 1 && word(6) > 0) {
+        "Bound UDP DNS query failed"
+      }
+    }
   }
 
   private suspend fun requireAdapterAbsent(luid: Long) {

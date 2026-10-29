@@ -258,7 +258,7 @@ jobs:
           } catch { $cleaned = $false }
           $passed = $receipt.tunnelPassed -eq $true -and $receipt.processExit -eq 0 -and $cleaned -and @($receipt.cycles).Count -eq 2
           foreach ($cycle in @($receipt.cycles)) {
-            foreach ($field in @('passed', 'connected', 'ownedAdapter', 'boundInternet', 'bidirectionalTraffic', 'stopped', 'adapterAbsent', 'internetRecovered')) {
+            foreach ($field in @('passed', 'connected', 'ownedAdapter', 'boundInternet', 'boundUdpDns', 'bidirectionalTraffic', 'stopped', 'adapterAbsent', 'internetRecovered')) {
               if ($cycle.$field -ne $true) { $passed = $false }
             }
           }
