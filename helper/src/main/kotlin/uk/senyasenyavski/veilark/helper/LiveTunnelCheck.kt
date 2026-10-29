@@ -91,6 +91,31 @@ object LiveTunnelCheck {
       receipt.put(stage, true).put("stage", stage)
       onCycleReceipt(cycle, JSONObject(receipt.toString()))
     }
+    fun captureConnectionPhase() {
+      val phase = session.state.value.phase
+      val name = when (phase) {
+        VpnPhase.Idle -> "Idle"
+        VpnPhase.NeedsElevation -> "NeedsElevation"
+        VpnPhase.Preparing -> "Preparing"
+        VpnPhase.Connecting -> "Connecting"
+        is VpnPhase.Connected -> "Connected"
+        is VpnPhase.Degraded -> "Degraded"
+        VpnPhase.Stopping -> "Stopping"
+        is VpnPhase.Error -> "Error"
+      }
+      receipt.put("connectionPhase", name)
+      if (phase is VpnPhase.Error) {
+        if (phase.code.matches(Regex("[A-Z0-9_-]{1,80}"))) receipt.put("connectionCode", phase.code)
+        val status = Regex("^Veilark Core stopped \\(phase=(-?[0-9]{1,10}), outcome=(-?[0-9]{1,10}), os=([0-9]{1,10})\\)$")
+          .matchEntire(phase.message)
+        status?.let {
+          listOf("nativePhase", "nativeOutcome", "nativeOs").forEachIndexed { index, key ->
+            it.groupValues[index + 1].toLongOrNull()?.let { number -> receipt.put(key, number) }
+          }
+        }
+      }
+      onCycleReceipt(cycle, JSONObject(receipt.toString()))
+    }
     var ownedLuid: Long? = null
     val fairwayIdentity = if (profile.engine == VpnEngine.VeilarkCore) {
       FairwayAdapterIdentityStore().loadOrCreate()
@@ -119,6 +144,7 @@ object LiveTunnelCheck {
       mark("started")
       val startedAt = System.currentTimeMillis()
       session.connect(profile)
+      captureConnectionPhase()
       val elapsed = System.currentTimeMillis() - startedAt
       report("подключение заняло ${elapsed} мс, итог: ${describe(session.state.value.phase)}")
       check(session.state.value.phase is VpnPhase.Connected) { "Tunnel did not reach Connected" }

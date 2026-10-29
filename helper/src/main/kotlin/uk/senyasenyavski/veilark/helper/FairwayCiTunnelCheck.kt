@@ -9,7 +9,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
-import java.util.Comparator
 import java.util.zip.ZipInputStream
 import org.json.JSONArray
 import org.json.JSONObject
@@ -47,6 +46,7 @@ object FairwayCiTunnelCheck {
     try {
       check(FairwayRelease.accepted)
       work = Files.createTempDirectory(tempRoot, "veilark-isolated-full-tun-")
+      receipt.put("workBasename", work.fileName.toString())
       val resources = Files.createDirectory(work.resolve("resources"))
       stage = "download"
       receipt.put("stage", stage)
@@ -91,12 +91,16 @@ object FairwayCiTunnelCheck {
       work?.let { directory ->
         try {
           check(directory.toAbsolutePath().normalize().parent == tempRoot && directory.fileName.toString().startsWith("veilark-isolated-full-tun-"))
-          Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
+          // Native callback module is process-pinned. Delete credentials now;
+          // the PowerShell parent removes the DLLs/directory after JVM exit.
+          Files.walk(directory).use { paths -> paths.filter { Files.isRegularFile(it) }
+            .filter { it.fileName.toString() !in setOf("veilark_windows_native.dll", "wintun.dll") }
+            .forEach(Files::delete) }
         } catch (_: Throwable) { cleaned = false }
       }
-      receipt.put("stage", stage).put("cleanup", cleaned).put("passed", passed && cleaned)
+      receipt.put("stage", stage).put("secretCleanup", cleaned).put("tunnelPassed", passed)
+        .put("cleanup", false).put("passed", false)
       Files.writeString(receiptPath, receipt.toString(2))
-      passed = passed && cleaned
     }
     println("Isolated Fairway full TUN: passed=$passed; two cycles required; supplied lab fixture only")
     exitProcess(if (passed) 0 else 1)

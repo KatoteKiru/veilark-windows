@@ -219,17 +219,54 @@ jobs:
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'veilark-isolated-appdata'
           $classpath = (Get-Content helper\build\runtime-classpath.txt -Raw).Trim()
           & "$env:JAVA_HOME\bin\java.exe" -Dfile.encoding=UTF-8 -cp $classpath uk.senyasenyavski.veilark.helper.FairwayCiTunnelCheck
-          if ($LASTEXITCODE -ne 0) { throw 'Isolated full TUN did not pass; inspect the safe receipt' }
-          $receipt = Get-Content -LiteralPath $env:VEILARK_CI_RECEIPT -Raw | ConvertFrom-Json
-          if (-not $receipt.passed -or -not $receipt.cleanup -or @($receipt.cycles).Count -ne 2) { throw 'Incomplete full TUN receipt' }
-      - name: Remove isolated app metadata
+          $javaExit = $LASTEXITCODE
+          if (Test-Path -LiteralPath $env:VEILARK_CI_RECEIPT) {
+            $receipt = Get-Content -LiteralPath $env:VEILARK_CI_RECEIPT -Raw | ConvertFrom-Json
+            $receipt | Add-Member -NotePropertyName processExit -NotePropertyValue $javaExit -Force
+            $receipt | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 -LiteralPath $env:VEILARK_CI_RECEIPT
+          }
+          if ($javaExit -ne 0) { throw 'Isolated full TUN did not pass; inspect the safe receipt' }
+      - name: Remove isolated files after the native process exits
         if: always()
         shell: powershell
         run: |
-          $target = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'veilark-isolated-appdata'))
-          $root = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\'
-          if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected cleanup target' }
-          if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+          # CAP_PROCESS_PIN deliberately keeps the native image mapped until Java exits.
+          # Only this parent may delete its work directory, including that DLL.
+          $receiptPath = Join-Path $env:RUNNER_TEMP 'fairway-full-tun-receipt.json'
+          if (Test-Path -LiteralPath $receiptPath) {
+            $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+          } else {
+            $receipt = [pscustomobject]@{ passed = $false; tunnelPassed = $false; cycles = @(); processExit = -1 }
+          }
+          $root = [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')
+          $names = @('veilark-isolated-appdata')
+          $cleaned = $true
+          try {
+            if ($receipt.workBasename) {
+              if ($receipt.workBasename -notmatch '^veilark-isolated-full-tun-[A-Za-z0-9._-]+$') { throw 'Invalid owned work directory' }
+              $names += $receipt.workBasename
+            }
+            foreach ($name in $names) {
+              $target = [IO.Path]::GetFullPath((Join-Path $root $name))
+              if (-not [IO.Path]::GetDirectoryName($target).Equals($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected cleanup target' }
+              if (Test-Path -LiteralPath $target) {
+                if ((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing a redirected work directory' }
+                Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+              }
+              if (Test-Path -LiteralPath $target) { throw 'Owned work directory remains after cleanup' }
+            }
+          } catch { $cleaned = $false }
+          $passed = $receipt.tunnelPassed -eq $true -and $receipt.processExit -eq 0 -and $cleaned -and @($receipt.cycles).Count -eq 2
+          foreach ($cycle in @($receipt.cycles)) {
+            foreach ($field in @('passed', 'connected', 'ownedAdapter', 'boundInternet', 'bidirectionalTraffic', 'stopped', 'adapterAbsent', 'internetRecovered')) {
+              if ($cycle.$field -ne $true) { $passed = $false }
+            }
+          }
+          $receipt | Add-Member -NotePropertyName cleanup -NotePropertyValue $cleaned -Force
+          $receipt | Add-Member -NotePropertyName postExitCleanup -NotePropertyValue $cleaned -Force
+          $receipt | Add-Member -NotePropertyName passed -NotePropertyValue $passed -Force
+          $receipt | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 -LiteralPath $receiptPath
+          if (-not $passed) { throw 'Full TUN traffic, two cycles and post-exit cleanup must all pass' }
       - name: Preserve safe full TUN receipt only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
