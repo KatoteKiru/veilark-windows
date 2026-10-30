@@ -1,199 +1,52 @@
-# Windows Fairway continuation — 27 October 2026
+# Windows Fairway — current handoff, 30 October 2026
 
-28Oct ACTUAL ISOLATED DRIVER ACCEPTANCE: public WindowsCI40759834482,
-job Actual Wintun leaf lifecycle SUCCESS (1executed/0skip/0failure). Real custom
-Veilark Tunnel adapter accepted via exactGUID, StartSession/OSstate/counters,
-EndSession/CloseAdapter and GUID/LUIDabsence verified. NoIP/routes/DNS/Coreauth.
-This supersedes prior Wintun-leaf NOT RUN status only, NOT fullFairwayInternet.
-Source4fbb978 adds independent CIjob; downloadedXML under
-reports/windows-stop-20261028/ci-wintun-leaf-40759834482.
-Android one-managed-subscription Windows+Android sourceac7a48e pushed separately,
-15checksPASS, actualsimultaneousNOTRUN. Defaultcommercialslots3; don't changegrants.
-Vector investigating cross-device refresh after source-device revoke and preparing
-separate synthetic Linuxpeer plan. User DENIED hostPC interruption/UAC; preserveTT.
+## Objective and authority
+Deliver real Windows Fairway TUN/traffic/Stop/reconnect, then OTA. One managed subscription must support Windows + Android using separate per-install keys.
+Owner explicitly forbids interrupting the working PC, stopping TrustTunnel, or testing host TUN/UAC here. Use disposable GitHub-hosted Windows and scoped synthetic NL peer only.
+Direct human consent covers exact linux_lab_v2.py (SHA b51a88a545f003d27b8d9ad7e0e77aafc82e20311482ed7507d6be4f1669cc57) on NL. Do not bypass prior review using another operator/tool/agent. Vector alone operates the Linux lab.
 
-28Oct STARTUP ROOT CAUSE FIX79d162e (CI fixture54d6f8d): native Wintun type
-Veilark yields Veilark Tunnel; old description heuristic rejected actual adapter
-after native RUNNING, triggering TUN_NOT_CREATED+cleanup. Now exact-ownedGUID
-lookup/health and LiveCheck do not depend on cosmetic descriptions.
-Replacement327132726784B SHA315b3295e0fc07e405b2891d3d78790e3781a99b6b18d15869dc02ae56b074fb.
-Native remains7ea7989/699c6fad. Public OTA24. User DENIED hostnetwork/UAC:
-no stop of activeTrustTunnel, no localhost TUN test. PublicWindowsCI is AVAILABLE
-(run40759391327), privatecorebilling restriction does not block publicWindowsrunner.
-Independent actualWintun leaf job being added; still NOT fullFairwayInternet.
-Android explicitmanagedimport/refresh separateencryptedidentity being committed
-by subscription_two_devices in android-managed worktree. One subscription intended
-Windows+Android with per-install keys, not shared static credentials.
+## Recover current state first
+Detailed authoritative per-attempt state: C:/AI-Agent/reports/windows-fullhost-20261028/RUN_STATE.md.
+Safe receipts/diagnostics and frozen native artifacts are under that folder. Never output profile/key/bearer/transport URL or raw logs.
+Windows branch local/windows-fairway-20261025, runtime-tested source9856580.
+Vector chat: 01a049ec-1dab-7533-9234-786a387fb4e6. Native worktree C:/AI-Agent/veilark-fairway-passage-integration-20261024.
 
-28Oct FINAL PRIVATE327 REPLACES OLD327 BELOW: Windows b5e8de6, native7ea7989.
-Fixes pending-start Stop deadlock and failed-create adapter intent cleanup.
-Candidate132726784B SHA125a509eed4da022511017cde7dcb8770b891f3bbbae7f2cb31c09f38287d7f5.
-Native4500480B SHA699c6fad51ffe6341cacb76f378d3af0a019f155edca4a8d8573443a0048c308.
-Session21+real JNA1 checks PASS, package/native/payload verified. Fullhost NOT RUN;
-OTA24 unchanged. Owner asks self-diagnosis; no repeated request for logs.
-See final section reports/windows-stop-20261028/ATLAS_RESULT.md.
+## Latest real full-TUN PASS — no active lab or CI secrets
+CI40891175866; retired synthetic lab193216b1d4532ffb; exact WindowsSHA9856580c546856fc2c44f7f49838f494bfe99c8a.
+Native016990a/c3a748ae6b98ca779d26770e81b6019d80161e0f3cbed051b4d9ffde86004623, 4605525 bytes, ABI1/caps11.
+Both cycles passed every mandatory TCP/UDP/Stop/restore field; processExit0 and post-exit cleanup true. Receipt ci-40891175866/receipt/fairway-full-tun-receipt.json.
+Encrypted bundle, two Actions secrets and local DPAPI custody deleted; Vector lab cleanup/protected production unchanged/keys retired confirmed. No active-run.json.
+For future runs ALWAYS use fresh trusted preflight and synthetic keys, and ci_bundle.py cleanup even on failure. fetch_route_diag.py extracts fixed numeric diagnostics without persisting raw logs.
 
-28Oct LATEST INCIDENT OVERRIDES HISTORICAL RELEASE NOTES BELOW: public Windows
-OTA restored to signed0.3.24; installed25/26 not downgraded. Private0.3.27 built
-from96e5ea3 (pushed), native ec91c71/2af7d100/4501504B. Candidate132730880B SHA
-2f26262277e4e4e97a0b90bec66b4932249688dcb924c246dca395e1452bb955.
-Bounded native cleanup retry, noncancellable session completion and safe native
-diagnostics fixed. Full helper+desktop tests PASS (optionalOS cases skipped),
-actual newDLL JNA memory/policy8662+Stop PASS; package/native/payload hashes PASS.
-No actual Wintun/Internet acceptance: both RunAs attempts returned cancellation.
-Manual admin launcher reports/windows-stop-20261028/run-wintun-probe-admin.ps1
-ready but NOT RUN; do not auto-repeat UAC. Full Fairway harness prepared, NOT RUN.
-Owner's failing OS stage UNKNOWN; requested actual failing log lines. Do not
-publish327 from current evidence. Read reports/windows-stop-20261028/ATLAS_RESULT.md.
-Cleanup completed PC679306766B and NL about4971975754 unique logical bytes;
-current/rollback artifacts retained; rc34 archive preserved after auto-review
-rejection. Android85 and FI issuer active/health200 unchanged.
+## Confirmed fixes and actual evidence
+- 79d162e: real Wintun description is Veilark Tunnel; old cosmetic heuristic rejected the owned adapter. Admission/health now exact installation GUID + operational index/LUID, excludes physical uplinks.
+- Actual bare Wintun CI40759834482 PASS1/0skip: create/start/close/absence only, NOT full Fairway Internet.
+- Native1370799: manually created unicast routes explicitly disable Loopback/AutoconfigureAddress/Publish.
+- CI40846657612 proved strict endpoint readback mismatch only bit13 Immortal. Native d3eb585 explicitly sets Immortal=false, retains infinite lifetimes and strict ownership matcher.
+- CI40883247054 confirmed server AUTH admitted1, real Windows TUN created; failed later at DNS/routes/policy. Stop, adapter absence and Internet recovery passed. No full traffic acceptance.
+- Native3e2bfd1 preserves original startup outcome/OS BEFORE cleanup overwrites status; stages60 DNScreate,61 routescreate,62 policycreate,63 directenable,64 policyapply,65 routesapply,66 DNSapply.
+- CI40885403336 identified original stage64 POLICY_APPLY/outcome15. Raw OS was lost in WFP formatted error wrapper.
+- Nativec1ce5eb fixes proven API-contract defect: RPC-only IP_LOCAL_ADDRESS_V4 used on ALE_AUTH_CONNECT_V4; now generic IP_LOCAL_ADDRESS, same UINT32/address/interface/app/protocol constraints. Original raw error preserved, safe WFP filter index/OS diagnostics. Its DLL passed real two-cycle CI40888532816; final016990a inherits the fix and passed CI40891175866.
+- Root1d98889 adds strict baseline HTTPS before TUN (normal CA/revocation cache priming, no TLS bypass), finer source/route proof and stable HTTP failure class. Final acceptance requires baseline plus both original cycles.
+- JNA exact frozen DLL memory/configure8662-prefix/status/Stop pairing passed1/0skip for each pin. These are NOT host-TUN acceptance.
 
-28Oct Windows OTA 0.3.26/code326 RELEASED: fixes Fairway-selected import of
-legacy compact veilark://import?t= links by routing non-managed sources through
-the standard fetcher. Real owner static profile imported through actual corrected
-Windows importer; focused managed/legacy tests passed. Android Beta15 parser and
-UI source supports same link; 16 parser tests pass, physical import NOT tested.
-Source commit d42ecee. OTA SHA256 a3dc7fae910747ebc701c69fcc3b6fe2a8544f75522533f1bdb3c98b035c70e5,
-132689920 bytes, signed manifest, Authenticode NotSigned. Native DLL extracted
-from actual inner installer matches fa516b... pin; wrapper extraction PASS.
-Same legacy static identity on two devices can evict itself; per-device Android
-managed enrollment remains unreleased. No live Windows tunnel acceptance.
+## Acceptance, not synthetic substitutes
+Current CI exercises real WindowsVpnSession: two cycles Connected, exact-owned adapter, bound HTTPS through TUN, bound UDP DNS to1.1.1.1:53, bidirectional counters, hold, Stop, strict adapter absence and Internet restoration; final process exit and parent-after-JVM file cleanup.
+Native DLL is process-pinned: only parent after Java exit removes DLLs. Filesystem cleanup alone does not prove network cleanup.
+Do not publish from build/unit/ABI/driver-only/source evidence. All fields and both cycles must pass; any residual network resources remain a failure.
 
-28Oct RELEASED Windows 0.3.25/code325 OTA. Public manifest verified, installer
-SHA256 47ba6c522ef99517111b98d05a9746edb59374229b6b94849349739e58343c84,
-132689920 bytes; previous manifest backed up on server. Authenticode NotSigned,
-Ed25519 OTA manifest signed. Source metadata commit 2a016d5. FI Core issuance
-enabled after readiness race repaired; real Windows admin managed claim and
-idempotent retry PASS without VPN. NL snapshot revision2/ACK2, six legacy
-identities retained, one active managed binding. Windows real tunnel/device test
-deferred to owner. Android managed Fairway parity source 3d35797 not released;
-do not claim same managed URL is verified for both platforms yet.
+## Release and remaining boundaries
+Old journal compatibility IS included in final016990a. Known flags0000/0001/1101 are accepted only by the bounded decoder. Absent resources allow metadata-only retirement; present confirmed tagged v2 requires dead previous process, manifest/run/tag/GUID/index/key and every other semantic field exact, only known Immortal1->0 normalization. Present unconfirmed and untagged v1 remain blocked; no journal erasure or broad adoption. Focused5 safety tests and independent reviews passed.
+Private accepted8363 installer: build/candidate-8363/Veilark-0.3.27.exe, 132739072B SHA29e3c177f9d618c37235e22443b46e65a2036820a3144d85b16bf2882e4f1425. Exact native extracted from actual inner installer and wrapper payload verified; candidate-8363.json records evidence. Not installed/published. Earlier327 candidates obsolete. Verification-only duplicate EXE removed.
+PUBLIC WINDOWS OTA NOW0.3.27/code327, wrapper132739072B SHAa6d0d109f1c54ff41e80697e41a85de0c1bdafd6358150a2aa90e92b7d7948fc, build/candidate-final/Veilark-0.3.27.exe. Exact native in actual inner installer and bootstrap payload verified. Full public download and both manifest/notes signatures independently passed30Oct, report public-ota-verification.json. Signed24 rollback verified at /var/backups/veilark/windows/manifest-before-327-20261029T143749Z-91663b50.json (rollback-327.json). Do not re-run publisher for327: it correctly rejects non-increasing versions. Public Android remainsBeta15/code85. Installer was not run on owner PC; successful readonly ProgramData enumeration found zero exact VeilarkCoreJournal-v1 entries, and host network was not changed. See docs/RELEASE_0.3.27.md.
 
-Atlas owns Windows app/import/store/JNA/UI/packaging/sole OTA. Vector owns private
-Core/server/native code in C:/AI-Agent/veilark-fairway-passage-integration-20261024.
-Windows branch local/windows-fairway-20261025; do not touch unrelated untracked
- docs/RELEASE_0.3.21.md or ui-research/.
+## Subscription compatibility
+Android managed worktree C:/AI-Agent/veilark-android-managed-fairway-20261027 sourceac7a48e pushed: explicit managed import/refresh, encrypted per-source install identity, actual Core resolver, deletion tombstone. Focused15+compile passed, source-only; public Beta15 lacks this new path.
+Windows+Android backend synthetic enrollment creates two separate per-install bindings/keys, idempotent retry; normal commercial device slots3. Actual concurrent two-device traffic NOT tested.
+Old static compact import carries one shared identity and can evict another device. Do not promise it supports simultaneous devices; use managed enrollment.
+Revoked original source-device bearer refresh edge remains separate backlog; never weaken revoke checks.
 
-## Current state
-- 28Oct new server8d20bc9 ELF8a16e889 (2374888B) fixes missing deployed Legacy
-  proof; isolated Linux CLI accepts true/rejects invalid; actual TUN + exact
-  remotehelper add/revoke + interrupted-update restart/ACK PASS with proof enabled.
-  Receipts reports/core-server-snapshot-20261027/frozen-8d20bc93. FI runtime
-  operator scripts locally repinned 8a16; NOT activated. Vector sole NL operator.
-  Android managed Fairway source prepared separately commit3d35797, 4/4 focused
-  and compile PASS; no device/live API evidence or Android OTA yet.
-- 28Oct RELEASE GATE CLOSED: NL prepare refused real legacy_session_proof
-  config: candidate863c750 lacks deployed Beta15 proof implementation. Vector
-  integrating real semantics from1193f81, not disabling the setting. CORRECTION:
-  Windows DLL5f0e189 uses separate veilark-windows-runtime: authenticate retains
-  legacy renewal credentials and the packet pump calls LegacyMaintenance with
-  Fairway. Earlier claim that Windows recovery was not wired was incorrect;
-  verify compatibility with fixed server, rebuild DLL only for a concrete defect.
-  Previously built 0.3.25 candidate is NOT eligible for OTA; source flag reset false.
-  Ignored packaging DLL fa516 remains staged: verifier intentionally rejects it
-  while flag false. Preserve candidate as evidence, not a released product.
-  FI runtime helper scripts previously pinned old7fac; repinned8a16 as above.
-  Active NL service and Android85 unchanged until an actual rollout confirms it.
-  Android single-managed-link enrollment missing in beta15; separate agent works
-  source-only on parity; old static Android subscription remains usable.
-- 27Oct historical private candidate BUILT with FairwayRelease=true at build time
-  and ignored packaging DLL fa516bfd (4567446B). It is superseded as noted above.
-  Do NOT publish/merge until matched recovery, NL daemon and real managed claim pass.
-  Existing public OTA remains0.3.24; physical Windows TUN deferred by owner.
-  Appimage/resources PASS, 12 focused cases0failure/0skip, actualDLL/JNA pairing,
-  EXE inner payload+bootstrap verify PASS, wrapper version0.3.25.0. Candidate
-  build/candidate/Veilark-0.3.25.exe 132689920B SHA256
-  47ba6c522ef99517111b98d05a9746edb59374229b6b94849349739e58343c84;
-  Authenticode NotSigned, matching existing unsigned channel; NOT published.
-- Latest app implementation e6cd4da: use exact Android pinned Fairway policy and
-  unchanged parser, bundled135358B/8662prefixes/45223232IPv4, SHA256
-  fd0fdb390680c4a6a18a02542205b766e345b6caa34de717a2d9c776dd063cd5.
-- Core no longer consumes TrustTunnel/SRS Geo preparation. Legacy engines unchanged.
-- Actual helperJAR asset verified;5targetedchecks0skip+desktopcompilePASS99s.
-- App imports/model/DPAPI/controller/separateFairwaybutton/releasefactory prepared.
-  FairwayRelease.accepted=false; no accepted nativepin, newversion or OTA.
-- 27Oct: existing import/product/DPAPI checks now follow immutable release metadata
-  instead of hardcoding false; six focused cases PASS17s, no tunnel/network action.
-  Current release decision remains false until matching native artifact/delivery.
-- Prepared next release source version0.3.25/code325; live public OTA read-only
-  confirmed0.3.24/code324. No new installer/manifest publication yet.
-- Corrected private DLL RECEIVED from Vector source5f0e189:4567446B,
-  SHA256fa516bfda35a1d5f743ec96a82ecc386f2a0ca7f20b8eb74f603a075c38855b6,
-  reports/windows-fairway-20261025/native-v1-host-beta-20261027, ABI1/caps11/noLAB.
-  Actual JNA pairing accepts full8662Androidpolicy PASS8s0skip; no AUTH/host effect.
-  Imports onlyWindowsOSDLLs. Native source/build not hardware forwarding PASS.
-- Initial isolated0.3.25image assembled59s whileflagfalse; no installer/OTA yet.
-- Fixed existing Windows omission: Android compactt/code links now decode through
-  HTTPS import; shell/IPC retains opaque form, nested envelopes rejected.15focused
-  import checks0fail/0skip+desktopcompilePASS32s. This is legacy encoding parity,
-  NOT signed enrollment-v2 or account/device enrollment.
-- Account enrollment client/codec now implemented and wired to explicit Fairway
-  button/dialog/clipboard and Core-source refresh. Same /managed|trust URL,
-  opt-in GET→canonical32char scope; POST only publickey/scope/stable requestid;
-  strict response checked before local DPAPI private key merge. No redirects,
-  bounded64KiB body+HTTPdeadline, no-store success required, fixed UI errors.
-- Existing TrustTunnel/sing-box profiles preserved during Core-only response;
-  legacy refresh preserves existing Core entry under the same subscription URL.
-  Seven focused DPAPI/mockHTTP/catalog cases PASS35s0skip; final import4cases+
-  desktopcompilePASS25s after HTTPS-paste routing and UIretry fix. No live HTTP.
-- Independent client/UI review caught pending202/503 retry dropping Core hint;
-  fixed: clear hint only on successful import or dismissal, no legacy fallback.
-- Speculative larger startup timeout was fully reverted, never compiled/released.
-- Critical correction: Android already uses veilark-fairway-dispatch/DirectPolicy.
-  Previous Windows native host_actor created bulk OSdirectroutes instead. Vector
-  now reuses existing shared Fairway runtime with Windowsboundsocket/TUN adapter.
-  Do NOT promote the old bulkGeo host-beta snapshot as feature parity.
-- Input HostConfig48/Prefix8/max16384 matches Android policy count bound; no new
-  protocol/stack or broader Geo limits required. Android remains unchanged.
-
-## Immediate next actions
-1. Matching private artifact/JNA memory pairing now complete. Await real distinct
-   per-install delivery before setting release flag/pin and packaging final image.
-2. Finish ACTUAL beta issuer/deviceclaim/delivery. Legacy manual script in reports/
-   core-fairway-20261016 appendsargon.conf+RESTARTS; restore-kowalski.py overwrites
-   hardcoded6entries. NEVERrerun those as modern enrollment/migration.
-3. Bot sibling sourcee0fa226 has all-target receipt proof and atomic revokequeue/
-   device/request completion before slotreuse. No actual authenticated publisher,
-   claim/encrypted delivery or protected-admin additive migration consumes it yet.
-4. One entitlement must support Android+Windows with distinct per-install keys;
-   never copy Android staticprivate key or promise oldstaticlink concurrent-safe.
-5. Match productmetadata, nativepin, resources/installer/OTA signature/rollback.
-6. Vector owns backend actualaccount bridge in botlogiccheckout; GETclaim/POST
-   publickey contract locked and app side implemented. Backend claims/protected
-   grant committede9fc221; publisher/runtime composition3b5e6d9 implemented,
-   NOT deployed/configured end-to-end. Reject JWE/allowlist possession as authority
-   over owner/slots. Need effective all-target receipt before a usable profile.
-   Atlas owns Windows DPAPIkey/claimconsumer/OTA. Newoperatoradapter83e8e6d source
-   exists in isolatedsnapshotcheckout, not deployed; 5purechecks+reviewfix complete.
-7. Linuxv2 pre-anchorELF source4524403 built/staged privately; CLI golden accepted/
-   malformed rejected in isolatednetns, no activeunit changes. Vector adding
-   independent durable anchor +verified previous-snapshot boot recovery, then
-   matched rebuild/real isolated driver+SSH receipt/controlled rollout still due.
-8. 27Oct continuation: final anchored Linux source863c750/2370808B/SHA7fac12c2
-   frozen in reports/core-server-snapshot-20261027/frozen-863c750f. Actual isolated
-   Linux TUN + EXACT remote publisher helper: initialACK1, addACK2, revokeACK3,
-   daemon restart with pending4/anchor3 boots confirmed3, retry givesACK4/anchor4.
-   Owned TUN cleanup PASS; CLI missinganchor/corruptprevious/rollback rejected.
-   No production service/config/customer key changes, no Windows forwarding test.
-   Vector prepares custody-safe live daemon rollout; Atlas prepares backend deploy.
-   Read-only FI has real admin entitlements/free slots but no core_* migrations;
-   original staticAndroid lineage is not yet proven, never guess entitlement.
-9. FI backend deployed source7a7a0fd + 13 newCore tables via SQLite backup and
-   journaled one-shot; PID1462340 health PASS. Public managed/trust opt-in GET and
-   POST now return503 no-store while runtime remains disabled. Existing managed
-   subscription is valid authority for distinct Windows key; legacy static Android
-   remains unchanged. Await NL daemon transaction, runtime bootstrap and actual
-   managed claim/driverACK before pinning DLL and publishing OTA.
-
-## Authority and evidence boundaries
-Owner explicitly chose testing real Windows AFTER release: do not ask again for
-VM/Billing or label hardware acceptance PASS. Source/runtime functionality still
-must exist before publication. No current-PC network mutation implied. PrivateCore
-source/plainDLL must not enter public Git repository. No billing/spending change.
-Android85/live server/accounts preserved; no live actions in recent sourcework.
-
-Frozen a8e29e private labDLL from16df365 paired through realJNA8s, memory only,
-caps13/FULL_TUNfalse. It is NOT the future commonFairway product artifact.
-Full prior decisions, test evidence and historical releases are preserved in
- docs/handoff/windows-history-before-parity-20261027.md; consult narrowly as needed.
+## Other constraints
+Workspace audit delivered C:/AI-Agent/reports/workspace-inventory-20261029/ПОНЯТНЫЙ-ОТЧЕТ.md. User decides cleanup after reading; no project deletion/push under audit. Snapshot115.30GiB, not current live disk assertion.
+Preserve unrelated docs/RELEASE_0.3.21.md and ui-research/.
+Historical full handoff retained C:/AI-Agent/reports/windows-fullhost-20261028/windows-handoff-before-20261029.md; obsolete release claims there are historical only.
